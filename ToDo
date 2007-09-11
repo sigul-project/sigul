@@ -1,0 +1,8 @@
+Things to do for the Signing Server
+
+Create a better method to load key information from a file to populate the key dict
+Set up logging of some kind
+Create a setup.py file for installation
+Create some installation notes regarding a user and importing keys
+Sort things into directories
+Fill more out here (:
