@@ -1,0 +1,9 @@
+Signing Server
+--
+
+See http://fedoraproject.org/wiki/ReleaseEngineering/Projects/SigningServer
+
+For testing development, execute xmlrpcserver.py.  Then use client.py to
+connect and test various methods.  Currently client.py takes a keyemail and
+a list of package paths to sign.  It will also clearsign some hard set
+content just to test that code path.
