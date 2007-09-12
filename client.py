@@ -4,6 +4,24 @@
 import xmlrpclib
 import sys
 
+def list_keys():
+    # keys = server.doListKeys(authstuff)
+    # for kmail, keyid in keys:
+    #   print "%s (%s)" % (kmail, keyid)
+    print "Not implemented"
+    
+def sign_packages(key, pkglist):
+    retval = server.doSignRPMsandVerify(key, ' '.join(pkglist))
+    if not retval:
+        print "Signing successful"
+    else:
+        print "Signing failed."
+    return retval
+
+def clear_sign(key, content):
+    signed_content = server.doClearSign(key, content)
+    return signed_content
+
 server = xmlrpclib.ServerProxy("http://localhost:8000")
 
 if server.auth('jkeating', 'foobar'):
@@ -12,12 +30,11 @@ if server.auth('jkeating', 'foobar'):
 key = sys.argv[1]
 pkglist = sys.argv[2:]
 
-server.doSignRPMsandVerify(key, ' '.join(pkglist))
+sign_packages(key, pkglist)
 
 content = """Hi there, I am going to be clearsigned.
 I hope I work...
 """
 
-signed_content = server.doClearSign(key, content)
+print clear_sign(key, content)
 
-print signed_content
