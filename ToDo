@@ -5,4 +5,5 @@ Set up logging of some kind
 Create a setup.py file for installation
 Create some installation notes regarding a user and importing keys
 Sort things into directories
+Prevent infinite loop in signstuff.py when retrying to sign
 Fill more out here (:
