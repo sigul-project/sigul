@@ -6,4 +6,14 @@ Create a setup.py file for installation
 Create some installation notes regarding a user and importing keys
 Sort things into directories
 Prevent infinite loop in signstuff.py when retrying to sign
+Add a list-keys function; should return keys user is authed to sign with.
 Fill more out here (:
+
+Design questions
+
+Do we use koji style "client <glob-opts> command <command-opts>" or a more
+simple "client <options> --command"?
+
+How do we keep the server stuff generic enough to be useful with other clients
+that may or may not make use of koji, but still prevent passing whole rpms
+from being passed around?
