@@ -87,7 +87,7 @@ class SigningStuff:
                 self.doSignRPMsandVerify(key, ' '.join(resign))
 
         # Pass up return code to calling function.
-        return str(retcode)
+        return retcode
 
     def doClearSign(self, key, content):
         """Clearsign the provided content with the requested key.
