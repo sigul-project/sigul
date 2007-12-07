@@ -1,12 +1,12 @@
 Things to do for the Signing Server
 
-Create a better method to load key information from a file to populate the key dict
-Set up logging of some kind
-Create a setup.py file for installation
+[DONE] Create a better method to load key information from a file to populate the key dict
+[DONE] Set up logging of some kind
+[DONE] Create a setup.py file for installation
 Create some installation notes regarding a user and importing keys
 Sort things into directories
 Prevent infinite loop in signstuff.py when retrying to sign
-Add a list-keys function; should return keys user is authed to sign with.
+[DONE] Add a list-keys function; should return keys user is authed to sign with.
 Fill more out here (:
 
 Design questions
