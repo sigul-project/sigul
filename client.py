@@ -41,18 +41,18 @@ if __name__ == '__main__':
                           version=__version__)
     parser.add_option("-s", "--sign", action="store", type="string",
                       dest="sign", metavar="BUILDS",
-                      help="Mark an update for push to stable")
+                      help="Sign builds")
     parser.add_option("-k", "--key", action="store", type="string",
                       dest="key", help="Specify a GPG key to sign with")
     parser.add_option("-c", "--clear", action="store", type="string",
                       dest="clear", help="Make a clear text signature")
-    parser.add_option("-v", "--verbose", action="store_true", dest="verbose",
-                      help="Show debugging messages")
     parser.add_option("-l", "--list", action="store_true", dest="list",
                       help="List available keys")
     parser.add_option("-u", "--username", action="store", type="string",
                       dest="username", default=getuser(),
                       help="Fedora username")
+    parser.add_option("-v", "--verbose", action="store_true", dest="verbose",
+                      help="Show debugging messages")
     (opts, args) = parser.parse_args()
 
     # Setup the logger
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     sh.setFormatter(format)
     log.addHandler(sh)
 
-    client = SigningClient(URL, opts.username, None)
+    client = SigningClient(URL, opts.username, None, opts.verbose)
 
     while True:
         try:
