@@ -12,10 +12,63 @@ log = logging.getLogger("signserv.controllers")
 
 class Root(controllers.RootController):
 
-    @expose(allow_json=True)
+    @expose("json", as_format="json")
+    def login(self, forward_url=None, previous_url=None, *args, **kw):
+        if not identity.current.anonymous \
+           and identity.was_login_attempted() \
+           and not identity.get_identity_errors():
+            return dict(user=identity.current.user)
+        forward_url=None
+        previous_url= request.path
+        if identity.was_login_attempted():
+            msg=_("The credentials you supplied were not correct or "
+                   "did not grant access to this resource.")
+        elif identity.get_identity_errors():
+            msg=_("You must provide your credentials before accessing "
+                   "this resource.")
+        else:
+            msg=_("Please log in.")
+            forward_url= request.headers.get("Referer", "/")
+        return dict(message=msg, previous_url=previous_url, logging_in=True,
+                    original_parameters=request.params,
+                    forward_url=forward_url)
+
+    @expose("json", as_format="json")
+    @identity.require(identity.in_group("releng"))
     def list_keys(self):
         """ Return list of keys """
         return dict(keys=map(unicode, Key.select()))
+
+    @expose("json", as_format="json")
+    @identity.require(identity.in_group("releng"))
+    def clear_sign(self, key, content):
+        """
+            Clearsign the provided content with the requested key.
+        """
+
+        # Override gpgme's passphrase callback so that we can utilize
+        # the passphrase in our database, rather than prompting us
+        def passphrase_cb(uid_hint, passphrase_info, prev_was_bad, fd):
+            # This is ugly ugly ugly.  Please somebody fix it...
+            keyid = uid_hint.split(' ')[-1].strip('<').rstrip('>')
+            key = Key.select(Key.q.email == keyid)[0]
+            os.write(fd, key.passphrase + '\n')
+
+        ctx = gpgme.Context()
+        ctx.armor = True
+        sigkey = ctx.get_key(key)
+        ctx.signers = [sigkey]
+        ctx.passphrase_cb = passphrase_cb
+        plaintext = StringIO.StringIO(str(content))
+        signature = StringIO.StringIO()
+
+        try:
+            new_sigs = ctx.sign(plaintext, signature, gpgme.SIG_MODE_CLEAR)
+        except gpgme.GpgmeError, e: # handle this better
+            flash("Something went wrong: %s" % e)
+            return dict()
+
+        return dict(signature=signature.getvalue())
 
     def _doReturnUnsignedRPMs(self, key, paths):
         """Verify that the rpms listed in paths are signed with the given key.
@@ -87,59 +140,3 @@ class Root(controllers.RootController):
 
         # Pass up return code to calling function.
         return retcode
-
-    @expose(allow_json=True)
-    def clear_sign(self, key, content):
-        """
-            Clearsign the provided content with the requested key.
-        """
-        # Override gpgme's passphrase callback so that we can stuff the
-        # passphrase in without prompting.
-        def stuff_passphrase(uid_hint, passphrase_info, prev_was_bad, fd):
-            # This is ugly ugly ugly.  Please somebody fix it...
-            keyid = uid_hint.split(' ')[-1].strip('<').rstrip('>')
-            key = Key.select(Key.q.email == keyid)[0]
-            os.write(fd, key.passphrase + '\n')
-
-        ctx = gpgme.Context()
-        ctx.armor = True
-        sigkey = ctx.get_key(key)
-        ctx.signers = [sigkey]
-        ctx.passphrase_cb = stuff_passphrase
-
-        # gpgme doesn't seem to like unicode
-        plaintext = StringIO.StringIO(str(content))
-        signature = StringIO.StringIO()
-
-        try:
-            new_sigs = ctx.sign(plaintext, signature, gpgme.SIG_MODE_CLEAR)
-        except gpgme.GpgmeError, e: # handle this better
-            flash("Something went wrong: %s" % e)
-            return dict()
-
-        return dict(signature=signature.getvalue())
-
-    @expose(allow_json=True)
-    def login(self, forward_url=None, previous_url=None, *args, **kw):
-        """
-            The default TurboGears login method
-        """
-        if not identity.current.anonymous \
-           and identity.was_login_attempted() \
-           and not identity.get_identity_errors():
-            raise redirect(forward_url)
-        forward_url=None
-        previous_url= request.path
-        if identity.was_login_attempted():
-            msg=_("The credentials you supplied were not correct or "
-                   "did not grant access to this resource.")
-        elif identity.get_identity_errors():
-            msg=_("You must provide your credentials before accessing "
-                   "this resource.")
-        else:
-            msg=_("Please log in.")
-            forward_url= request.headers.get("Referer", "/")
-        response.status=403
-        return dict(message=msg, previous_url=previous_url, logging_in=True,
-                    original_parameters=request.params,
-                    forward_url=forward_url)
