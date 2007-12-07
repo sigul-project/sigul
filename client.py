@@ -12,29 +12,28 @@ from fedora.tg.client import BaseClient, AuthError, ServerError
 __version__ = '$Revision: $'[11:-2]
 __description__ = 'The signing client'
 
+URL = 'http://localhost:8088/'
 log = logging.getLogger(__name__)
-URL = 'http://localhost:8088'
+
 
 class SigningClient(BaseClient):
 
     def list_keys(self):
-        # keys = server.doListKeys(authstuff)
-        # for kmail, keyid in keys:
-        #   print "%s (%s)" % (kmail, keyid)
-        data = self.send_request('listkeys', auth=True)
-        log.info(data)
+        data = self.send_request('list_keys', auth=True)
+        for key in data['keys']:
+            log.info(key)
 
-    #def sign_packages(key, pkglist):
-    #    retval = server.doSignRPMsandVerify(key, ' '.join(pkglist))
-    #    if not retval:
-    #        print "Signing successful"
-    #    else:
-    #        print "Signing failed."
-    #    return retval
+    def sign_packages(self, key, pkglist):
+        retval = server.doSignRPMsandVerify(key, ' '.join(pkglist))
+        log.info(data['tg_flash'])
 
-    #def clear_sign(key, content):
-    #    signed_content = server.doClearSign(key, content)
-    #    return signed_content
+    def clear_sign(self, key, content):
+        input = { 'key' : key, 'content' : content }
+        data = self.send_request('clear_sign', input=input, auth=True)
+        if data.has_key('tg_flash') and data['tg_flash']:
+            log.error(data['tg_flash'])
+        else:
+            log.info(data['signature'])
 
 if __name__ == '__main__':
     usage = "usage: %prog [options]"
@@ -45,7 +44,7 @@ if __name__ == '__main__':
                       help="Mark an update for push to stable")
     parser.add_option("-k", "--key", action="store", type="string",
                       dest="key", help="Specify a GPG key to sign with")
-    parser.add_option("-c", "--clear", action="store_true",
+    parser.add_option("-c", "--clear", action="store", type="string",
                       dest="clear", help="Make a clear text signature")
     parser.add_option("-v", "--verbose", action="store_true", dest="verbose",
                       help="Show debugging messages")
@@ -68,7 +67,6 @@ if __name__ == '__main__':
     sh.setFormatter(format)
     log.addHandler(sh)
 
-    #client = SigningClient(URL, opts.username, None, debug=opts.verbose)
     client = SigningClient(URL, opts.username, None)
 
     while True:
@@ -77,6 +75,11 @@ if __name__ == '__main__':
                 client.sign(opts)
             elif opts.list:
                 client.list_keys()
+            elif opts.clear:
+                if not opts.key:
+                    log.error("You need to specify a key to sign with")
+                    sys.exit(-1)
+                client.clear_sign(opts.key, opts.clear)
             else:
                 parser.print_help()
             break

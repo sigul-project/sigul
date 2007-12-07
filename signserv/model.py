@@ -9,11 +9,17 @@ log = logging.getLogger(__name__)
 hub = PackageHub("signserv")
 __connection__ = hub
 
-class Key(SQLObject):
-    key_id     = UnicodeCol(alternateID=True, notNone=True)
-    email      = UnicodeCol(length=255, alternateID=True, notNone=True)
-    passphrase = UnicodeCol(notNone=True)
 
+class Key(SQLObject):
+    name        = UnicodeCol(alternateID=True, notNone=True)
+    key_id      = UnicodeCol(notNone=True)
+    email       = UnicodeCol(notNone=True)
+    passphrase  = UnicodeCol(default="")
+    description = UnicodeCol()
+
+    def __str__(self):
+        return u"[%s] %s : %s <%s>" % (self.key_id, self.name,
+                                       self.description, self.email)
 
 class Visit(SQLObject):
     """ A visit to your site """
