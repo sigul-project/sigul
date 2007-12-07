@@ -17,6 +17,18 @@ class Key(SQLObject):
     passphrase  = UnicodeCol(default="")
     description = UnicodeCol()
 
+    @staticmethod
+    def fetch(id):
+        """ Fetch a Key by name/id/email """
+        key = None
+        keys = Key.select(
+                OR(Key.q.name == id,
+                   Key.q.key_id == id,
+                   Key.q.email == id))
+        if keys.count():
+            key = keys[0]
+        return key
+
     def __str__(self):
         return u"[%s] %s : %s <%s>" % (self.key_id, self.name,
                                        self.description, self.email)

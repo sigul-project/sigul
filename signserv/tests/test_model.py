@@ -16,3 +16,7 @@ class TestKey(testutil.DBTest):
         assert key.name == 'signserv-test'
         assert key.email == 'nobody@fedoraproject.org'
         assert key.passphrase == 'abcdefg'
+
+        assert Key.fetch('F5B783C4')
+        assert Key.fetch('signserv-test')
+        assert Key.fetch('nobody@fedoraproject.org')
