@@ -1,22 +1,18 @@
-# If your project uses a database, you can set up database tests
-# similar to what you see below. Be sure to set the db_uri to
-# an appropriate uri for your testing database. sqlite is a good
-# choice for testing, because you can use an in-memory database
-# which is very fast.
-
 from turbogears import testutil, database
-# from signserv.model import YourDataClass, User
+from signserv.model import Key
 
-# database.set_db_uri("sqlite:///:memory:")
+database.set_db_uri("sqlite:///:memory:")
 
-# class TestUser(testutil.DBTest):
-#     def get_model(self):
-#         return User
-#     def test_creation(self):
-#         "Object creation should set the name"
-#         obj = User(user_name = "creosote",
-#                       email_address = "spam@python.not",
-#                       display_name = "Mr Creosote",
-#                       password = "Wafer-thin Mint")
-#         assert obj.display_name == "Mr Creosote"
+class TestKey(testutil.DBTest):
 
+    def get_model(self):
+        return Key
+
+    def test_creation(self):
+        key = Key(key_id='F5B783C4', name='signserv-test',
+                  description='Signing Server (Test key)',
+                  email='nobody@fedoraproject.org', passphrase='abcdefg')
+        assert key.key_id == 'F5B783C4'
+        assert key.name == 'signserv-test'
+        assert key.email == 'nobody@fedoraproject.org'
+        assert key.passphrase == 'abcdefg'
