@@ -37,7 +37,7 @@ class Root(controllers.RootController):
     @identity.require(identity.in_group("releng"))
     def list_keys(self):
         """ Return list of keys """
-        return dict(keys=map(unicode, Key.select()))
+        return dict(keys=[str(key) for key in Key.select()])
 
     @expose("json", as_format="json")
     @identity.require(identity.in_group("releng"))
