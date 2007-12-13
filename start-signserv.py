@@ -21,5 +21,11 @@ else:
     update_config(configfile="prod.cfg",modulename="signserv.config")
 config.update(dict(package="signserv"))
 
+# Check if gpg-agent is running, and bail out
+import os
+if not os.WEXITSTATUS(os.system("pidof gpg-agent >/dev/null")):
+    print "Error: gpg-agent is running, which is known to cause issue with gpgme."
+    sys.exit(-1)
+
 from signserv.controllers import Root
 start_server(Root())
