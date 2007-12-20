@@ -2,11 +2,50 @@ sigul: An automated gpg signing system
 https://fedorahosted.org/sigul
 --
 
-TODO: update this stuff
+Initialization
+==============
 
-For testing development, import the signserv.sec gpg key, and make sure your 
-gpg config does not make use of any agents.  Then execute xmlrpcserver.py.  
-It will run indefinitely, kill it with ^c.
-Then use client.py to connect and test various methods.  Currently client.py 
-takes a keyemail and a list of package paths to sign.  It will also clearsign 
-some hard set content just to test that code path.
+The init.py script will automatically import various keys into your database.
+If the '--dev' flag is passed, it will create a 'guest' releng account for local
+testing.
+
+ $ tg-admin sql create 
+ $ ./init.py
+ Populating database with keys
+ [1CDDBCA9] fedora-rawhide : Fedora Project automated build signing key <rawhide@redhat.com>
+ [4F2A6FD2] fedora-gold : Fedora Project <fedora@redhat.com>
+ [F5B783C4] signserv-test : Signing Server (Test key) <nobody@fedoraproject.org>
+ [30C9ECF8] fedora-test : Fedora Project (Test Software) <rawhide@redhat.com>
+
+Running the server
+==================
+
+ $ ./start-sigul.py
+
+Using the client
+================
+
+ $ ./client.py
+ Usage: client.py [options]
+
+ The sigul client
+
+ Options:
+   -h, --help            show this help message and exit
+   -s, --sign            Sign a list of RPMs
+   -k KEY, --key=KEY     Specify a GPG key to sign with
+   -c CLEAR, --clear=CLEAR
+                         Make a clear text signature
+   -l, --list            List available keys
+   -u USERNAME, --username=USERNAME
+                         Fedora username
+   -v, --verbose         Show debugging messages
+
+Using the sigul shell
+=====================
+
+Creating a new Key by hand from the sigul shell
+
+ $ tg-admin shell
+ >>> Key(key_id='1234', name='testkey', email='foo@bar.com', description='Test key')
+ <Key 5 name=u'testkey' key_id=u'1234' email=u'foo@bar.com' passphrase=u'' description=u'Test key'>

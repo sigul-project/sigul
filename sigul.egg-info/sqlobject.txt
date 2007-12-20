@@ -1,2 +1,2 @@
-db_module=signserv.model
-history_dir=$base/signserv/sqlobject-history
+db_module=sigul.model
+history_dir=$base/sigul/sqlobject-history
