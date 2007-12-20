@@ -1,3 +1,19 @@
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the GNU
+# General Public License v.2.  This program is distributed in the hope that it
+# will be useful, but WITHOUT ANY WARRANTY expressed or implied, including the
+# implied warranties of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.  You should have
+# received a copy of the GNU General Public License along with this program;
+# if not, write to the Free Software Foundation, Inc., 51 Franklin Street,
+# Fifth Floor, Boston, MA 02110-1301, USA. Any Red Hat trademarks that are
+# incorporated in the source code or documentation are not subject to the GNU
+# General Public License and may only be used or replicated with the express
+# permission of Red Hat, Inc.
+#
+# Copyright (C) 2007  Red Hat, Inc. All rights reserved.
+# Author: Luke Macken <lmacken@redhat.com>
+
 import logging
 
 from datetime import datetime
@@ -9,6 +25,8 @@ log = logging.getLogger(__name__)
 hub = PackageHub("signserv")
 __connection__ = hub
 
+class KeyNotFound(Exception):
+    pass
 
 class Key(SQLObject):
     name        = UnicodeCol(alternateID=True, notNone=True)
@@ -19,15 +37,14 @@ class Key(SQLObject):
 
     @staticmethod
     def fetch(id):
-        """ Fetch a Key by name/id/email """
-        key = None
+        """ Fetch a Key by name, id, or email """
         keys = Key.select(
                 OR(Key.q.name == id,
                    Key.q.key_id == id,
                    Key.q.email == id))
-        if keys.count():
-            key = keys[0]
-        return key
+        if not keys.count():
+            raise KeyNotFound("No key id/name/email matches '%s'" % id)
+        return keys[0]
 
     def __str__(self):
         return u"[%s] %s : %s <%s>" % (self.key_id, self.name,
