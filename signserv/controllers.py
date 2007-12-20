@@ -1,9 +1,29 @@
-import os
-import gpgme
-import logging
-import StringIO
+# -*- coding: utf-8 -*-
+#
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the GNU
+# General Public License v.2.  This program is distributed in the hope that it
+# will be useful, but WITHOUT ANY WARRANTY expressed or implied, including the
+# implied warranties of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.  You should have
+# received a copy of the GNU General Public License along with this program;
+# if not, write to the Free Software Foundation, Inc., 51 Franklin Street,
+# Fifth Floor, Boston, MA 02110-1301, USA. Any Red Hat trademarks that are
+# incorporated in the source code or documentation are not subject to the GNU
+# General Public License and may only be used or replicated with the express
+# permission of Red Hat, Inc.
+#
+# Copyright © 2007  Red Hat, Inc. All rights reserved.
+# Author: Luke Macken <lmacken@redhat.com>
 
-from model import Key
+import os
+import rpm
+import gpgme
+import pexpect
+import logging
+
+from model import Key, KeyNotFound
+from StringIO import StringIO
 from cherrypy import request, response
 from turbogears import controllers, expose, flash
 from turbogears import identity, redirect
@@ -12,7 +32,7 @@ log = logging.getLogger("signserv.controllers")
 
 class Root(controllers.RootController):
 
-    @expose("json", as_format="json")
+    @expose()
     def login(self, forward_url=None, previous_url=None, *args, **kw):
         if not identity.current.anonymous \
            and identity.was_login_attempted() \
@@ -33,42 +53,102 @@ class Root(controllers.RootController):
                     original_parameters=request.params,
                     forward_url=forward_url)
 
-    @expose("json", as_format="json")
+    @expose()
     @identity.require(identity.in_group("releng"))
     def list_keys(self):
-        """ Return list of keys """
+        """
+        @return: A list of keys in our database
+        """
         return dict(keys=[str(key) for key in Key.select()])
 
-    @expose("json", as_format="json")
+    @expose()
     @identity.require(identity.in_group("releng"))
     def clear_sign(self, key, content):
         """
-            Clearsign the provided content with the requested key.
+        Clearsign the provided content with the requested key.
+
+        @param key: The key id/name/email
+        @param content: The string of content to sign
+        @return: The provided content signed with the given key
         """
+        log.debug("clear_sign(%s, %s)" % (key, content))
+        try:
+            key = Key.fetch(key)
+        except KeyNotFound, e:
+            flash(e)
+            return dict()
 
         # Override gpgme's passphrase callback so that we can utilize
         # the passphrase in our database, rather than prompting us
         def passphrase_cb(uid_hint, passphrase_info, prev_was_bad, fd):
-            # This is ugly ugly ugly.  Please somebody fix it...
-            keyid = uid_hint.split(' ')[-1].strip('<').rstrip('>')
-            key = Key.select(Key.q.email == keyid)[0]
             os.write(fd, key.passphrase + '\n')
 
         ctx = gpgme.Context()
         ctx.armor = True
-        sigkey = ctx.get_key(key)
+        sigkey = ctx.get_key(key.key_id)
         ctx.signers = [sigkey]
         ctx.passphrase_cb = passphrase_cb
-        plaintext = StringIO.StringIO(str(content))
-        signature = StringIO.StringIO()
+        plaintext = StringIO(str(content))
+        signature = StringIO()
 
         try:
             new_sigs = ctx.sign(plaintext, signature, gpgme.SIG_MODE_CLEAR)
-        except gpgme.GpgmeError, e: # handle this better
-            flash("Something went wrong: %s" % e)
+            log.info("Successfully clear signed the following with %s\n%s" %
+                    (key.name, content))
+        except gpgme.GpgmeError, e:
+            flash("Error: %s" % e)
             return dict()
 
         return dict(signature=signature.getvalue())
+
+    @expose()
+    @identity.require(identity.in_group("releng"))
+    def sign(self, key, files):
+        """
+        Sign all packages in paths with the given key.  Verify signature.
+        Returns return code from rpm call.
+
+        @param key: The key id/name/email
+        @param files: A list of RPMs to sign
+        """
+        try:
+            key = Key.fetch(key)
+        except KeyNotFound, e:
+            flash(e)
+            return dict()
+
+        # Set up the rpm signing command as a list
+        command = ['rpm', '--define', '_gpg_name %s' % key.key_id, '--resign']
+        command.extend(files.split())
+
+        # now for some expect fun (open to suggestions on how to do this better)
+        p = pexpect.spawn(command[0], command[1:], timeout=200)
+
+        # Being a bit adventurous - no need for timeouts
+        p.delaybeforesend = 0
+        p.delayafterclose = 0
+        p.expect('Enter pass phrase:')
+        p.sendline(key.passphrase + '\n')
+        i = p.expect(['Pass phrase is good.', 'Pass phrase check failed',])
+        log.debug("rpm returned with %s" % i)
+        data = p.after
+        p.expect(pexpect.EOF)
+        p.close()
+        retcode = p.exitstatus
+
+        if i == 1:
+            flash("Pass phrase check failed")
+            return dict()
+
+        # Check to see if rpm returned happy, and if so, verify signed paths
+        if not retcode:
+            resign = self._doReturnUnsignedRPMs(key, files)
+            if resign:
+                # We have some that didn't get signed, try again.
+                self.doSignRPMsandVerify(key, ' '.join(resign))
+
+        # Pass up return code to calling function.
+        return retcode
 
     def _doReturnUnsignedRPMs(self, key, paths):
         """Verify that the rpms listed in paths are signed with the given key.
@@ -104,39 +184,15 @@ class Root(controllers.RootController):
 
         return unsigned
 
-    def doSignRPMsandVerify(self, key, *paths):
-        """Sign all packages in paths with the given key.  Verify signature.
-           Returns return code from rpm call."""
 
-        # Set up the rpm signing command as a list
-        command = ['rpm', '--define', '_gpg_name %s' % key, '--resign']
-        command.extend(paths)
+## Some useful methods for sending messages to our logger,
+## as well as the client
+def error(msg):
+    log.error(msg)
+    flash(msg)
+    return msg
 
-        # now for some expect fun (open to suggestions on how to do this better)
-        p = pexpect.spawn(command[0], command[1:], timeout=200)
-
-        # Being a bit adventurous - no need for timeouts
-        p.delaybeforesend = 0
-        p.delayafterclose = 0
-        p.expect('Enter pass phrase:')
-        p.sendline(keydict[key]['passphrase'])
-        i = p.expect(['Pass phrase is good.', 'Pass phrase check failed',])
-        data = p.after
-        p.expect(pexpect.EOF)
-        p.close()
-        retcode = p.exitstatus
-
-        if i == 1:
-            # Pass phrase check failed This should be a raise
-            print "Pass phrase check failed"
-            return retcode
-
-        # Check to see if rpm returned happy, and if so, verify signed paths
-        if not retcode:
-            resign = self._doReturnUnsignedRPMs(key, paths)
-            if resign:
-                # We have some that didn't get signed, try again.
-                self.doSignRPMsandVerify(key, ' '.join(resign))
-
-        # Pass up return code to calling function.
-        return retcode
+def info(msg):
+    log.info(msg)
+    flash(msg)
+    return msg
