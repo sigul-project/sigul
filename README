@@ -1,7 +1,8 @@
-Signing Server
+sigul: An automated gpg signing system
+https://fedorahosted.org/sigul
 --
 
-See http://fedoraproject.org/wiki/ReleaseEngineering/Projects/SigningServer
+TODO: update this stuff
 
 For testing development, import the signserv.sec gpg key, and make sure your 
 gpg config does not make use of any agents.  Then execute xmlrpcserver.py.  

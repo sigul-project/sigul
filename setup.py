@@ -4,28 +4,24 @@ from turbogears.finddata import find_package_data
 import os
 
 packages=find_packages()
-package_data = find_package_data(where='signserv',
-    package='signserv')
+package_data = find_package_data(where='sigul',
+    package='sigul')
 if os.path.isdir('locales'):
     packages.append('locales')
     package_data.update(find_package_data(where='locales',
         exclude=('*.po',), only_in_packages=False))
 
 setup(
-    name="signserv",
-    version=version,
-
-    #description=description,
-    #author=author,
-    #author_email=email,
-    #url=url,
-    #download_url=download_url,
-    #license=license,
+    name="sigul",
+    version="0.0.1",
+    description="An automated gpg signing system",
+    url="https://fedorahosted.org/sigul",
+    license="GPL",
 
     install_requires=[
         "TurboGears >= 1.0.3.2",
     ],
-    scripts=["start-signserv.py"],
+    scripts=["start-sigul.py"],
     zip_safe=False,
     packages=packages,
     package_data=package_data,

@@ -22,7 +22,7 @@ from turbogears import identity
 from turbogears.database import PackageHub
 
 log = logging.getLogger(__name__)
-hub = PackageHub("signserv")
+hub = PackageHub("sigul")
 __connection__ = hub
 
 class KeyNotFound(Exception):

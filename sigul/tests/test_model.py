@@ -1,5 +1,5 @@
 from turbogears import testutil, database
-from signserv.model import Key
+from sigul.model import Key
 
 database.set_db_uri("sqlite:///:memory:")
 

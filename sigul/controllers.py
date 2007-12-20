@@ -26,7 +26,7 @@ from cherrypy import request, response
 from turbogears import controllers, expose, flash
 from turbogears import identity, redirect
 
-log = logging.getLogger("signserv.controllers")
+log = logging.getLogger("sigul.controllers")
 
 class Root(controllers.RootController):
 

@@ -8,10 +8,10 @@ import sys
 import gpgme
 
 from turbogears import update_config
-update_config(configfile='dev.cfg', modulename='signserv.config')
+update_config(configfile='dev.cfg', modulename='sigul.config')
 from turbogears.database import PackageHub
 hub = __connection__ = PackageHub("bodhi")
-from signserv.model import Key, User, Group
+from sigul.model import Key, User, Group
 
 keys = {
     '4F2A6FD2': {

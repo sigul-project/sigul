@@ -25,12 +25,12 @@ from optparse import OptionParser
 from fedora.tg.client import BaseClient, AuthError, ServerError
 
 __version__ = '$Revision: $'[11:-2]
-__description__ = 'The signing client'
+__description__ = 'The sigul client'
 
 URL = 'http://localhost:8088/'
 log = logging.getLogger(__name__)
 
-class SigningClient(BaseClient):
+class SigulClient(BaseClient):
 
     def list_keys(self):
         """
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     sh.setFormatter(format)
     log.addHandler(sh)
 
-    client = SigningClient(URL, opts.username, None, opts.verbose)
+    client = SigulClient(URL, opts.username, None, opts.verbose)
 
     # Our main loop.  Ideally, we should only have to make it through this once,
     # assuming our credentials are valid.
