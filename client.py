@@ -1,7 +1,22 @@
 #!/usr/bin/python -tt
-# Copyright 2007  Red Hat, Inc.
-# Luke Macken <lmacken@redhat.com>
+#
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the GNU
+# General Public License v.2.  This program is distributed in the hope that it
+# will be useful, but WITHOUT ANY WARRANTY expressed or implied, including the
+# implied warranties of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.  You should have
+# received a copy of the GNU General Public License along with this program;
+# if not, write to the Free Software Foundation, Inc., 51 Franklin Street,
+# Fifth Floor, Boston, MA 02110-1301, USA. Any Red Hat trademarks that are
+# incorporated in the source code or documentation are not subject to the GNU
+# General Public License and may only be used or replicated with the express
+# permission of Red Hat, Inc.
+#
+# Copyright (C) 2007  Red Hat, Inc.
+# Author: Luke Macken <lmacken@redhat.com>
 
+import os
 import sys
 import logging
 
@@ -15,20 +30,34 @@ __description__ = 'The signing client'
 URL = 'http://localhost:8088/'
 log = logging.getLogger(__name__)
 
-
 class SigningClient(BaseClient):
 
     def list_keys(self):
+        """
+        Display a list of available keys on the server
+        """
         data = self.send_request('list_keys', auth=True)
         for key in data['keys']:
             log.info(key)
 
-    def sign_packages(self, key, pkglist):
-        retval = server.doSignRPMsandVerify(key, ' '.join(pkglist))
-        log.info(data['tg_flash'])
+    def sign(self, key, pkglist):
+        """
+        Sign a list of packages with the specified key
+        """
+        log.debug("pkglist = %s" % pkglist)
+        input = { 'key' : key, 'files' : ' '.join(pkglist) }
+        data = self.send_request('sign', input=input, auth=True)
+        log.info(data)
 
     def clear_sign(self, key, content):
+        """
+        Clear sign the specified content, which could be a filename or text
+        """
         input = { 'key' : key, 'content' : content }
+        if os.path.isfile(content):
+            fp = open(content, 'rb')
+            input['content'] = fp.read()
+            fp.close()
         data = self.send_request('clear_sign', input=input, auth=True)
         if data.has_key('tg_flash') and data['tg_flash']:
             log.error(data['tg_flash'])
@@ -39,9 +68,8 @@ if __name__ == '__main__':
     usage = "usage: %prog [options]"
     parser = OptionParser(usage, description=__description__,
                           version=__version__)
-    parser.add_option("-s", "--sign", action="store", type="string",
-                      dest="sign", metavar="BUILDS",
-                      help="Sign builds")
+    parser.add_option("-s", "--sign", action="store_true", dest="sign",
+                      help="Sign a list of RPMs")
     parser.add_option("-k", "--key", action="store", type="string",
                       dest="key", help="Specify a GPG key to sign with")
     parser.add_option("-c", "--clear", action="store", type="string",
@@ -69,10 +97,15 @@ if __name__ == '__main__':
 
     client = SigningClient(URL, opts.username, None, opts.verbose)
 
+    # Our main loop.  Ideally, we should only have to make it through this once,
+    # assuming our credentials are valid.
     while True:
         try:
             if opts.sign:
-                client.sign(opts)
+                if not opts.key:
+                    log.error("You need to specify a key to sign with")
+                    sys.exit(-1)
+                client.sign(opts.key, args)
             elif opts.list:
                 client.list_keys()
             elif opts.clear:
