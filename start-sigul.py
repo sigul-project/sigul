@@ -13,13 +13,12 @@ import sys
 # look for setup.py in this directory. If it's not there, this script is
 # probably installed
 if len(sys.argv) > 1:
-    update_config(configfile=sys.argv[1],
-        modulename="signserv.config")
+    update_config(configfile=sys.argv[1], modulename="sigul.config")
 elif exists(join(dirname(__file__), "setup.py")):
-    update_config(configfile="dev.cfg",modulename="signserv.config")
+    update_config(configfile="dev.cfg",modulename="sigul.config")
 else:
-    update_config(configfile="prod.cfg",modulename="signserv.config")
-config.update(dict(package="signserv"))
+    update_config(configfile="prod.cfg",modulename="sigul.config")
+config.update(dict(package="sigul"))
 
 # Check if gpg-agent is running, and bail out
 import os
@@ -27,5 +26,5 @@ if not os.WEXITSTATUS(os.system("pidof gpg-agent >/dev/null")):
     print "Error: gpg-agent is running, which is known to cause issue with gpgme."
     sys.exit(-1)
 
-from signserv.controllers import Root
+from sigul.controllers import Root
 start_server(Root())
