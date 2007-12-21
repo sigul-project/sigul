@@ -1,2 +1,0 @@
-db_module=sigul.model
-history_dir=$base/sigul/sqlobject-history
