@@ -1,5 +1,16 @@
 2009-01-11  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (M2CryptoSHA512DigestMod): New class.
+	* src/client.py (ClientsConnection.connect)
+	(ClientsConnection.send_inner)
+	* src/server.py (ServersConnection.read_request)
+	(ServersConnection.read_request): Use M2Crypto.EVP.MessageDigest instead
+	of hashlib, which is not supported by Python 2.4.
+	* src/client.py (read_password): Read password from stdin, the second
+	argument to getpass.getpass() is not supported by Python 2.4.
+	* src/server.py (cmd_sign_rpm): Define '_signature gpg', which is
+	required by RHEL5 rpm.
+
 	* README: Make it clear when a CA private key is copied, describe how
 	to avoid doing so.
 

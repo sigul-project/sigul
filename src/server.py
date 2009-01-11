@@ -17,7 +17,6 @@
 
 import binascii
 import crypt
-import hashlib
 import hmac
 import logging
 import os
@@ -30,6 +29,7 @@ import sys
 import tempfile
 import time
 
+import M2Crypto.EVP
 import gpgme
 import nss.error
 import nss.nss
@@ -270,7 +270,7 @@ class ServersConnection(object):
             if payload_size > self.config.max_file_payload_size:
                 raise InvalidRequestError('Payload too large')
             # FIXME? python-nss does not support incremental hash computation
-            digest = hashlib.sha512()
+            digest = M2Crypto.EVP.MessageDigest('sha512')
 
             (fd, self.payload_path) = tempfile.mkstemp(text=False)
             self.payload_file = os.fdopen(fd, 'w+b')
@@ -281,7 +281,7 @@ class ServersConnection(object):
                 payload_size -= len(run)
             self.payload_file.flush()
             self.payload_file.seek(0)
-            self.payload_sha512_digest = digest.digest()
+            self.payload_sha512_digest = digest.final()
 
         # FIXME? authenticate using the client's certificate as well?
         # May raise double_tls.InnerCertificateNotFound.
@@ -311,11 +311,13 @@ class ServersConnection(object):
         key = self.inner_field('header-auth-key', required=True)
         if len(key) < 64:
             raise InvalidRequestError('Header authentication key too small')
-        self.__reply_header_hmac = hmac.new(key, digestmod=hashlib.sha512)
+        self.__reply_header_hmac = \
+            hmac.new(key, digestmod=utils.M2CryptoSHA512DigestMod)
         key = self.inner_field('payload-auth-key', required=True)
         if len(key) < 64:
             raise InvalidRequestError('Payload authentication key too small')
-        self.__reply_payload_hmac = hmac.new(key, digestmod=hashlib.sha512)
+        self.__reply_payload_hmac = \
+            hmac.new(key, digestmod=utils.M2CryptoSHA512DigestMod)
 
         return handler
 
@@ -958,7 +960,7 @@ def cmd_sign_rpm(db, conn):
 
     env = dict(os.environ) # Shallow copy, uses our $GNUPGHOME
     env['LC_ALL'] = 'C'
-    child = pexpect.spawn('rpm', ['--define',
+    child = pexpect.spawn('rpm', ['--define', '_signature gpg', '--define',
                                   '_gpg_name %s' % access.key.fingerprint,
                                   '--addsign', conn.payload_path], env=env)
     child.expect('Enter pass phrase: ')

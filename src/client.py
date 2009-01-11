@@ -17,7 +17,6 @@
 
 import binascii
 import getpass
-import hashlib
 import hmac
 import logging
 import optparse
@@ -26,6 +25,7 @@ import socket
 import struct
 import sys
 
+import M2Crypto.EVP
 import nss.nss
 
 import double_tls
@@ -88,8 +88,8 @@ class ClientsConnection(object):
         except utils.NSSInitError, e:
             raise ClientError(str(e))
         # FIXME: python-nss does not support incremental hash computation
-        self.__request_header_digest = hashlib.sha512()
-        self.__request_payload_digest = hashlib.sha512()
+        self.__request_header_digest = M2Crypto.EVP.MessageDigest('sha512')
+        self.__request_payload_digest = M2Crypto.EVP.MessageDigest('sha512')
         self.__send_header(utils.u32_pack(utils.protocol_version))
         if op is not None and outer_fields is not None:
             self.send_outer_fields(op, outer_fields)
@@ -139,17 +139,19 @@ class ClientsConnection(object):
         # FIXME: handle errors.UNKNOWN_VERSION - there is no inner session and
         # outer session data is not all read
         fields = dict(inner_fields) # Shallow copy
-        fields['header-auth-sha512'] = self.__request_header_digest.digest()
+        fields['header-auth-sha512'] = self.__request_header_digest.final()
         if not omit_payload_auth:
             fields['payload-auth-sha512'] = \
-                self.__request_payload_digest.digest()
+                self.__request_payload_digest.final()
         key = nss.nss.generate_random(64)
         fields['header-auth-key'] = key
         # FIXME: python-nss does not support HMAC
-        self.__reply_header_hmac = hmac.new(key, digestmod=hashlib.sha512)
+        self.__reply_header_hmac = \
+            hmac.new(key, digestmod=utils.M2CryptoSHA512DigestMod)
         key = nss.nss.generate_random(64)
         fields['payload-auth-key'] = key
-        self.__reply_payload_hmac = hmac.new(key, digestmod=hashlib.sha512)
+        self.__reply_payload_hmac = \
+            hmac.new(key, digestmod=utils.M2CryptoSHA512DigestMod)
         try:
             self.__client.inner_open_client(self.config.server_hostname,
                                             self.config.client_cert_nickname)
@@ -281,15 +283,10 @@ class ClientsConnection(object):
             finally:
                 self.__client = None
 
-_dev_tty_fd = None
 def read_password(config, prompt):
     '''Return a password.'''
-    global _dev_tty_fd
-
     if not config.batch_mode:
-        if _dev_tty_fd is None:
-            _dev_tty_fd = open('/dev/tty', 'w', 0)
-        return getpass.getpass(prompt, _dev_tty_fd)
+        return getpass.getpass(prompt)
     password = ''
     while True:
         c = sys.stdin.read(1)
