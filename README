@@ -18,6 +18,20 @@ There are three separate computers involved:
 * a bridge that accepts connections from the server and from clients
 * at least one client that sends requests to the bridge
 
+The instructions below are the minimum to get you started with sigul.  If you
+are creating new certificates, it is safer to create them in a separate NSS
+database not accessible to sigul, import the server/bridge certificates and
+keys to the sigul databases, and only import the CA certificate (not the CA
+private key!) to the sigul databases.  To import a CA certificate from one NSS
+database to another:
+	certutil -d $source_dir -L -n my-ca -a > ca.pem
+	certutil -d $dest_dir -A -n my-ca -t CT,, -a -i ca.pem
+	rm ca.pem
+To copy a certificate and key from one NSS database to another:
+        pk12util -d $source_dir -o cert.p12 -n $cert_nickname
+	pk12util -d $dest_dir -i cert.p12
+	rm cert.p12
+
 Setting up the bridge
 ---------------------
 The bridge gates access to the signing server, and transfers RPM data from and
@@ -65,7 +79,8 @@ server:
 
 * Create a NSS database for the server in $server_dir=/var/lib/sigul
   (see above)
-* Import the CA certificate used to generate the certificate for the bridge:
+* Import the CA certificate and private key used to generate the certificate for
+  the bridge:
         pk12util -d $bridge_dir -o ca.p12 -n my-ca
 	pk12util -d $server_dir -i ca.p12
 	rm ca.p12

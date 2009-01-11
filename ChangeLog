@@ -1,4 +1,7 @@
 2009-01-11  Miloslav Trmač  <mitr@redhat.com>
 
+	* README: Make it clear when a CA private key is copied, describe how
+	to avoid doing so.
+
 	* src/client.py (main): Don't frighten users with exceptions on
 	PR_END_OF_FILE_ERROR.
