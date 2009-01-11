@@ -920,6 +920,8 @@ def main():
                     assert False, 'Unhandled child_exception type'
             else:
                 logging.error('I/O error: NSPR connection reset')
+        elif e.errno == nss.error.PR_END_OF_FILE_ERROR:
+            logging.error('I/O error: Unexpected EOF in NSPR')
         else:
             logging.error('NSPR error', exc_info=True)
         sys.exit(1)

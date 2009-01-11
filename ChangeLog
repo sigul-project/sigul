@@ -1,0 +1,4 @@
+2009-01-11  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/client.py (main): Don't frighten users with exceptions on
+	PR_END_OF_FILE_ERROR.

@@ -4,3 +4,4 @@
 /build
 /configure
 Makefile.in
+*.pyc
