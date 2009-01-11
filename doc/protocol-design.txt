@@ -1,0 +1,245 @@
+-*- outline -*-
+
+Rationale for new protocol, not using XML-RPC/whatever: We need something
+simple and small that we can easily write a thorough verifier for.  The need to
+transfer authenticated data without any risk of attacks (e.g. replay of older
+authenticators) also requires a protocol defined at the byte level.
+
+CONVENTIONS
+-----------
+* All numbers are in network byte order.
+* bool == u32, only 0 and 1 allowed
+* strings do not have a trailing NUL unless specified otherwise
+  bytes \x00..\x1F, \x7F.. are prohibited
+
+STREAM PROTOCOL
+---------------
+Both connections to the bridge use TLS, and the TLS session is used to transfer
+two separate "streams": "outer", which contains data accessible to the bridge,
+and "inner", a nested TLS session.
+
+The TLS connection between an endpoint and the bridge consists of a sequence of
+chunks with the following format:
+* u32 N length/type:
+** bits 0..30: L length of the following chunk.
+   if L == 0, this is an unidirectional "end of stream" marker.
+** bit 31: 0 == outer stream, 1 == inner stream
+* u8[L] chunk data
+
+The order of inner and outer chunks does not need to correspond to the logical
+order (if the protocols requests sending outer data, then inner, the inner
+chunk may actually be sent over the TLS session before the outer chunk).  The
+implementation nevertheless should not delay a chunk indefinitely just because
+a lot of data is being transfered over the other stream.  (This simplifies
+implementation because it is not necessary to communicate chunk ordering to the
+subprocess used to implement the nested TLS sessions.)
+
+ENDPOINT PROTOCOL
+-----------------
+The endpoints (client and server) use the stream protocol to talk to the bridge,
+which forwards the communication between them.  The inner stream uses
+a nested TLS session, uses of the inner stream are marked with "|" characters.
+* request: TLS to bridge / from bridge
+** u32 version ID == 0
+** u8 N number of key-value pairs
+   N <= 255
+** N times:
+*** u8 L key length
+    L <= 255
+*** u8[L] key: string
+*** u8 L value length
+    L <= 255
+*** u8[L] value
+** u32 L payload length
+   FIXME: limit request-specific
+   FIXME: should be u64?
+** u8[L] payload
+** client sends EOF on the outer stream at this point
+** |TLS: client - server initialized
+** |u8 N number of key-value pairs
+   |N <= 255
+** |N times:
+*** |u8 L key length
+    |L <= 255
+*** |u8[L] key: string
+*** |u8 L value length
+    |L <= 255
+*** |u8[L] value
+** |now both sides close the inner stream and send EOF on it
+* reply:
+** u32 error code - 0 OK, others defined
+** u8 N number of key-value pairs
+   N <= 255
+** N times:
+*** u8 L key length
+    L <= 255
+*** u8[L] key: string
+*** u8 L name length
+    L <= 255
+*** u8[L] value
+** u8[64] header auth
+   hmac-sha512 of header (including error code), using |header-auth-key
+** u32 L payload length
+   FIXME: should be u64?
+** u8[L] payload
+** u8[64] payload auth
+   hmac-sha512 of payload, using |payload-auth-key
+
+** server sends EOF on the outer stream at this point
+
+COMMON REQUEST FIELDS
+---------------------
+all mandatory
+** op: string
+** user: string
+** |header-auth-sha512: blob, all up to (not including) payload length
+   The hash is computed over the stream content, ignoring chunk headers.
+** |payload-auth-sha512: blob (FIXME: rpm)
+   The hash is computed over the stream content, ignoring chunk headers.
+** |header-auth-key: blob, >= 64 bytes
+   For authenticating reply header
+** |payload-auth-key: blob, >= 64 bytes
+   For authenticating reply payload
+** |payload_
+
+ERROR RESPONSE FIELD
+--------------------
+** message: string
+
+ADMIN REQUESTS
+--------------
+* common fields:
+** |password: blob
+The request must satisfy: user.admin && password matches user.sha512_password
+
+* op="list-users"
+** =>
+** num-users: u32
+** _payload_: num-users * NUL-terminated user name
+* op="new-user"
+** name: string
+** [admin: bool]
+   default false
+** [|new-password: blob]
+   default: password unset
+** =>
+* op="delete-user"
+** name: string
+** =>
+* op="user-info"
+** name: string
+** =>
+** admin: bool
+FIXME: disabled account
+* op="modify-user"
+** name: string
+** [admin: bool]
+** [new-name: string]
+** [|new-password: blob]
+** =>
+default values: no change
+FIXME: disabled account
+* op="key-user-info"
+** name: string
+** key: string
+** =>
+** key-admin: bool
+* op="modify-key-user"
+** name: string
+** key: string
+** [key-admin: bool]
+** =>
+default values: no change
+* op="list-keys"
+** =>
+** num-keys: u32
+** _payload_: num-keys * NUL-terminated key name
+* op="new-key"
+** key: string
+** [initial-key-admin]: string
+   defaults to the invoking user
+** [name-real]: string
+   defaults to key
+** [name-comment]: string
+** [name-email]: string
+   FIXME: allow specifying key type/length?
+** [expire-date]: string
+   yyyy-mm-dd
+** |passphrase: blob
+** =>
+** _payload_: ASCII armored public key
+* op="delete-key"
+** key: string
+** =>
+* op="modify-key"
+** key: string
+** [new-name: string]
+** =>
+# FIXME: key-info, show real name?
+
+KEY ADMIN REQUESTS
+------------------
+* common fields:
+** key: string
+** |passphrase: blob
+   Optional with password access
+The request must satisfy: (key_access[key,user].admin)
+    	    	 	  && passphrase matches key.encrypted_passphrase
+
+* op="list-key-users"
+Access allowed also to admins (see "admin requests" for access rule)
+** =>
+** num-users: u32
+** _payload_: num-users * NUL-terminated user name
+* op="grant-key-access"
+** name: string
+** |new-passphrase: blob
+** =>
+* op="revoke-key-access"
+Access allowed also to admins (see "admin requests" for access rule)
+** name: string
+** =>
+
+USER REQUESTS
+-------------
+* common fields:
+** key: string
+** |passphrase: blob
+The passphrase must match key.encrypted_passphrase
+
+* op="get-public-key"
+** key: string
+** =>
+** _payload_: ASCII armored public key
+Access allowed also to admins (see "admin requests" for access rule)
+* op="change-passphrase"
+** |new-passphrase: blob
+* op="sign-text"
+** _payload_: data to sign
+** =>
+** _payload_: data with clear-text signature
+* op="sign-data"
+** _payload_: data to sign
+** =>
+** _payload_: detached signature packet
+* op="sign-rpm"
+modified by bridge to supply complete payload
+** [rpm-name: string]
+** [rpm-epoch: string]
+** [rpm-version: string]
+** [rpm-release: string]
+** [rpm-arch: string]
+** [rpm-sigmd5: blob]
+** [import-signature: bool]
+   default: false
+** [return-data: bool]
+   default: true
+All of the fields above are only used by the bridge
+FIXME: payload hash for authentication
+** _payload_: complete RPM, added by bridge if empty
+   FIXME: can we extract only the header and authenticate it safely?
+          Perhaps by "using" rpm --addsign to get the data?
+** =>
+** _payload_: signed RPM
+   imported into koji by bridge if import-signature
+   dropped by bridge if !return-package

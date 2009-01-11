@@ -1,0 +1,56 @@
+.\" Copyright (C) 2008, 2009 Red Hat, Inc.  All rights reserved.
+.\"
+.\" This copyrighted material is made available to anyone wishing to use,
+.\" modify, copy, or redistribute it subject to the terms and conditions of the
+.\" GNU General Public License v.2.  This program is distributed in the hope
+.\" that it will be useful, but WITHOUT ANY WARRANTY expressed or implied,
+.\" including the implied warranties of MERCHANTABILITY or FITNESS FOR A
+.\" PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+.\" You should have received a copy of the GNU General Public License along
+.\" with this program; if not, write to the Free Software Foundation, Inc., 51
+.\" Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  Any Red Hat
+.\" trademarks that are incorporated in the source code or documentation are
+.\" not subject to the GNU General Public License and may only be used or
+.\" replicated with the express permission of Red Hat, Inc.
+.\"
+.\" Red Hat Author: Miloslav Trmac <mitr@redhat.com>
+.TH sigul_setup_client 1 "Jan 2009" sigul
+
+.SH name
+sigul_setup_client \- Set up a sigul client
+
+.SH SYNOPSIS
+
+\fBsigul_setup_client\fP
+
+.SH DESCRIPTION
+Sets up a NSS database at \fB~/.sigul\fP,
+which is used by the
+.B sigul
+command in its default configuration,
+using certificates used for Fedora build system access.
+
+The Fedora certificates must already be present in their usual locations.
+
+The command interactively prompts for the necessary passwords.
+
+.SH FILES
+.TP
+.B ~/.sigul
+A directory containing the
+.B sigul
+database and other configuration.
+
+.TP
+.B ~/.fedora-server-ca.cert
+Fedora CA certificate.
+
+.TP
+.B ~/.fedora.cert
+User's Fedora certificate and private key.
+
+.SH AUTHORS
+Miloslav Trmac <mitr@redhat.com>
+
+.SH SEE ALSO
+.BR sigul (1)

@@ -1,0 +1,62 @@
+.\" Copyright (C) 2008, 2009 Red Hat, Inc.  All rights reserved.
+.\"
+.\" This copyrighted material is made available to anyone wishing to use,
+.\" modify, copy, or redistribute it subject to the terms and conditions of the
+.\" GNU General Public License v.2.  This program is distributed in the hope
+.\" that it will be useful, but WITHOUT ANY WARRANTY expressed or implied,
+.\" including the implied warranties of MERCHANTABILITY or FITNESS FOR A
+.\" PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+.\" You should have received a copy of the GNU General Public License along
+.\" with this program; if not, write to the Free Software Foundation, Inc., 51
+.\" Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  Any Red Hat
+.\" trademarks that are incorporated in the source code or documentation are
+.\" not subject to the GNU General Public License and may only be used or
+.\" replicated with the express permission of Red Hat, Inc.
+.\"
+.\" Red Hat Author: Miloslav Trmac <mitr@redhat.com>
+.TH sigul_server_add_admin 1 "Jan 2009" sigul
+
+.SH name
+sigul_server_add_admin \- Add an administrator account to a signing server
+
+.SH SYNOPSIS
+
+\fBsigul_server_add_admin\fP [\fIOPTIONS\fP]
+
+.SH DESCRIPTION
+Adds a signing server administrator account to a signing server.
+Prompts for the administrator acocunt name and password.
+
+.SH OPTIONS
+
+.TP
+\fB\-c\fP, \fB\-\-config\-file\fP \fIPATH\fP
+Use
+.I PATH
+as the per-user configuration file instead of \fB~/.sigul/server.conf\fR.
+
+.TP
+\fB\-v\fP, \fB\-\-verbose\fP
+Be more verbose.
+Using this option twice enables debugging output.
+
+.SH EXIT STATUS
+.B sigul_server_add_admin
+returns with exit status 0 on success, non-zero on error.
+
+.SH FILES
+.TP
+.B @configdir@/server.conf
+A system-wide configuration file.
+
+.TP
+.B ~/.sigul/server.conf
+A per-user configuration file.
+Values defined in this file override the system-wide configuration file.
+
+.SH AUTHORS
+Miloslav Trmac <mitr@redhat.com>
+
+.SH SEE ALSO
+.BR sigul_server (8),
+.BR sigul_server_create_db (8)

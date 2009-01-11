@@ -1,0 +1,1 @@
+bridge ignores SIGINT (caused by "import rpm")

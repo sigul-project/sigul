@@ -1,0 +1,265 @@
+.\" Copyright (C) 2008, 2009 Red Hat, Inc.  All rights reserved.
+.\"
+.\" This copyrighted material is made available to anyone wishing to use,
+.\" modify, copy, or redistribute it subject to the terms and conditions of the
+.\" GNU General Public License v.2.  This program is distributed in the hope
+.\" that it will be useful, but WITHOUT ANY WARRANTY expressed or implied,
+.\" including the implied warranties of MERCHANTABILITY or FITNESS FOR A
+.\" PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+.\" You should have received a copy of the GNU General Public License along
+.\" with this program; if not, write to the Free Software Foundation, Inc., 51
+.\" Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  Any Red Hat
+.\" trademarks that are incorporated in the source code or documentation are
+.\" not subject to the GNU General Public License and may only be used or
+.\" replicated with the express permission of Red Hat, Inc.
+.\"
+.\" Red Hat Author: Miloslav Trmac <mitr@redhat.com>
+.TH sigul 1 "Jan 2009" sigul
+
+.SH name
+sigul \- A client for accessing a signing server
+
+.SH SYNOPSIS
+
+\fBsigul\fP [\fIOPTIONS\fP] [\fICOMMAND\fP [\fICOMMAND-ARGS...\fP]]
+
+.SH DESCRIPTION
+Connects to a sigul server through a sigul bridge to perform \fICOMMAND\fP.
+
+.SH OPTIONS
+The global
+.B sigul
+.I OPTIONS
+above are distinct from \fICOMMAND\fP-specific options.
+Only options preceding
+.I COMMAND
+on the command line are treated as global \fIOPTIONS\fP.
+
+.TP
+.B \-\-help\-commands
+List recognized \fICOMMAND\fPs.
+
+.TP
+.B \-\-batch
+Be more suitable for batch processing:
+Instead of reading passwords from \fB/dev/tty\fP,
+read them from the standard input.
+Each password on standard input is terminated by a NUL (0) byte.
+The passwords are expected in the same order as when
+.B \-\-batch
+is not specified,
+except that a new password is expected only once, not twice.
+
+.TP
+\fB\-c\fP, \fB\-\-config\-file\fP \fIPATH\fP
+Use
+.I PATH
+as the per-user configuration file instead of \fB~/.sigul/client.conf\fR.
+
+.TP
+\fB\-v\fP, \fB\-\-verbose\fP
+Be more verbose.
+Using this option twice enables debugging output.
+
+.SH EXIT STATUS
+.B sigul
+returns with exit status 0 on success, non-zero on error.
+
+.SH ADMINISTRATIVE COMMANDS
+These commands are only available to signing server administrators,
+identified with a personal password.
+
+.TP
+.B list\-users
+List users recognized by the server.
+
+.TP
+\fBnew\-user\fP [\fB\-\-admin\fP] [\fB\-\-with\-password\fP] \fIUSER\fP
+Add
+.I USER
+to the server.
+The user will be a server administrator if
+.B \-\-admin
+is specified,
+and will have a personal password defined if
+.B \-\-with\-password
+is specified.
+
+.TP
+\fBdelete\-user\fP \fIUSER\fP
+Delete
+.I USER
+on the server.
+This operation is allowed only after all key access right were revoked from
+\fIUSER\fP.
+
+.TP
+\fBuser\-info\fP \fIUSER\fP
+Show information about \fIUSER\fP.
+
+.TP
+\fBmodify\-user\fP [\fB\-\-admin\fP {\fByes\fP|\fBno\fP}] [\fB\-\-new\-name\fP \fINEW_NAME\fP] [\fB\-\-change\-password\fP] \fIUSER\fP
+Modify
+.I USER
+according to the specified options.
+
+.TP
+\fBkey\-user\-info\fP \fIUSER\fP \fIKEY\fP
+Show whether
+.I USER
+has access to
+.I KEY
+and whether the user is an administrator for this key.
+
+.TP
+\fBmodify\-key\-user\fP [\fB\-\-key\-admin\fP {\fByes\fP|\fBno\fP}] \fIUSER\fP \fIKEY\fP
+Modify the access of
+.I USER
+to
+.I KEY
+according to the specified options.
+
+.TP
+.B list\-keys
+List keys stored on the server.
+
+.TP
+\fBnew\-key\fP [\fB\-\-key\-admin\fP \fIUSER\fP] [\fB\-\-name\-real\fP \fIREAL_NAME\fP] [\fB\-\-name\-comment\fP \fICOMMENT\fP] [\fB\-\-name\-email\fP \fIEMAIL\fP] [\fB\-\-expire\-date\fP \fIYYYY\fP\fB-\fP\fIMM\fP\fB-\fP\fIDD\fP] \fIKEY\fP
+Create a new key
+.I KEY
+on the server,
+using the specified name and expiry information,
+and write the public key to standard output.
+
+If
+.I USER
+is specified,
+make him the key administrator and only user instead of the invoking user.
+This is only this user and the users this user grants access can use the key;
+even signing server administrators can not use the key
+without knowing a key passphrase of one of the authorized key users.
+
+.TP
+\fBdelete\-key\fP \fIKEY\fP
+Delete
+.I KEY
+from the server.
+
+.TP
+\fBmodify\-key\fP [\fB\-\-new\-name\fP \fINEW_NAME\fP] \fIKEY\fP
+Modify
+.I KEY
+according to the specified options.
+
+.SH KEY ADMINISTRATION COMMANDS
+These commands are available to key administrators,
+identified with a key passphrase.
+Some of the commands support a
+.B \-\-password
+option;
+these commands also available to signing server administrators,
+identified by their personal password.
+
+.TP
+\fBlist\-key\-users\fP [\fB\-\-password\fP] \fIKEY\fP
+List users that have access to \fIKEY\fP.
+
+.TP
+\fBgrant\-key\-access\fP \fIKEY\fP \fIUSER\fP
+Grant access to
+.I KEY
+to \fIUSER\fP.
+
+.TP
+\fBrevoke\-key\-access\fP [\fB\-\-password\fP] \fIKEY\fP \fIUSER\fP
+Revoke access to
+.I KEY
+from \fIUSER\fP.
+This command can not revoke access from the last user of \fIKEY\fP:
+you must delete
+.I KEY
+instead.
+
+.SH USER COMMANDS
+These commands are available to key users,
+identified with a key passphrase.
+Some of the commands support a
+.B \-\-password
+option;
+these commands also available to signing server administrators,
+identified by their personal password.
+
+.TP
+\fBget\-public\-key\fP [\fB\-\-password\fP] \fIKEY\fP
+Write the public key for
+.I KEY
+to standard output.
+
+.TP
+\fBchange\-passphrase\fP \fIKEY\fP
+Change the user's passphrase for \fIKEY\fP.
+Each user has a separate passphrase for each
+.I KEY
+they have access to.
+
+.TP
+\fBsign-text\fP [\fB\-\-output\fP \fIOUTPUT\fP] \fIKEY\fP \fIINPUT_FILE\fP
+Wrap
+.I INPUT_FILE
+in a clear-text signature,
+and write it to \fIOUTPUT\fP.
+If
+.I OUTPUT
+is not defined,
+write the signed text to standard output.
+
+.TP
+\fBsign-data\fP [\fB\-\-output\fP \fIOUTPUT\fP] \fIKEY\fP \fIINPUT_FILE\fP
+Create a detached signature for
+.I INTPUT_FILE
+and write it to \fIOUTPUT\fP.
+If
+.I OUTPUT
+is not defined,
+write the signed text to standard output,
+which must not be a terminal.
+
+.TP
+\fBsign-rpm\fP [\fB\-\-output\fP \fIOUTPUT\fP] [\fB\-\-store\-in\-koji\fP] [\fB\-\-koji\-only\fP] \fIKEY\fP \fIRPM_ID\fP
+Sign the rpm specified by \fIRPM_ID\fP.
+.I RPM_ID
+can either be a path to a RPM file, or a
+\fIname\fP\fB-\fP\fIepoch\fP\fB:\fP\fIversion\fP\fB-\fP\fIrelease\fP\fB.\fP\fIarch\fP
+string
+that specifies a RPM stored in Koji.
+
+If
+.B \-\-store\-in\-koji
+is specified,
+store the generated signature to Koji.
+Unless
+.B \-\-koji\-only
+is specified,
+write a signed RPM file to \fIOUTPUT\fP,
+and if
+.I OUTPUT
+is not defined,
+write it to standard output,
+
+.SH FILES
+.TP
+.B @configdir@/client.conf
+A system-wide configuration file.
+
+.TP
+.B ~/.sigul/client.conf
+A per-user configuration file.
+Values defined in this file override the system-wide configuration file.
+
+.SH AUTHORS
+Miloslav Trmac <mitr@redhat.com>
+
+.SH SEE ALSO
+.BR sigul_setup-client (1),
+.BR sigul_bridge (8),
+.BR sigul_server (8)

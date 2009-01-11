@@ -1,51 +1,168 @@
-sigul: An automated gpg signing system
-https://fedorahosted.org/sigul
---
+Signing server setup
+====================
 
-Initialization
-==============
+Required packages
+-----------------
+pexpect
+python-fedora
+python-urlgrabber
+python-sqlalchemy
 
-The init.py script will automatically import various keys into your database.
-If the '--dev' flag is passed, it will create a 'guest' releng account for local
-testing.
+python-nss (modified)
+pygpgme (modified)
 
- $ tg-admin sql create 
- $ ./init.py
- Populating database with keys
- [1CDDBCA9] fedora-rawhide : Fedora Project automated build signing key <rawhide@redhat.com>
- [4F2A6FD2] fedora-gold : Fedora Project <fedora@redhat.com>
- [F5B783C4] signserv-test : Signing Server (Test key) <nobody@fedoraproject.org>
- [30C9ECF8] fedora-test : Fedora Project (Test Software) <rawhide@redhat.com>
+Overall design
+--------------
+There are three separate computers involved:
+* the signing server, which should be as isolated as possible
+* a bridge that accepts connections from the server and from clients
+* at least one client that sends requests to the bridge
 
-Running the server
-==================
+Setting up the bridge
+---------------------
+The bridge gates access to the signing server, and transfers RPM data from and
+to koji.  To set up the bridge:
 
- $ ./start-sigul.py
+* Create a NSS database for the bridge:
+	bridge_dir=/var/lib/sigul
+        certutil -d $bridge_dir -N
+  (you'll be asked to choose a NSS database password)
+* Create a new CA certificate:
+        certutil -d $bridge_dir -S -n my-ca -s 'CN=My CA' -t CT,, -x -v 120
+  Alternatively, import an external CA certificate:
+        certutil -d $bridge_dir -A -n fedora-ca -t CT,, -a \
+		-i ~/.fedora-server-ca.cert
+* Create a certificate for the bridge (replace at least BRIDGE_HOSTNAME)
+        certutil -d $bridge_dir -S -n sigul-bridge-cert \
+		 -s 'CN=BRIDGE_HOSTNAME' -c my-ca -t u,, -v 120
+  Alternatively, import a certificate and a key from a .pem file:
+	openssl pkcs12 -export -out bridge.p12 -in openssl-cert.pem \
+		-name sigul-bridge-cert
+        pk12util -d $bridge_dir -i bridge.p12
+	rm bridge.p12
 
-Using the client
-================
+* Configure the bridge: edit /etc/sigul/bridge.conf:
+  Note the default ports, edit at least fas-user-name and fas-password and the
+  [nss] section.  The default configuration assumes you set up a separate
+  "sigul" user and group; remove the [daemon] section if you want the bridge
+  to run as the invoking user.
+* If you use a separate user and group:
+	chown sigul:sigul $server_dir/*.db
 
- $ ./client.py
- Usage: client.py [options]
+* Run the bridge in a debug mode:
+	sigul_bridge -v -v
+  You should see the first log message in /var/log/sigul_bridge.log:
+	2008-11-24 16:20:29,454 DEBUG: Waiting for the server to connect
+  Keep the bridge running (e.g. open a new terminal)
 
- The sigul client
+  After you are satisfied with the function of the system, enable and start the
+  sigul_bridge service.
 
- Options:
-   -h, --help            show this help message and exit
-   -s, --sign            Sign a list of RPMs
-   -k KEY, --key=KEY     Specify a GPG key to sign with
-   -c CLEAR, --clear=CLEAR
-                         Make a clear text signature
-   -l, --list            List available keys
-   -u USERNAME, --username=USERNAME
-                         Fedora username
-   -v, --verbose         Show debugging messages
+Setting up the server
+---------------------
+The server stores the keys and performs crypto operations.  To set up the
+server:
 
-Using the sigul shell
+* Create a NSS database for the server in $server_dir=/var/lib/sigul
+  (see above)
+* Import the CA certificate used to generate the certificate for the bridge:
+        pk12util -d $bridge_dir -o ca.p12 -n my-ca
+	pk12util -d $server_dir -i ca.p12
+	rm ca.p12
+	certutil -d $server_dir -M -n my-ca -t CT,,
+* Create a certificate for the server, or import it from a .pem file
+  (see above).  Use 'sigul-server-cert' as a nickname.
+
+* Configure the server: edit /etc/sigul/server.conf:
+  Note the default ports.  Edit at least bridge-hostname and the [nss] section.
+  The default configuration assumes you set up a separate "sigul" user and
+  group; remove the [daemon] section if you want the server to run as the
+  invoking user.
+* If you want a GPG home directory different from the default
+  /var/lib/sigul/gnupg, create it.  Its location is specified either in
+  server.conf ("gnupg-home"), or, if that is not defined, in settings.py
+  ("default_gnupg_home")
+* If you use a separate user and group:
+	chown sigul:sigul $server_dir/*.db
+
+* Create the server's database:
+	sigul_server_create_db
+* Add the initial administrator:
+	sigul_server_add_admin
+* Run the server in a debug mode:
+	sigul_server -v -v
+  You should see the first log message in /var/log/sigul_server.log:
+	2008-11-24 16:36:42,154 DEBUG: Waiting for a request
+  ... and the bridge should log:
+	2008-11-24 16:41:42,214 DEBUG: Waiting for the client to connect
+
+  After you are satisfied with the function of the system, enable and start the
+  sigul_server service.
+
+Setting up the client
+---------------------
+* Create a NSS database for the client in $client_dir=~/.sigul.
+  (see above)
+* Import the CA certificate used to generate the certificate for the bridge
+  (see above)
+* Create a certificate for the user, or import it from a .pem file
+  (see above).  Use 'sigul-client-cert' as a nickname,
+  CN=YOUR_FEDORA_ACCOUNT_NAME as the certificate's subject ('-s' option to
+  certutil).  Use 'u,,' as a parameter to the '-t' (trust) option.
+
+* Configure the client: edit /etc/sigul/client.conf:
+  Note the default port.  Edit at least bridge-hostname, server-hostname
+  and the [nss] section.  Edit user-name to be the same as the user name of the
+  server administrator you have created before.
+
+* Run the client:
+	sigul -v -v list-users
+  This should ask for administrator's password and then output a single
+  line containing the administrator's user name.
+
+Note on setting up the client
+-----------------------------
+After the system is deployed using the Fedora CA and certificates issued by the
+Fedora CA, a client can be confiured simply by running
+	sigul_setup_client
+This scripts imports ~/.fedora-server-ca.cert and ~/.fedora.cert into ~/.sigul;
+~/.sigul will be the default $client_dir.
+
+Guide to the commands
 =====================
-
-Creating a new Key by hand from the sigul shell
-
- $ tg-admin shell
- >>> Key(key_id='1234', name='testkey', email='foo@bar.com', description='Test key')
- <Key 5 name=u'testkey' key_id=u'1234' email=u'foo@bar.com' passphrase=u'' description=u'Test key'>
+See (sigul --help-commands) and (sigul $command --help) for details.  Note that
+each user has a potentially different pass phrase for each key they have access
+to, and some users (e.g. administrators) may have a password that is not
+related to any key.
+* Create a new user on the server:
+	sigul new-user [--admin] [--with-password] new_user_name
+* Create a new key, making key_admin an administrator of the key (an user
+  that can grant or revoke access to the key to/from other users):
+	sigul new-key [--name-real=..] [...] --key-admin key_admin new_key_name
+  (This can take quite a long time because gpg needs to generate enough
+  entropy.)
+* Grant access to the key to another user:
+	sigul grant-key-access key_name grantee_name
+  (To try access as different users, edit conf/client.conf:[client] user-name
+* Clearsign a text message:
+	cat > my-text-file << EOF
+	[...]
+	sigul sign-text -o signed-text-file key_name my-text-file
+* Sign a binary file:
+	sigul sign-data -o data-file.gpg key_name data-file
+* Sign a local RPM:
+	sigul sign-rpm -o signed.rpm key_name unsigned.rpm
+* Download a RPM from koji, sign it and store it locally
+	sigul sign-rpm -o signed.rpm key_name basesystem-8.1-1.noarch
+* Download a RPM from koji, sign it and store the signature into koji
+  (UNTESTED!!)
+	sigul sign-rpm -o signed.rpm --store-in-koji --koji-only key_name \
+		unsigned.rpm
+  NOTE: This is currently disabled in the code, it requires a koji configuration
+  (in /etc/koji.conf or ~/.koji/config) that allows authentication, submitting
+  signatures and proxy authentication.
+* Provide passphrases noninteractively, to sign data from scripts:
+  Use --batch, supply NUL-terminated pass-phrases on stdin (if the interactive
+  mode asks for a particular passphrase twice, supply it only once).  E.g.:
+	printf 'MY_PASSPHRASE\0' | sigul --batch \
+		sign-data -o foo my_key pyrpm-0.70-1.src.rpm

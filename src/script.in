@@ -1,0 +1,3 @@
+#! /bin/sh
+PYTHONPATH=$PYTHONPATH${PYTHONPATH:+:}@pkgdatadir@ \
+    exec @PYTHON@ @pkgdatadir@/@program@.py "$@"

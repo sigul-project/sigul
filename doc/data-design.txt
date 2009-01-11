@@ -1,0 +1,66 @@
+user (
+	id,
+	name VARCHAR NOT NULL UNIQUE,
+	sha512_password BLOB NULL % only for system admins
+	admin BOOLEAN NOT NULL
+);
+
+key (
+	id,
+	name VARCHAR NOT NULL UNIQUE,
+	fingerprint VARCHAR NOT NULL UNIQUE
+);
+
+key_access (
+	id,
+	key_id NOT NULL REFERENCES key(id),
+	user_id NOT NULL REFERENCES user(id),
+	encrypted_passphrase BLOB NOT NULL % created using gpg --symmetric
+	key_admin BOOLEAN NOT NULL,
+	CONSTRAINT UNIQUE (key_id, user_id)
+);
+
+server configuration:
+* database_path
+* gnupg_key_type
+* gnupg_key_length
+* gnupg_subkey_type
+* gnupg_subkey_length
+* gnupg_key_usage
+* server_cert_nickname
+* bridge_hostname
+* bridge_port
+* passphrase_len
+* max_memory_payload_size
+* max_file_payload_size
+* NSS database directory
+* gnupg_bin
+* gnupg_home
+* nss_dir
+* nss_password
+? bridge certificate?
+? log file
+  ? support rotation? don't interfere with rotation?
+? log host, port
+  ? what mechanism?
+
+bridge configuration:
+* nss-dir
+* nss-password
+* bridge-cert-nickname
+* server-listen-port
+* client-listen-port
+? server address, port for checking?
+? FAS path
+? FAS group for key server users
+? log file
+
+client configuration:
+* nss-dir
+* nss-password
+* client-cert-nickname
+* bridge-hostname
+* bridge-port
+* server-hostname
+* user-name
+? server certificate

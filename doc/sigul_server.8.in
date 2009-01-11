@@ -1,0 +1,83 @@
+.\" Copyright (C) 2008, 2009 Red Hat, Inc.  All rights reserved.
+.\"
+.\" This copyrighted material is made available to anyone wishing to use,
+.\" modify, copy, or redistribute it subject to the terms and conditions of the
+.\" GNU General Public License v.2.  This program is distributed in the hope
+.\" that it will be useful, but WITHOUT ANY WARRANTY expressed or implied,
+.\" including the implied warranties of MERCHANTABILITY or FITNESS FOR A
+.\" PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+.\" You should have received a copy of the GNU General Public License along
+.\" with this program; if not, write to the Free Software Foundation, Inc., 51
+.\" Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  Any Red Hat
+.\" trademarks that are incorporated in the source code or documentation are
+.\" not subject to the GNU General Public License and may only be used or
+.\" replicated with the express permission of Red Hat, Inc.
+.\"
+.\" Red Hat Author: Miloslav Trmac <mitr@redhat.com>
+.TH sigul_server 1 "Jan 2009" sigul
+
+.SH name
+sigul_server \- A signing server
+
+.SH SYNOPSIS
+
+\fBsigul_server\fP [\fIOPTIONS\fP]
+
+.SH DESCRIPTION
+Repeatedly connects to a
+.B sigul_bridge
+to receive and and act upon a request from a client,
+
+.SH OPTIONS
+
+.TP
+\fB\-c\fP, \fB\-\-config\-file\fP \fIPATH\fP
+Use
+.I PATH
+as the per-user configuration file instead of \fB~/.sigul/server.conf\fR.
+
+.TP
+\fB\-d\fP, \fB\-\-daemonize\fP
+Detach from the terminal and run in the background.
+
+.TP
+\fB\-v\fP, \fB\-\-verbose\fP
+Be more verbose.
+Using this option twice enables debugging output.
+
+.SH EXIT STATUS
+.B sigul_server
+returns with exit status 0 when interrupted with SIGINT,
+non-zero on an unrecoverable error.
+
+.SH FILES
+.TP
+.B @configdir@/server.conf
+A system-wide configuration file.
+
+.TP
+.B ~/.sigul/server.conf
+A per-user configuration file.
+Values defined in this file override the system-wide configuration file.
+
+.TP
+.B @piddir@/sigul_server.pid
+A file that contains the process ID of the bridge while it is running.
+
+.SH NOTES
+Before starting
+.B sigul_server
+for the first time,
+create its database using
+.BR sigul_server_create_db (8)
+and set up the first singing server administrator using
+.BR sigul_server_add_admin (8).
+
+.SH AUTHORS
+Miloslav Trmac <mitr@redhat.com>
+
+.SH SEE ALSO
+.BR sigul (1),
+.BR sigul_bridge (8),
+.BR sigul_server_add_admin (8),
+.BR sigul_server_create_db (8)
