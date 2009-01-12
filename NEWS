@@ -1,0 +1,4 @@
+Changes in version 0.91:
+- Modified sigul to run on RHEL5.
+- Enhanced handling of unexpected EOF in the client.
+- Modified README not to recommend copying the CA private key around.

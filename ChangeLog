@@ -1,3 +1,8 @@
+2009-01-12  Miloslav Trmač  <mitr@redhat.com>
+
+	* configure.ac: Version 0.91.
+	* NEWS: Update.
+
 2009-01-11  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/utils.py (M2CryptoSHA512DigestMod): New class.
