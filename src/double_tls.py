@@ -735,7 +735,7 @@ class DoubleTLSClient(object):
             logging.error(str(e))
             logging.shutdown()
             os._exit(self.__unrecoverable_error_exit_code)
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, SystemExit):
             # No error message
             logging.shutdown()
             os._exit(self.__unrecoverable_error_exit_code)

@@ -1048,7 +1048,7 @@ def request_handling_child(config):
             return _CHILD_BUG
         else:
             logging.info('Unexpected EOF')
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         pass # Don't consider this an unexpected exception
     except (utils.NSSInitError, double_tls.InnerCertificateNotFound), e:
         logging.error(str(e))
