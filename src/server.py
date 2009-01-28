@@ -960,9 +960,17 @@ def cmd_sign_rpm(db, conn):
 
     env = dict(os.environ) # Shallow copy, uses our $GNUPGHOME
     env['LC_ALL'] = 'C'
-    child = pexpect.spawn('rpm', ['--define', '_signature gpg', '--define',
-                                  '_gpg_name %s' % access.key.fingerprint,
-                                  '--addsign', conn.payload_path], env=env)
+    argv = ['--define', '_signature gpg',
+            '--define', '_gpg_name %s' % access.key.fingerprint]
+    field_value = conn.outer_field_bool('v3-signature')
+    if field_value is not None and field_value:
+        # Add --force-v3-sigs to the value in redhat-rpm-config-9.0.3-3.fc10
+        argv += ['--define', '__gpg_sign_cmd %{__gpg} gpg --force-v3-sigs '
+                 '--batch --no-verbose --no-armor --passphrase-fd 3 '
+                 '--no-secmem-warning -u "%{_gpg_name}" -sbo '
+                 '%{__signature_filename} %{__plaintext_filename}']
+    child = pexpect.spawn('rpm', argv + ['--addsign', conn.payload_path],
+                          env=env)
     child.expect('Enter pass phrase: ')
     child.sendline(key_passphrase)
     answer = child.expect(['Pass phrase is good\.',

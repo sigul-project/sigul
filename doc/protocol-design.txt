@@ -235,6 +235,8 @@ modified by bridge to supply complete payload
 ** [return-data: bool]
    default: true
 All of the fields above are only used by the bridge
+** [v3-signature: bool]
+   default: false
 FIXME: payload hash for authentication
 ** _payload_: complete RPM, added by bridge if empty
    FIXME: can we extract only the header and authenticate it safely?

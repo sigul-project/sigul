@@ -743,7 +743,10 @@ def cmd_sign_rpm(conn, args):
     p2.add_option('--koji-only', action='store_true',
                   help='Do not save the signed RPM locally, store it only to '
                   'Koji')
-    p2.set_defaults(store_in_koji=False, koji_only=False)
+    p2.add_option('--v3-signature', action='store_true',
+                  help='Create a v3 signature (currently necessary for RSA'
+                  'keys)')
+    p2.set_defaults(store_in_koji=False, koji_only=False, v3_signature=False)
     (o2, args) = p2.parse_args(args)
     if len(args) != 2:
         p2.error('key name and RPM path or identification expected')
@@ -760,6 +763,8 @@ def cmd_sign_rpm(conn, args):
         f['import-signature'] = True
     if o2.koji_only:
         f['return-data'] = False
+    if o2.v3_signature:
+        f['v3-signature'] = True
     omit_payload_auth = False
     if os.path.exists(args[1]):
         try:

@@ -1,5 +1,10 @@
 2009-01-28  Miloslav Trmač  <mitr@redhat.com>
 
+	* doc/protocol-design.txt (sign-rpm): Add optional "v3-signature" field.
+	* src/client.py (cmd_sign_rpm): Add --v3-signature.
+	* src/bridge.py (request_types): Add v3-signature to sign-rpm.
+	* src/server.py (cmd_sign_rpm): Handle v3-signature.
+
 	* src/double_tls.py (DoubleTLSClient.__child)
 	* src/server.py (request_handling_child): Handle SystemError (raised
 	on SIGTERM) without printing a backtrace.

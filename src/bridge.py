@@ -378,7 +378,8 @@ request_types = {
                                     Field('rpm-sigmd5', optional=True),
                                     BoolField('import-signature',
                                               optional=True),
-                                    BoolField('return-data', optional=True)),
+                                    BoolField('return-data', optional=True),
+                                    BoolField('v3-signature', optional=True)),
                                    max_payload=1024*1024*1024),
     }
 del RT
