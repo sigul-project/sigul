@@ -1,3 +1,8 @@
+Changes in version 0.92:
+- Added --v3-signature to "sigul sign-rpm", rpm doesn't recognize v4 RSA
+  signatures.
+- SIGTERM no longer causes a backtrace.
+
 Changes in version 0.91:
 - Modified sigul to run on RHEL5.
 - Enhanced handling of unexpected EOF in the client.
