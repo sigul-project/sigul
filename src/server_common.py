@@ -17,7 +17,10 @@
 
 import cStringIO
 import crypt
+import logging
 import os
+import shutil
+import tempfile
 
 import gpgme
 import nss.nss
@@ -165,6 +168,10 @@ def db_create(config):
 
  # GPG utilities
 
+class GPGError(Exception):
+    '''Error performing a GPG operation.'''
+    pass
+
 class GPGConfiguration(utils.Configuration):
 
     def _add_defaults(self, defaults):
@@ -218,6 +225,117 @@ def gpg_delete_key(config, fingerprint):
     ctx = _gpg_open(config)
     key = ctx.get_key(fingerprint, True)
     ctx.delete(key, True)
+
+def _restore_gnupg_home(config, backup_dir):
+    '''Restore config.gnupg_home from a backup in backup_dir.'''
+    tmp_dir = tempfile.mktemp(prefix=os.path.basename(config.gnupg_home),
+                              dir=os.path.dirname(config.gnupg_home))
+    shutil.copytree(backup_dir, tmp_dir)
+    # This is racy.  In the worst case manual recovery is necessary anyway,
+    # and backup_dir will be left around if we fail.
+    shutil.rmtree(config.gnupg_home)
+    os.rename(tmp_dir, config.gnupg_home)
+
+def gpg_import_key(config, key_file):
+    '''Import a public and secret key from key_file.
+
+    Return a fingerprint.  Raise GPGError if key_file contents are unexpected.
+
+    '''
+    # We can't parse key_file to see whether it is acceptable, so just back
+    # up the database and restore it if necessary.
+    tmp_dir = tempfile.mkdtemp()
+    import_ok = False
+    try:
+        backup_dir = os.path.join(tmp_dir, 'gnupghome-backup')
+        shutil.copytree(config.gnupg_home, backup_dir)
+        ctx = _gpg_open(config)
+        r = ctx.import_(key_file)
+        if (r.imported == 0 and r.secret_imported == 0 and
+            len(r.imports) == 1 and (r.imports[0][2] & gpgme.IMPORT_NEW) == 0):
+            raise GPGError('Key already exists')
+        if (r.imported != 1 or r.secret_imported != 1 or len(r.imports) != 2 or
+            set((r.imports[0][2], r.imports[1][2])) !=
+            set((gpgme.IMPORT_NEW, gpgme.IMPORT_NEW | gpgme.IMPORT_SECRET)) or
+            r.imports[0][0] != r.imports[1][0]):
+            raise GPGError('Unexpected import file contents')
+        if r.imports[0][1] is not None:
+            raise r.imports[0][1]
+        if r.imports[1][1] is not None:
+            raise r.imports[1][1]
+        import_ok = True
+    finally:
+        if not import_ok:
+            _restore_gnupg_home(config, backup_dir)
+        # If _restore_gnupg_home raises an exception, tmp_dir won't be removed.
+        shutil.rmtree(tmp_dir)
+    return r.imports[0][0]
+
+# In LISP a nested function that modifies upper-level variables would be enough;
+# Python requires an object
+class _ChangePasswordResponder(object):
+    def __init__(self, old_passphrase, new_passphrase):
+        self.old_passphrase = old_passphrase
+        self.new_passphrase = new_passphrase
+        self.passwd_cmd_sent = False
+        self.quit_cmd_sent = False
+        self.want_new_passphrase = None
+        # pygpgme overrides any exceptions in the callback, store them here
+        self.exception = None
+
+    def callback(self, status, args, fd):
+        try:
+            if status == gpgme.STATUS_GET_LINE and args == 'keyedit.prompt':
+                if not self.passwd_cmd_sent:
+                    os.write(fd, 'passwd\n')
+                    self.passwd_cmd_sent = True
+                else:
+                    os.write(fd, 'save\n')
+                    self.quit_cmd_sent = True
+            elif status in (gpgme.STATUS_GOT_IT, gpgme.STATUS_USERID_HINT,
+                            gpgme.STATUS_GOOD_PASSPHRASE, gpgme.STATUS_EOF):
+                pass
+            elif status == gpgme.STATUS_NEED_PASSPHRASE:
+                self.want_new_passphrase = False
+            elif status == gpgme.STATUS_GET_HIDDEN:
+                if not self.want_new_passphrase:
+                    os.write(fd, self.old_passphrase + '\n')
+                else:
+                    os.write(fd, self.new_passphrase + '\n')
+            elif status == gpgme.STATUS_NEED_PASSPHRASE_SYM:
+                self.want_new_passphrase = True
+            elif status == gpgme.STATUS_BAD_PASSPHRASE:
+                self.exception = GPGError('Invalid passphrase')
+                return gpgme.ERR_GENERAL
+            else:
+                logging.error('Unexpected GPG edit callback: (%s, %s, %s)',
+                              repr(status), repr(args), repr(fd))
+                self.exception = NotImplementedError()
+                return gpgme.ERR_GENERAL
+            return gpgme.ERR_NO_ERROR
+        except Exception, e:
+            self.exception = e
+            raise # Will return gpgme.ERR_GENERAL
+
+def gpg_change_password(config, fingerprint, old_passphrase, new_passphrase):
+    '''Change a passphrase for the specified key.
+
+    Raise GPGError if old_passphrase is invalid.
+
+    '''
+    ctx = _gpg_open(config)
+    key = ctx.get_key(fingerprint, True)
+    responder = _ChangePasswordResponder(old_passphrase, new_passphrase)
+    try:
+        ctx.edit(key, responder.callback, cStringIO.StringIO())
+    except gpgme.GpgmeError:
+        if responder.exception is not None:
+            raise responder.exception
+        raise
+    if (not responder.passwd_cmd_sent or not responder.want_new_passphrase or
+        not responder.quit_cmd_sent):
+        logging.error('Unexpected state when changing GPG key password')
+        raise NotImplementedError()
 
 def gpg_encrypt_symmetric(config, cleartext, passphrase):
     '''Return cleartext encrypted using passphrase.'''

@@ -1,9 +1,36 @@
+2009-04-10  Miloslav Trmač  <mitr@redhat.com>
+
+	* configure.ac: Version 0.93.
+
+	* doc/sigul.1.in: Document import-key.
+	* README: Document import-key.
+
+	* doc/protocol-design.txt (import-key): New operation.
+	* src/client.py (cmd_import_key): New function.
+	(command_handlers): Add cmd_import_key.
+	* src/errors.py (INVALID_IMPORT, IMPORT_PASSPHRASE_ERROR): New
+	definitions.
+	(_messages): Update.
+	* src/bridge.py (request_types): Add import-key.
+	* src/server_common.py (GPGError): New exception class.
+	(_restore_gnupg_home, gpg_import_key): New functions.
+	(_ChangePasswordResponder): New class.
+	(gpg_change_password): New function.
+	* src/server.py (random_passphrase): Split from cmd_new_key.
+	(cmd_import_key): New function.
+
+	* src/bridge.py: Update to run with newer python-fedora.
+
+	* src/client.py (cmd_grant_key_access): Use read_key_passphrase().
+
+	* src/server.py (cmd_new_key): Remove a redundant check.
+
 2009-01-28  Miloslav Trmač  <mitr@redhat.com>
 
 	* configure.ac: Version 0.92.
 	* NEWS: Update.
 
-	* doc/protocol-design.txt (sign-rpm): Add optional "v3-signature" field.
+	* doc/protoocol-design.txt (sign-rpm): Add optional "v3-signature" field.
 	* src/client.py (cmd_sign_rpm): Add --v3-signature.
 	* src/bridge.py (request_types): Add v3-signature to sign-rpm.
 	* src/server.py (cmd_sign_rpm): Handle v3-signature.

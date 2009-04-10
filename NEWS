@@ -1,3 +1,7 @@
+Changes in version 0.93:
+- New command "sigul import-key".
+- Fixed FAS authentication support with new python-fedora.
+
 Changes in version 0.92:
 - Added --v3-signature to "sigul sign-rpm", rpm doesn't recognize v4 RSA
   signatures.

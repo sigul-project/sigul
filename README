@@ -156,6 +156,9 @@ related to any key.
 	sigul new-key [--name-real=..] [...] --key-admin key_admin new_key_name
   (This can take quite a long time because gpg needs to generate enough
   entropy.)
+* Import an existing key, making key_admin an administrator of the key:
+	gpg --export-secret-key your-key-name > foo.gpg
+	sigul import-key --key-admin key_admin new_key_name foo.gpg
 * Grant access to the key to another user:
 	sigul grant-key-access key_name grantee_name
   (To try access as different users, edit conf/client.conf:[client] user-name

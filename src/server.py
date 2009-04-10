@@ -612,6 +612,13 @@ def key_access_by_names(db, conn):
         conn.send_error(errors.KEY_USER_NOT_FOUND)
     return access
 
+_passphrase_characters = string.ascii_letters + string.digits
+def random_passphrase(conn):
+    '''Return a random passphrase.'''
+    random = nss.nss.generate_random(conn.config.passphrase_length)
+    return ''.join(_passphrase_characters[ord(c) % len(_passphrase_characters)]
+                   for c in random)
+
  # Request handlers
 
 @request_handler()
@@ -705,15 +712,13 @@ def cmd_list_keys(db, conn):
         payload += user.name + '\x00'
     conn.send_reply_payload(payload)
 
-_passphrase_characters = string.ascii_letters + string.digits
 @request_handler()
 def cmd_new_key(db, conn):
     conn.authenticate_admin(db)
     key_name = conn.safe_outer_field('key', required=True)
-    if key_name is not None:
-        # FIXME: is this check atomic?
-        if db.query(Key).filter_by(name=key_name).first() is not None:
-            conn.send_error(errors.ALREADY_EXISTS)
+    # FIXME: is this check atomic?
+    if db.query(Key).filter_by(name=key_name).first() is not None:
+        conn.send_error(errors.ALREADY_EXISTS)
     admin_name = conn.safe_outer_field('initial-key-admin')
     if admin_name is None:
         admin_name = conn.safe_outer_field('user', required=True)
@@ -726,10 +731,7 @@ def cmd_new_key(db, conn):
     if conn.config.gnupg_subkey_type is not None:
         key_attrs += ('Subkey-Type: %s\n' % conn.config.gnupg_subkey_type +
                       'Subkey-Length: %d\n' % conn.config.gnupg_subkey_length)
-    random = nss.nss.generate_random(conn.config.passphrase_length)
-    key_passphrase = ''.join(_passphrase_characters[ord(c) %
-                                                    len(_passphrase_characters)]
-                             for c in random)
+    key_passphrase = random_passphrase(conn)
     key_attrs += 'Passphrase: %s\n' % key_passphrase
     name = conn.safe_outer_field('name-real')
     if name is None:
@@ -791,6 +793,48 @@ def cmd_new_key(db, conn):
     payload = server_common.gpg_public_key(conn.config, fingerprint)
     conn.send_reply_header(errors.OK, {})
     conn.send_reply_payload(payload)
+
+@request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
+def cmd_import_key(db, conn):
+    conn.authenticate_admin(db)
+    key_name = conn.safe_outer_field('key', required=True)
+    # FIXME: is this check atomic?
+    if db.query(Key).filter_by(name=key_name).first() is not None:
+        conn.send_error(errors.ALREADY_EXISTS)
+    admin_name = conn.safe_outer_field('initial-key-admin')
+    if admin_name is None:
+        admin_name = conn.safe_outer_field('user', required=True)
+    admin = db.query(User).filter_by(name=admin_name).first()
+    if admin is None:
+        conn.send_error(errors.USER_NOT_FOUND)
+    new_key_passphrase = random_passphrase(conn)
+    import_key_passphrase = conn.inner_field('passphrase', required=True)
+    user_passphrase = conn.inner_field('new-passphrase', required=True)
+
+    try:
+        fingerprint = server_common.gpg_import_key(conn.config, conn.payload_file)
+    except server_common.GPGError, e:
+        conn.send_error(errors.INVALID_IMPORT, message=str(e))
+
+    try:
+        try:
+            server_common.gpg_change_password(conn.config, fingerprint,
+                                              import_key_passphrase,
+                                              new_key_passphrase)
+        except server_common.GPGError, e:
+            conn.send_error(errors.IMPORT_PASSPHRASE_ERROR)
+
+        key = Key(key_name, fingerprint)
+        db.save(key)
+        access = KeyAccess(key, admin, key_admin=True)
+        access.set_passphrase(conn.config, key_passphrase=new_key_passphrase,
+                              user_passphrase=user_passphrase)
+        db.save(access)
+        db.commit()
+    except:
+        server_common.gpg_delete_key(conn.config, fingerprint)
+        raise
+    conn.send_reply_ok_only()
 
 @request_handler()
 def cmd_delete_key(db, conn):

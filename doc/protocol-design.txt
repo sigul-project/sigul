@@ -168,6 +168,14 @@ default values: no change
 ** |passphrase: blob
 ** =>
 ** _payload_: ASCII armored public key
+* op="import-key"
+** key: string
+** [initial-key-admin]: string
+** |passphrase: blob
+   passphrase used for the secret key in payload
+** |new-passphrase: blob
+** _payload_: PGP secret key data
+** =>
 * op="delete-key"
 ** key: string
 ** =>

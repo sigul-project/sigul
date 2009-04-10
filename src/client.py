@@ -553,6 +553,35 @@ def cmd_new_key(conn, args):
         raise InvalidResponseError('Public key is not safely printable')
     print pubkey,
 
+def cmd_import_key(conn, args):
+    p2 = optparse.OptionParser(usage='%prog import-key [options] key',
+                               description='Import a key')
+    p2.add_option('--key-admin', metavar='USER',
+                  help='Initial key administrator')
+    (o2, args) = p2.parse_args(args)
+    if len(args) != 2:
+        p2.error('key name and input file path expected')
+    password = read_admin_password(conn.config)
+    passphrase = read_key_passphrase(conn.config)
+    new_passphrase = read_new_password(conn.config, 'New key passphrase: ',
+                                       'New key passphrase (again): ')
+    try:
+        f = open(args[1], 'rb')
+    except IOError, e:
+        raise ClientError('Error opening %s: %s' % (args[1], e.strerror))
+
+    try:
+        fields = {'key': safe_string(args[0])}
+        if o2.key_admin is not None:
+            fields['initial-key-admin'] = safe_string(o2.key_admin)
+        conn.connect('import-key', fields)
+        conn.send_payload_from_file(f)
+    finally:
+        f.close()
+    conn.send_inner({'password': password, 'passphrase': passphrase,
+                     'new-passphrase': new_passphrase})
+    conn.read_response(no_payload=True)
+
 def cmd_delete_key(conn, args):
     p2 = optparse.OptionParser(usage='%prog delete-key key',
                                description='Delete a key')
@@ -606,7 +635,7 @@ def cmd_grant_key_access(conn, args):
     (o2, args) = p2.parse_args(args)
     if len(args) != 2:
         p2.error('key name and user name expected')
-    passphrase = read_password(conn.config, 'Key passphrase: ')
+    passphrase = read_key_passphrase(conn.config)
     new_passphrase = read_new_password(conn.config,
                                        'Key passphrase for the new user: ',
                                        'Key passphrase for the new user '
@@ -835,6 +864,7 @@ command_handlers = {
     'list-keys': (cmd_list_keys, 'List keys'),
     'modify-key': (cmd_modify_key, 'Modify a key'),
     'new-key': (cmd_new_key, 'Add a key'),
+    'import-key': (cmd_import_key, 'Import a key'),
     'delete-key': (cmd_delete_key, 'Delete a key'),
     'modify-key': (cmd_modify_key, 'Modify a key'),
     'list-key-users': (cmd_list_key_users, 'List users that can access a key'),

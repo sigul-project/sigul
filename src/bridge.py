@@ -25,8 +25,7 @@ import sys
 import tempfile
 
 try:
-    import fedora.client.AccountSystem
-    import fedora.client.baseclient
+    import fedora.client
     have_fas = True
 except:
     have_fas = False
@@ -361,6 +360,8 @@ request_types = {
                    SF('name-comment', optional=True),
                    SF('name-email', optional=True),
                    YYYYMMDDField('expire-date', optional=True))),
+    'import-key': RT((SF('key'), SF('initial-key-admin', optional=True)),
+                     max_payload=1024*1024),
     'delete-key': RT((SF('key'),)),
     'modify-key': RT((SF('key'), SF('new-name', optional=True))),
     'list-key-users': RT((SF('key'),)),

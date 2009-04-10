@@ -140,6 +140,27 @@ even signing server administrators can not use the key
 without knowing a key passphrase of one of the authorized key users.
 
 .TP
+\fBimport\-key\fP [\fB\-\-key\-admin\fP \fIUSER\fP] \fIKEY\fP \fIKEY_FILE\fP
+Import a public and private key from \fIKEY_FILE\fP to the server, naming it
+\fIKEY\fP.
+
+If
+.I USER
+is specified,
+make him the key administrator and only user instead of the invoking user.
+This is only this user and the users this user grants access can use the key;
+even signing server administrators can not use the key
+without knowing a key passphrase of one of the authorized key users.
+
+.I KEY_FILE
+should be created using the following command:
+.RS
+.RS
+\fBgpg \-\-export\-secret\-key\fP \fIKEY_ID\fP \fB>\fP \fIKEY_FILE\fP
+.RE
+.RE
+
+.TP
 \fBdelete\-key\fP \fIKEY\fP
 Delete
 .I KEY

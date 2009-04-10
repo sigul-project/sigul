@@ -28,6 +28,8 @@ UNKNOWN_ERROR = 9
 ONLY_ONE_KEY_USER = 10
 CORRUPT_RPM = 11
 UNAUTHENTICATED_RPM = 12
+INVALID_IMPORT = 13
+IMPORT_PASSPHRASE_ERROR = 14
 
 _messages = {
     OK: 'No error',
@@ -43,6 +45,8 @@ _messages = {
     ONLY_ONE_KEY_USER: 'This is the only user with access to this key',
     CORRUPT_RPM: 'The RPM file is corrupt',
     UNAUTHENTICATED_RPM: 'Missing RPM file authentication by client',
+    INVALID_IMPORT: 'Invalid import file',
+    IMPORT_PASSPHRASE_ERROR: 'Import passphrase does not match',
     }
 
 def message(error_code):
