@@ -1,3 +1,7 @@
+Changes in version 0.94:
+- Update to run with python-nss 0.4 (local modifications are no longer required,
+  won't work with older versions of python-nss).
+
 Changes in version 0.93:
 - New command "sigul import-key".
 - Fixed FAS authentication support with new python-fedora.
