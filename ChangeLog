@@ -1,3 +1,7 @@
+2009-07-17  Miloslav Trmač  <mitr@redhat.com>
+
+	* config/server.conf (database-path): Fix the comments.
+
 2009-07-01  Miloslav Trmač  <mitr@redhat.com>
 
 	* configure.ac: Release 0.94.
