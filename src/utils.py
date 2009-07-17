@@ -233,7 +233,11 @@ def nss_init(config):
 
     nss.nss.set_password_callback(_password_callback)
     try:
-        nss.nss.nss_init(config.nss_dir)
+        # The initialization name has changed in python-nss 0.4.
+        try:
+            nss.nss.nss_init(config.nss_dir)
+        except AttributeError:
+            nss.ssl.nssinit(config.nss_dir)
     except nss.error.NSPRError, e:
         if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
             raise NSSInitError('\'%s\' does not contain a valid NSS database' %

@@ -1,3 +1,8 @@
+2009-07-18  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/utils.py (nss_init._password_callback): Be compatible with both
+	python-nss 0.1 and 0.4.
+
 2009-07-17  Miloslav Trmač  <mitr@redhat.com>
 
 	* config/server.conf (database-path): Fix the comments.
