@@ -17,7 +17,6 @@
 
 import binascii
 import crypt
-import hmac
 import logging
 import os
 import signal
@@ -311,29 +310,27 @@ class ServersConnection(object):
         key = self.inner_field('header-auth-key', required=True)
         if len(key) < 64:
             raise InvalidRequestError('Header authentication key too small')
-        self.__reply_header_hmac = \
-            hmac.new(key, digestmod=utils.M2CryptoSHA512DigestMod)
+        self.__reply_header_hmac = M2Crypto.EVP.HMAC(key, algo='sha512')
         key = self.inner_field('payload-auth-key', required=True)
         if len(key) < 64:
             raise InvalidRequestError('Payload authentication key too small')
-        self.__reply_payload_hmac = \
-            hmac.new(key, digestmod=utils.M2CryptoSHA512DigestMod)
+        self.__reply_payload_hmac = M2Crypto.EVP.HMAC(key, algo='sha512')
 
         return handler
 
     def __send_payload(self, data):
         '''Send data on outer stream as a part of the authenticated payload.'''
         self.__client.outer_write(data)
-        self.__reply_payload_hmac.update(data)
+        self.__reply_payload_hmac.update(str(data))
 
     def send_reply_header(self, error_code, fields):
         '''Send a reply header to the client.'''
         data = utils.u32_pack(error_code)
         self.__client.outer_write(data)
-        self.__reply_header_hmac.update(data)
+        self.__reply_header_hmac.update(str(data))
         data = utils.format_fields(fields)
         self.__client.outer_write(data)
-        self.__reply_header_hmac.update(data)
+        self.__reply_header_hmac.update(str(data))
         auth = self.__reply_header_hmac.digest()
         assert len(auth) == 64
         self.__client.outer_write(auth)

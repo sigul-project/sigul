@@ -254,35 +254,6 @@ def sha512_digest(data):
     '''Return a sha512 digest of data.'''
     return str(nss.nss.sha512_digest(buffer(data)))
 
-class M2CryptoSHA512DigestMod(object):
-
-    '''A hashlib-like wrapper for M2Crypto's SHA-512 implementation.'''
-    # This is necessary only because Python 2.4 RHEL5 does not contain hashlib.
-
-    @classmethod
-    def new(cls, data=None):
-        return cls(data)
-
-    def __init__(self, data=None):
-        self.__digest = M2Crypto.EVP.MessageDigest('sha512')
-        if data is not None:
-            self.update(data)
-
-    def copy(self):
-        # This is an ugly hack, handles only hmac.digest() and only assuming
-        # hmac.digest() won't be called more than once.
-        return self
-
-    def digest(self):
-        return self.__digest.final()
-
-    def update(self, data):
-        data = str(data) # M2Crypto hashes unicode objects differently
-        self.__digest.update(data)
-
-    digest_size = 64
-    block_size = 128
-
  # Protocol utilities
 
 protocol_version = 0

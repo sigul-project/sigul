@@ -17,7 +17,6 @@
 
 import binascii
 import getpass
-import hmac
 import logging
 import optparse
 import os
@@ -146,12 +145,10 @@ class ClientsConnection(object):
         key = nss.nss.generate_random(64)
         fields['header-auth-key'] = key
         # FIXME: python-nss does not support HMAC
-        self.__reply_header_hmac = \
-            hmac.new(key, digestmod=utils.M2CryptoSHA512DigestMod)
+        self.__reply_header_hmac = M2Crypto.EVP.HMAC(key, algo='sha512')
         key = nss.nss.generate_random(64)
         fields['payload-auth-key'] = key
-        self.__reply_payload_hmac = \
-            hmac.new(key, digestmod=utils.M2CryptoSHA512DigestMod)
+        self.__reply_payload_hmac = M2Crypto.EVP.HMAC(key, algo='sha512')
         try:
             self.__client.inner_open_client(self.config.server_hostname,
                                             self.config.client_cert_nickname)
@@ -203,7 +200,7 @@ class ClientsConnection(object):
     def read_payload(self):
         '''Return and authenticate server's payload.'''
         data = self.__client.outer_read(self.__payload_size)
-        self.__reply_payload_hmac.update(data)
+        self.__reply_payload_hmac.update(str(data))
         self.__authenticate_reply_payload()
         return data
 
@@ -212,7 +209,7 @@ class ClientsConnection(object):
         while self.__payload_size > 0:
             run = self.__client.outer_read(min(self.__payload_size, 4096))
             f.write(run)
-            self.__reply_payload_hmac.update(run)
+            self.__reply_payload_hmac.update(str(run))
             self.__payload_size -= len(run)
         self.__authenticate_reply_payload()
 
@@ -267,7 +264,7 @@ class ClientsConnection(object):
     def __read_header(self, bytes):
         '''Read bytes bytes as a part of the authenticated reply header.'''
         data = self.__client.outer_read(bytes)
-        self.__reply_header_hmac.update(data)
+        self.__reply_header_hmac.update(str(data))
         return data
 
     def close(self):
