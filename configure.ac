@@ -1,7 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT([sigul], [0.94], [mitr@redhat.com])
+AC_INIT([sigul], [0.95], [mitr@redhat.com])
 AC_COPYRIGHT(
-[Copyright (C) 2008 Red Hat, Inc.  All rights reserved.
+[Copyright (C) 2009 Red Hat, Inc.  All rights reserved.
 
 This copyrighted material is made available to anyone wishing to use, modify,
 copy, or redistribute it subject to the terms and conditions of the GNU General

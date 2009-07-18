@@ -1,5 +1,8 @@
 2009-07-18  Miloslav Trmač  <mitr@redhat.com>
 
+	* configure.ac: Release 0.95.
+	* NEWS: Update.
+
 	* src/client.py (ClientsConnection.send_inner)
 	(ClientsConnection.read_payload)
 	(ClientsConnection.write_payload_to_file)

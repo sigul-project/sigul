@@ -1,3 +1,7 @@
+Changes in version 0.95:
+- Fix authentication failures on connections with some mixed Python versions.
+- Allow running with modified python-nss-0.1 in addition to unmodified 0.4.
+
 Changes in version 0.94:
 - Update to run with python-nss 0.4 (local modifications are no longer required,
   won't work with older versions of python-nss).
