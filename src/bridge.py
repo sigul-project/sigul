@@ -246,12 +246,16 @@ class SignRpmRequestType(RequestType):
                 tmp_file = os.fdopen(fd, 'w+')
                 copy_data(tmp_file, server_buf, payload_size)
                 tmp_file.flush()
-                sigkey = koji.get_header_fields(tmp_path, ('siggpg',))['siggpg']
+                header_fields = koji.get_header_fields(tmp_path,
+                                                       ('siggpg', 'sigpgp'))
+                sigkey = header_fields['siggpg']
                 if sigkey is None:
-                    raise ForwardingError('Missing signature')
+                    sigkey = header_fields['sigpgp']
+                    if sigkey is None:
+                        raise ForwardingError('Missing signature')
                 # FIXME? This is not actually a key ID, but it is what Koji
                 # uses.
-                sigkey = koji.hex_string(sigkey[13:17])
+                sigkey = koji.get_sigpacket_key_id(sigkey)
                 sighdr = koji.rip_rpm_sighdr(tmp_path)
                 sighdr_digest = binascii.b2a_hex(utils.md5_digest(sighdr))
 
