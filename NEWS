@@ -1,3 +1,10 @@
+Changes in version 0.96:
+- Add support storing for RSA and PGPv4 signatures into Koji.
+- Fix pid file removal in the bridge.
+- Fix waiting on clients in the bridge when forwarding the inner stream.
+- Make sure a RPM is written to a file before attempting to parse the file.
+- Various error handling bug fixes and enhancements.
+
 Changes in version 0.95:
 - Fix authentication failures on connections with some mixed Python versions.
 - Allow running with modified python-nss-0.1 in addition to unmodified 0.4.
