@@ -1,5 +1,12 @@
 2009-07-22  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/double_tls.py (_CombiningBuffer.__receive_inner):
+	(_CombiningBuffer.__receive_outer, _InnerBridgingBuffer._receive):
+	Handle unexpected connection reset, and poll() that does not provide
+	any application-level data.
+	(_SplittingBuffer._receive): Don't re-raise the exception on reset
+	connection.  Simplify a bit.
+
 	* src/bridge.py (bridge_one_request, main)
 	* src/server.py (request_handling_child): Log more useful information
 	about NSPRError on RHEL5.

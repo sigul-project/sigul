@@ -248,7 +248,17 @@ class _CombiningBuffer(_ForwardingBuffer):
         # print 'b%s: reading inner %s: %d' % (_id(self), _id(self.__inner_src),
         #                                      self._BUFFER_LEN -
         #                                      len(self.__buffer))
-        data = self.__inner_src.recv(self._BUFFER_LEN - len(self.__buffer))
+        try:
+            data = self.__inner_src.recv(self._BUFFER_LEN - len(self.__buffer))
+        except nss.error.NSPRError, e:
+            if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
+                # print '...!exception, closing src: %s' % repr(e)
+                data = ''
+            elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
+                # print '...!would block: %s' % repr(e)
+                return False
+            else:
+                raise
         # print '=> %d' % len(data)
         # This automatically sends EOF if len(data) == 0
         assert len(data) < _chunk_inner_mask
@@ -272,7 +282,17 @@ class _CombiningBuffer(_ForwardingBuffer):
         #                                      self._BUFFER_LEN -
         #                                      len(self.__buffer))
         assert len(self.__buffer) + utils.u32_size < self._BUFFER_LEN
-        data = self.__outer_src.recv(self._BUFFER_LEN - len(self.__buffer))
+        try:
+            data = self.__outer_src.recv(self._BUFFER_LEN - len(self.__buffer))
+        except nss.error.NSPRError, e:
+            if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
+                # print '...!exception, closing src: %s' % repr(e)
+                data = ''
+            elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
+                # print '...!would block: %s' % repr(e)
+                return False
+            else:
+                raise
         # print '=> %d' % len(data)
         # This automatically sends EOF if len(data) == 0
         assert len(data) < _chunk_inner_mask
@@ -410,12 +430,12 @@ class _SplittingBuffer(_ForwardingBuffer):
         except nss.error.NSPRError, e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
                 # print '...!exception, closing src: %s' % repr(e)
-                self.__src_open = False
                 data = ''
             elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
                 # print '...!would block: %s' % repr(e)
                 return
-            raise
+            else:
+                raise
         # print '=> %s' % len(data)
         if len(data) == 0:
             # print '...!eof, closing src'
@@ -894,7 +914,17 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
         # print 'b%s: reading from %s: %d' % (_id(self), _id(self.__src),
         #                                     self._BUFFER_LEN -
         #                                     len(self.__buffer))
-        data = self.__src.recv(self._BUFFER_LEN - len(self.__buffer))
+        try:
+            data = self.__src.recv(self._BUFFER_LEN - len(self.__buffer))
+        except nss.error.NSPRError, e:
+            if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
+                # print '...!exception, closing src: %s' % repr(e)
+                data = ''
+            elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
+                # print '...!would block: %s' % repr(e)
+                return
+            else:
+                raise
         # print '=> %d' % len(data)
         if len(data) == 0:
             # print '... closing src'
