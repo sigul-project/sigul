@@ -176,9 +176,9 @@ related to any key.
   (UNTESTED!!)
 	sigul sign-rpm -o signed.rpm --store-in-koji --koji-only key_name \
 		unsigned.rpm
-  NOTE: This is currently disabled in the code, it requires a koji configuration
-  (in /etc/koji.conf or ~/.koji/config) that allows authentication, submitting
-  signatures and proxy authentication.
+  This requires a koji configuration (in /etc/koji.conf or ~/.koji/config) that
+  allows authentication and submitting signatures.  Proxy authentication using
+  the client's certificate is currently disabled in the code.
 * Provide passphrases noninteractively, to sign data from scripts:
   Use --batch, supply NUL-terminated pass-phrases on stdin (if the interactive
   mode asks for a particular passphrase twice, supply it only once).  E.g.:
