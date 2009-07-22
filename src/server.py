@@ -1087,7 +1087,7 @@ def request_handling_child(config):
         if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
             logging.debug('NSPR error: Connection reset')
         else:
-            logging.warning('NSPR error: %s', repr(e))
+            logging.warning('NSPR error: %s', str(e))
     except EOFError, e:
         if isinstance(child_exception, double_tls.ChildConnectionRefusedError):
             logging.info('Connection to the bridge refused')

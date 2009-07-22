@@ -535,7 +535,7 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
     except EOFError, e:
         logging.info('Unexpected EOF: %s', repr(e))
     except nss.error.NSPRError, e:
-        logging.info('NSPR I/O error: %s', repr(e))
+        logging.info('NSPR I/O error: %s', str(e))
     except BridgeError, e:
         logging.warning(str(e))
     logging.debug('Request handling finished')
@@ -590,7 +590,7 @@ def main():
                 client_listen_sock = \
                     create_listen_sock(config, config.client_listen_port)
             except nss.error.NSPRError, e:
-                logging.error('NSPR error: %s' % repr(e))
+                logging.error('NSPR error: %s' % str(e))
                 sys.exit(1)
             except BridgeError, e:
                 logging.error(str(e))
