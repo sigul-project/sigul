@@ -612,7 +612,7 @@ def main():
             sys.exit(1)
     finally:
         if config.daemon_uid is not None:
-            os.setreuid(os.getuid(), -1)
+            os.seteuid(os.getuid())
         utils.delete_pid_file('sigul_bridge')
 
 if __name__ == '__main__':

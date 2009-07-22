@@ -1,5 +1,7 @@
 2009-07-22  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (main): Fix pid file removal.
+
 	* src/bridge.py (bridge_one_request): Handle ForwardingError
 	gracefully.
 
