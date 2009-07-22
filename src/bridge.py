@@ -234,12 +234,15 @@ class SignRpmRequestType(RequestType):
             src.close()
 
     def forward_reply_payload(self, client_buf, server_buf, payload_size):
-        # Don't import koji before opening sockets!  The rpm Python module
-        # calls NSS_NoDB_Init() during its initialization, which breaks our
-        # attempts to initialize nss with our certificate database.
+        # Don't import koji or rpm before opening sockets!  The rpm Python
+        # module calls NSS_NoDB_Init() during its initialization, which breaks
+        # our attempts to initialize nss with our certificate database.
         import koji
+        import rpm
 
-        if self.__request_fields.get('import-signature') == utils.u32_pack(1):
+        # Zero-length response should happen only on error.
+        if (payload_size != 0 and
+            self.__request_fields.get('import-signature') == utils.u32_pack(1)):
             (fd, tmp_path) = tempfile.mkstemp(text=False)
             tmp_file = None
             try:
@@ -247,8 +250,11 @@ class SignRpmRequestType(RequestType):
                 copy_data(tmp_file, server_buf, payload_size)
                 tmp_file.close()
                 tmp_file = None
-                header_fields = koji.get_header_fields(tmp_path,
-                                                       ('siggpg', 'sigpgp'))
+                try:
+                    header_fields = koji.get_header_fields(tmp_path,
+                                                           ('siggpg', 'sigpgp'))
+                except rpm.error:
+                    raise ForwardingError('Corrupt RPM returned by server')
                 sigkey = header_fields['siggpg']
                 if sigkey is None:
                     sigkey = header_fields['sigpgp']

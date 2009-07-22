@@ -1,5 +1,8 @@
 2009-07-22  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py	(SignRpmRequestType.forward_reply_payload): Don't
+	attempt to parse empty payloads as RPMs.  Handle corrupted RPMs.
+
 	* src/bridge.py (SignRpmRequestType.forward_reply_payload): close()
 	tmp_file to force it to be written to disk, flush() apparently isn't
 	enough.
