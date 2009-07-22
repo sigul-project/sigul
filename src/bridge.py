@@ -245,7 +245,8 @@ class SignRpmRequestType(RequestType):
             try:
                 tmp_file = os.fdopen(fd, 'w+')
                 copy_data(tmp_file, server_buf, payload_size)
-                tmp_file.flush()
+                tmp_file.close()
+                tmp_file = None
                 header_fields = koji.get_header_fields(tmp_path,
                                                        ('siggpg', 'sigpgp'))
                 sigkey = header_fields['siggpg']
@@ -277,7 +278,7 @@ class SignRpmRequestType(RequestType):
                     utils.u32_pack(0)):
                     client_buf.write(utils.u32_pack(0))
                 else:
-                    tmp_file.seek(0)
+                    tmp_file = open(tmp_path, 'rb')
                     client_buf.write(utils.u32_pack(payload_size))
                     copy_data(client_buf, tmp_file, payload_size)
             finally:
