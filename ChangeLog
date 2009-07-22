@@ -1,5 +1,8 @@
 2009-07-22  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (bridge_one_request): Handle ForwardingError
+	gracefully.
+
 	* src/bridge.py (SignRpmRequestType.forward_reply_payload): Support
 	RSA and v4 signatures.
 

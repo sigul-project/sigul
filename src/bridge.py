@@ -534,6 +534,8 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
                 server_sock.close()
     except InvalidRequestError, e:
         logging.warning('Invalid request: %s', str(e))
+    except ForwardingError, e:
+        logging.warning('Error working with request data: %s', str(e))
     except IOError, e:
         logging.info('I/O error: %s', repr(e))
     except EOFError, e:
