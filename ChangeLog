@@ -1,5 +1,8 @@
 2009-07-31  Miloslav Trmač  <mitr@redhat.com>
 
+	* configure.ac: Release 0.97.
+	* NEWS: Update.
+
 	* src/bridge.py (copy_data, StoringProxy.stored_read)
 	* src/utils.py (u8_unpack, u32_unpack, read_fields): Rename "bytes"
 	to avoid a conflict with a built-in.

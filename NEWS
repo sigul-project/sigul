@@ -1,3 +1,11 @@
+Changes in version 0.97:
+- Proxy authenticate clients in the bridge.
+- Log the client's identity in the server as well.
+- Don't cache RPM information between signing requests.
+- Fix signing of source RPMs.
+- Fix signing of RPMs with non-null epoch.
+- Various minor bug fixes.
+
 Changes in version 0.96:
 - Add support storing for RSA and PGPv4 signatures into Koji.
 - Fix pid file removal in the bridge.
