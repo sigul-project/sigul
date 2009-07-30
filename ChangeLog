@@ -1,5 +1,7 @@
 2009-07-30  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server.py (cmd_sign_rpm): Handle source RPMS specially.
+
 	* src/client.py (cmd_sign_rpm)
 	* src/server.py (cmd_sign_rpm): Fix handling of epoch returned from
 	Koji.

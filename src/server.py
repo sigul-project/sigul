@@ -986,9 +986,12 @@ def cmd_sign_rpm(db, conn):
         field_value = conn.safe_outer_field(field)
         if field_value is None:
             continue
-        rpm_value = hdr[tag]
-        if rpm_value is None:
-            rpm_value = ''
+        if tag == rpm.RPMTAG_ARCH and hdr[rpm.RPMTAG_SOURCEPACKAGE] == 1:
+            rpm_value = 'src'
+        else:
+            rpm_value = hdr[tag]
+            if rpm_value is None:
+                rpm_value = ''
         if field_value != str(rpm_value):
             raise InvalidRequestError('RPM mismatch')
     field_value = conn.outer_field('rpm-sigmd5')
