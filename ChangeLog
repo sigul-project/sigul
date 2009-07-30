@@ -1,3 +1,9 @@
+2009-07-30  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/client.py (cmd_sign_rpm)
+	* src/server.py (cmd_sign_rpm): Fix handling of epoch returned from
+	Koji.
+
 2009-07-23  Miloslav Trmač  <mitr@redhat.com>
 
 	* configure.ac: Release 0.96.

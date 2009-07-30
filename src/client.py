@@ -819,7 +819,7 @@ def cmd_sign_rpm(conn, args):
         epoch = rpm['epoch']
         if epoch is None:
             epoch = ''
-        f['rpm-epoch'] = safe_string(epoch)
+        f['rpm-epoch'] = safe_string(str(epoch))
         f['rpm-version'] = safe_string(rpm['version'])
         f['rpm-release'] = safe_string(rpm['release'])
         f['rpm-arch'] = safe_string(rpm['arch'])
