@@ -260,8 +260,6 @@ class SignRpmRequestType(RequestType):
                     sigkey = header_fields['sigpgp']
                     if sigkey is None:
                         raise ForwardingError('Missing signature')
-                # FIXME? This is not actually a key ID, but it is what Koji
-                # uses.
                 sigkey = koji.get_sigpacket_key_id(sigkey)
                 sighdr = koji.rip_rpm_sighdr(tmp_path)
                 sighdr_digest = binascii.b2a_hex(utils.md5_digest(sighdr))
