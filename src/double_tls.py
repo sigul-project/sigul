@@ -642,6 +642,9 @@ class DoubleTLSClient(object):
                                               cert.find_kea_type())
             self.__inner.reset_handshake(True)
             self.__inner.force_handshake()
+            cert = self.__inner.get_peer_certificate()
+            assert cert is not None
+            logging.info('Connection from %s' % repr(cert.subject))
         except:
             self.__inner.close()
             self.__inner = None
