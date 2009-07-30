@@ -89,10 +89,10 @@ server:
   (see above).  Use 'sigul-server-cert' as a nickname.
 
 * Configure the server: edit /etc/sigul/server.conf:
-  Note the default ports.  Edit at least bridge-hostname and the [nss] section.
-  The default configuration assumes you set up a separate "sigul" user and
-  group; remove the [daemon] section if you want the server to run as the
-  invoking user.
+  Note the default ports.  Edit at least bridge-hostname (must match host name
+  in the certificate of the bridge) and the [nss] section.  The default
+  configuration assumes you set up a separate "sigul" user and group; remove
+  the [daemon] section if you want the server to run as the invoking user.
 * If you want a GPG home directory different from the default
   /var/lib/sigul/gnupg, create it.  Its location is specified either in
   server.conf ("gnupg-home"), or, if that is not defined, in settings.py
@@ -126,9 +126,10 @@ Setting up the client
   certutil).  Use 'u,,' as a parameter to the '-t' (trust) option.
 
 * Configure the client: edit /etc/sigul/client.conf:
-  Note the default port.  Edit at least bridge-hostname, server-hostname
-  and the [nss] section.  Edit user-name to be the same as the user name of the
-  server administrator you have created before.
+  Note the default port.  Edit at least bridge-hostname, server-hostname (both
+  must match host names in certificates) and the [nss] section.  Edit user-name
+  to be the same as the user name of the server administrator you have created
+  before.
 
 * Run the client:
 	sigul -v -v list-users

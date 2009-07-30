@@ -1,5 +1,8 @@
 2009-07-31  Miloslav Trmač  <mitr@redhat.com>
 
+	* README: Explicitly mention that host names in configuration must match
+	host names in certificates.
+
 	* src/server.py (ServersConnection.read_request): close() the temporary
 	file to force it to be written to disk.
 
