@@ -352,6 +352,7 @@ class SignRpmRequestType(RequestType):
         if self.__koji_session is not None:
             utils.koji_disconnect(self.__koji_session)
             self.__koji_session = None
+        self.__koji_rpm_info = None
 
 RT = RequestType
 SF = StringField

@@ -1,5 +1,8 @@
 2009-07-30  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (SignRpmRequestType.close): Don't keep cached
+	self.__koji_rpm_info between requests.
+
 	* src/server.py (cmd_sign_rpm): Handle source RPMS specially.
 
 	* src/client.py (cmd_sign_rpm)
