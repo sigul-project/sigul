@@ -194,7 +194,7 @@ class SignRpmRequestType(RequestType):
         super(SignRpmRequestType, self).__init__(*args, **kwargs)
         self.__koji_session = None
         self.__koji_rpm_info = None
-        self.__rpm = None
+        self.__koji_config = None
 
     def forward_request_payload(self, server_buf, client_buf, payload_size,
                                 fields):
@@ -301,7 +301,7 @@ class SignRpmRequestType(RequestType):
     def __koji_get_session(self):
         '''Return a koji session, creating it if necessary.
 
-        Also set up self.__koji_config.
+        Also make sure self.__koji_config is set up.
 
         '''
         # Don't import koji before opening sockets!  The rpm Python module
@@ -309,9 +309,10 @@ class SignRpmRequestType(RequestType):
         # attempts to initialize nss with our certificate database.
         import koji
 
+        if self.__koji_config is None:
+            self.__koji_config = utils.koji_read_config()
         if self.__koji_session is None:
             try:
-                self.__koji_config = utils.koji_read_config()
                 # self.__request_fields['user'] safety was verified by
                 # self.validate
                 # FIXME FIXME: proxyuser should be enabled, but that needs a

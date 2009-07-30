@@ -1,3 +1,10 @@
+2009-07-31  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/bridge.py (SignRpmRequestType.__init__): Don't initialize an
+	unused member.
+	(SignRpmRequestType.__init__, SignRpmRequestType.__koji_get_session):
+	Only read koji configuration once.
+
 2009-07-30  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/bridge.py (SignRpmRequestType.close): Don't keep cached
