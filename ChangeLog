@@ -1,5 +1,10 @@
 2009-07-31  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/settings.py.in (koji_do_proxy_auth): New variable.
+	* src/bridge.py (SignRpmRequestType.__koji_get_session): Proxy
+	authenticate as the client if settings allow it.
+	* README: Document proxy authentication is now required.
+
 	* src/double_tls.py (DoubleTLSClient.inner_open_server): Log the subject
 	of the client's certificate in the server.
 

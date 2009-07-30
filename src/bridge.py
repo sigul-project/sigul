@@ -311,14 +311,16 @@ class SignRpmRequestType(RequestType):
             self.__koji_config = utils.koji_read_config()
         if self.__koji_session is None:
             try:
-                # self.__request_fields['user'] safety was verified by
-                # self.validate
-                # FIXME FIXME: proxyuser should be enabled, but that needs a
-                # koji account that is allowed to use it
-                self.__koji_session = \
-                    utils.koji_connect(self.__koji_config,
-                                       authenticate=True)
-                                       #proxyuser=self.__request_fields['user'])
+                if settings.koji_do_proxy_auth:
+                    # self.__request_fields['user'] safety was verified by
+                    # self.validate
+                    self.__koji_session = utils.koji_connect \
+                        (self.__koji_config, authenticate=True,
+                         proxyuser=self.__request_fields['user'])
+                else:
+                    self.__koji_session = \
+                        utils.koji_connect(self.__koji_config,
+                                           authenticate=True)
             except (utils.KojiError, koji.GenericError), e:
                 raise ForwardingError('Koji connection failed: %s' % str(e))
         return self.__koji_session

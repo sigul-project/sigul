@@ -173,13 +173,12 @@ related to any key.
 	sigul sign-rpm -o signed.rpm key_name unsigned.rpm
 * Download a RPM from koji, sign it and store it locally
 	sigul sign-rpm -o signed.rpm key_name basesystem-8.1-1.noarch
-* Download a RPM from koji, sign it and store the signature into koji
-  (UNTESTED!!)
+  This requires a koji configuration (in /etc/koji.conf or ~/.koji/config) that
+  allows authentication, submitting signatures, and proxy authentication using
+  the client's certificate.
+* Download a RPM from koji, sign it and store the signature into koji:
 	sigul sign-rpm -o signed.rpm --store-in-koji --koji-only key_name \
 		unsigned.rpm
-  This requires a koji configuration (in /etc/koji.conf or ~/.koji/config) that
-  allows authentication and submitting signatures.  Proxy authentication using
-  the client's certificate is currently disabled in the code.
 * Provide passphrases noninteractively, to sign data from scripts:
   Use --batch, supply NUL-terminated pass-phrases on stdin (if the interactive
   mode asks for a particular passphrase twice, supply it only once).  E.g.:

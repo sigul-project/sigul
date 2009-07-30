@@ -23,6 +23,7 @@ _default_storage_path = '@serverdatadir@'
 default_server_nss_path = _default_storage_path
 default_database_path = os.path.join(_default_storage_path, 'server.sqlite')
 default_gnupg_home = os.path.join(_default_storage_path, 'gnupg')
+koji_do_proxy_auth = True
 log_dir = '@logdir@'
 pid_dir = '@piddir@'
 version = '@PACKAGE_VERSION@'
