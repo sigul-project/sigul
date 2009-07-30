@@ -100,12 +100,12 @@ class ForwardingError(Exception):
     '''An error was detected while forwarding or modifying the communication.'''
     pass
 
-def copy_data(dest, src, bytes):
-    '''Copy bytes bytes from file-like src to file-like dst.'''
-    while bytes > 0:
-        data = src.read(min(bytes, 4096))
+def copy_data(dest, src, size):
+    '''Copy size bytes from file-like src to file-like dst.'''
+    while size > 0:
+        data = src.read(min(size, 4096))
         dest.write(data)
-        bytes -= len(data)
+        size -= len(data)
 
  # Request verification
 
@@ -407,9 +407,9 @@ class StoringProxy(object):
         self.__buf = buf
         self.__stored = ''
 
-    def stored_read(self, bytes):
-        '''Read bytes bytes from the buffer and store the result.'''
-        data = self.__buf.read(bytes)
+    def stored_read(self, size):
+        '''Read size bytes from the buffer and store the result.'''
+        data = self.__buf.read(size)
         self.__stored += data
         return data
 

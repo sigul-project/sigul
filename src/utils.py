@@ -133,8 +133,8 @@ _u8_format = '!B'
 def u8_pack(v):
     return struct.pack(_u8_format, v)
 
-def u8_unpack(bytes):
-    return struct.unpack(_u8_format, bytes)[0]
+def u8_unpack(data):
+    return struct.unpack(_u8_format, data)[0]
 
 u8_size = struct.calcsize(_u8_format)
 
@@ -142,8 +142,8 @@ _u32_format = '!I'
 def u32_pack(v):
     return struct.pack(_u32_format, v)
 
-def u32_unpack(bytes):
-    return struct.unpack(_u32_format, bytes)[0]
+def u32_unpack(data):
+    return struct.unpack(_u32_format, data)[0]
 
 u32_size = struct.calcsize(_u32_format)
 
@@ -262,10 +262,10 @@ class InvalidFieldsError(Exception):
     pass
 
 def read_fields(read_fn):
-    '''Read field mapping using read_fn(bytes).
+    '''Read field mapping using read_fn(size).
 
-    Return field mapping.  Raise InvalidFieldsError on error.  read_fn(bytes)
-    must return exactly bytes bytes.
+    Return field mapping.  Raise InvalidFieldsError on error.  read_fn(size)
+    must return exactly size bytes.
 
     '''
     buf = read_fn(u8_size)
@@ -275,17 +275,17 @@ def read_fields(read_fn):
     fields = {}
     for _ in xrange(num_fields):
         buf = read_fn(u8_size)
-        bytes = u8_unpack(buf)
-        if bytes == 0 or bytes > 255:
+        size = u8_unpack(buf)
+        if size == 0 or size > 255:
             raise InvalidFieldsError('Invalid field key length')
-        key = read_fn(bytes)
+        key = read_fn(size)
         if not string_is_safe(key):
             raise InvalidFieldsError('Unprintable key value')
         buf = read_fn(u8_size)
-        bytes = u8_unpack(buf)
-        if bytes > 255:
+        size = u8_unpack(buf)
+        if size > 255:
             raise InvalidFieldsError('Invalid field value length')
-        value = read_fn(bytes)
+        value = read_fn(size)
         fields[key] = value
     return fields
 
