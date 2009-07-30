@@ -278,8 +278,8 @@ class ServersConnection(object):
                 self.payload_file.write(run)
                 digest.update(run)
                 payload_size -= len(run)
-            self.payload_file.flush()
-            self.payload_file.seek(0)
+            self.payload_file.close()
+            self.payload_file = open(self.payload_path, 'rb')
             self.payload_sha512_digest = digest.final()
 
         # FIXME? authenticate using the client's certificate as well?
