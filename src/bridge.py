@@ -224,10 +224,14 @@ class SignRpmRequestType(RequestType):
         src = urlgrabber.grabber.urlopen(url)
         try:
             try:
-                payload_size = int(src.hdr['Content-Length'])
-            except KeyError:
-                raise ForwardingError('Content-Length not returned for %s' %
-                                      url)
+                payload_size = src.size # urlgrabber using pycurl
+            except AttributeError:
+                try:
+                    # Older urlgrabber
+                    payload_size = int(src.hdr['Content-Length'])
+                except KeyError:
+                    raise ForwardingError('Content-Length not returned for %s' %
+                                          url)
             server_buf.write(utils.u32_pack(payload_size))
             copy_data(server_buf, src, payload_size)
         finally:
