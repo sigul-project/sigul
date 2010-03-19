@@ -1,3 +1,7 @@
+2010-03-19  Miloslav Trmač  <mitr@redhat.com>
+
+	* doc/protocol-design.txt: Minor clarifications.
+
 2010-03-10  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/bridge.py (SignRpmRequestType.forward_request_payload): Work with

@@ -51,7 +51,7 @@ a nested TLS session, uses of the inner stream are marked with "|" characters.
     L <= 255
 *** u8[L] value
 ** u32 L payload length
-   FIXME: limit request-specific
+   The payload length limit is request-specific.
    FIXME: should be u64?
 ** u8[L] payload
 ** client sends EOF on the outer stream at this point
@@ -94,13 +94,13 @@ all mandatory
 ** user: string
 ** |header-auth-sha512: blob, all up to (not including) payload length
    The hash is computed over the stream content, ignoring chunk headers.
-** |payload-auth-sha512: blob (FIXME: rpm)
+** |payload-auth-sha512: blob
    The hash is computed over the stream content, ignoring chunk headers.
+   Optional with op="sign-rpm" if "rpm-sigmd5" is present.
 ** |header-auth-key: blob, >= 64 bytes
    For authenticating reply header
 ** |payload-auth-key: blob, >= 64 bytes
    For authenticating reply payload
-** |payload_
 
 ERROR RESPONSE FIELD
 --------------------
@@ -245,11 +245,12 @@ modified by bridge to supply complete payload
 All of the fields above are only used by the bridge
 ** [v3-signature: bool]
    default: false
-FIXME: payload hash for authentication
 ** _payload_: complete RPM, added by bridge if empty
    FIXME: can we extract only the header and authenticate it safely?
           Perhaps by "using" rpm --addsign to get the data?
+   The payload-auth-sha512 field is optional if "rpm-sigmd5" is present.
 ** =>
 ** _payload_: signed RPM
    imported into koji by bridge if import-signature
-   dropped by bridge if !return-package
+   dropped by bridge if !return-package; in that case the payload auth field
+   is present, but ignored.
