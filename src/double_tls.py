@@ -18,9 +18,6 @@
 import logging
 import os
 import socket
-import struct
-import sys
-import traceback
 
 import nss.error
 import nss.io

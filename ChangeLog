@@ -1,3 +1,7 @@
+2010-04-02  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/double_tls.py: Drop some unused imports.
+
 2010-03-19  Miloslav Trmač  <mitr@redhat.com>
 
 	* doc/protocol-design.txt: Minor clarifications.
