@@ -26,17 +26,21 @@ import nss.ssl
 import utils
 
 # A helper for debug prints
-# __next_id = 0
-# __ids = {}
-# def _id(obj):
-#     global __next_id, __ids
-#     try:
-#         return __ids[obj]
-#     except KeyError:
-#         new_id = chr(ord('A') + __next_id)
-#         __next_id += 1
-#         __ids[obj] = new_id
-#         return new_id
+__next_id = 0
+__ids = {}
+def _id(obj):
+    global __next_id, __ids
+    try:
+        return __ids[obj]
+    except KeyError:
+        new_id = chr(ord('A') + __next_id)
+        __next_id += 1
+        __ids[obj] = new_id
+        return new_id
+
+def _debug(fmt, *args):
+    # print fmt % args
+    pass
 
 class ChildConnectionRefusedError(Exception):
     '''Child could not connect.'''
@@ -136,13 +140,12 @@ class _ForwardingBuffer(object):
             buf_1._prepare_poll(poll_descs)
             buf_2._prepare_poll(poll_descs)
 
-            # print 'Poll: %s' % (', '.join(['%s:%s' % (_id(o), v)
-            #                                for (o, v)
-            #                                 in poll_descs.iteritems()]))
+            _debug('Poll: %s',
+                   ', '.join(['%s:%s' % (_id(o), v)
+                              for (o, v) in poll_descs.iteritems()]))
             _nspr_poll(poll_descs, nss.io.PR_INTERVAL_NO_TIMEOUT)
-            # print '-> %s' % (', '.join(['%s:%s' % (_id(o), v)
-            #                             for (o, v)
-            #                             in poll_descs.iteritems()]))
+            _debug('-> %s', ', '.join(['%s:%s' % (_id(o), v)
+                                       for (o, v) in poll_descs.iteritems()]))
 
             # Handle I/O errors.
             buf_1._handle_errors(poll_descs)
@@ -177,48 +180,45 @@ class _CombiningBuffer(_ForwardingBuffer):
 
     @property
     def _active(self):
-        # print ('b%s active: inner open:%s, outer open:%s, len:%s' %
-        #        (_id(self), self.__inner_src_open, self.__outer_src_open,
-        #         len(self.__buffer)))
+        _debug('b%s active: inner open:%s, outer open:%s, len:%s', _id(self),
+               self.__inner_src_open, self.__outer_src_open, len(self.__buffer))
         return (self.__inner_src_open or self.__outer_src_open or
                 len(self.__buffer) > 0)
 
     def _prepare_poll(self, poll_descs):
-        # print ('b%s poll: inner open:%s, outer open:%s, len:%s' %
-        #        (_id(self), self.__inner_src_open, self.__outer_src_open,
-        #         len(self.__buffer)),
+        _debug('b%s poll: inner open:%s, outer open:%s, len:%s', _id(self),
+               self.__inner_src_open, self.__outer_src_open, len(self.__buffer))
         if len(self.__buffer) + utils.u32_size < self._BUFFER_LEN:
             if self.__inner_src_open:
-                # print ' => read inner %s' % (_id(self.__inner_src)),
+                _debug(' => read inner %s', _id(self.__inner_src))
                 poll_descs[self.__inner_src] = \
                     poll_descs.get(self.__inner_src, 0) | nss.io.PR_POLL_READ
             if self.__outer_src_open:
-                # print ' => read inner %s' % (_id(self.__outer_src)),
+                _debug(' => read outer %s', _id(self.__outer_src))
                 poll_descs[self.__outer_src] = \
                     poll_descs.get(self.__outer_src, 0) | nss.io.PR_POLL_READ
         if len(self.__buffer) > 0:
-            # print ' => write %s' % (_id(self.__dst))
+            _debug(' => write %s', _id(self.__dst))
             poll_descs[self.__dst] = (poll_descs.get(self.__dst, 0) |
                                       nss.io.PR_POLL_WRITE)
-        # print
 
     def _handle_errors(self, poll_descs):
         if (poll_descs.get(self.__inner_src, 0) & _POLL_PROBLEM) != 0:
-            # print ('b%s: inner src %s problem, adding EOF' %
-            #        (_id(self), _id(self.__inner_src)))
+            _debug('b%s: inner src %s problem, adding EOF', _id(self),
+                   _id(self.__inner_src))
             self.__inner_src_open = False
             # Append the EOF even if the buffer is too large - this can only
             # happen once per source.
             self.__buffer += utils.u32_pack(_chunk_inner_mask)
         if (poll_descs.get(self.__outer_src, 0) & _POLL_PROBLEM) != 0:
-            # print ('b%s: outer src %s problem, adding EOF' %
-            #        (_id(self), _id(self.__outer_src)))
+            _debug('b%s: outer src %s problem, adding EOF', _id(self),
+                   _id(self.__outer_src))
             self.__outer_src_open = False
             # Append the EOF even if the buffer is too large - this can only
             # happen once per source.
             self.__buffer += utils.u32_pack(0)
         if (poll_descs.get(self.__dst, 0) & _POLL_PROBLEM) != 0:
-            # print 'b%s: dst %s problem' % (_id(self), _id(self.__dst))
+            _debug('b%s: dst %s problem', _id(self), _id(self.__dst))
             if len(self.__buffer) > 0:
                 logging.debug('_CombiningBuffer: data dropped')
                 self.__buffer = ''
@@ -226,11 +226,11 @@ class _CombiningBuffer(_ForwardingBuffer):
     def _send(self, poll_descs):
         if (poll_descs.get(self.__dst, 0) &
             (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
-            # print 'b%s: sending to %s: %d' % (_id(self), _id(self.__dst),
-            #                                   len(self.__buffer))
+            _debug('b%s: sending to %s: %d', _id(self), _id(self.__dst),
+                   len(self.__buffer))
             sent = self.__dst.send(self.__buffer)
             self.__buffer = self.__buffer[sent:]
-            # print '=> %d' % sent
+            _debug('=> %d', sent)
 
     def __receive_inner(self, poll_descs):
         '''Receive data from self.__inner_src if necessary and possible.
@@ -242,27 +242,26 @@ class _CombiningBuffer(_ForwardingBuffer):
             (nss.io.PR_POLL_READ | nss.io.PR_POLL_ERR)) != nss.io.PR_POLL_READ:
             return False
         assert len(self.__buffer) + utils.u32_size < self._BUFFER_LEN
-        # print 'b%s: reading inner %s: %d' % (_id(self), _id(self.__inner_src),
-        #                                      self._BUFFER_LEN -
-        #                                      len(self.__buffer))
+        _debug('b%s: reading inner %s: %d', _id(self), _id(self.__inner_src),
+               self._BUFFER_LEN - len(self.__buffer))
         try:
             data = self.__inner_src.recv(self._BUFFER_LEN - len(self.__buffer))
         except nss.error.NSPRError, e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
-                # print '...!exception, closing src: %s' % repr(e)
+                _debug('...!exception, closing src: %s', repr(e))
                 data = ''
             elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
-                # print '...!would block: %s' % repr(e)
+                _debug('...!would block: %s', repr(e))
                 return False
             else:
                 raise
-        # print '=> %d' % len(data)
+        _debug('=> %d', len(data))
         # This automatically sends EOF if len(data) == 0
         assert len(data) < _chunk_inner_mask
         self.__buffer += utils.u32_pack(_chunk_inner_mask | len(data))
         self.__buffer += data
         if len(data) == 0:
-            # print '... was inner EOF'
+            _debug('... was inner EOF')
             self.__inner_src_open = False
         return True
 
@@ -275,28 +274,27 @@ class _CombiningBuffer(_ForwardingBuffer):
         if (poll_descs.get(self.__outer_src, 0) &
             (nss.io.PR_POLL_READ | nss.io.PR_POLL_ERR)) != nss.io.PR_POLL_READ:
             return False
-        # print 'b%s: reading outer %s: %d' % (_id(self), _id(self.__outer_src),
-        #                                      self._BUFFER_LEN -
-        #                                      len(self.__buffer))
+        _debug('b%s: reading outer %s: %d', _id(self), _id(self.__outer_src),
+               self._BUFFER_LEN - len(self.__buffer))
         assert len(self.__buffer) + utils.u32_size < self._BUFFER_LEN
         try:
             data = self.__outer_src.recv(self._BUFFER_LEN - len(self.__buffer))
         except nss.error.NSPRError, e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
-                # print '...!exception, closing src: %s' % repr(e)
+                _debug('...!exception, closing src: %s', repr(e))
                 data = ''
             elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
-                # print '...!would block: %s' % repr(e)
+                _debug('...!would block: %s', repr(e))
                 return False
             else:
                 raise
-        # print '=> %d' % len(data)
+        _debug('=> %d', len(data))
         # This automatically sends EOF if len(data) == 0
         assert len(data) < _chunk_inner_mask
         self.__buffer += utils.u32_pack(len(data))
         self.__buffer += data
         if len(data) == 0:
-            # print '... was outer EOF'
+            _debug('... was outer EOF')
             self.__outer_src_open = False
         return True
 
@@ -319,11 +317,11 @@ class _CombiningBuffer(_ForwardingBuffer):
     def _check_shutdown(self):
         '''Shutdown self.__dst if necessary.'''
         if not self._active:
-            # print 'b%s: inactive, shut down: %s' % (_id(self),
-            #                                         self.__dst_shut_down)
+            _debug('b%s: inactive, shut down: %s', _id(self),
+                   self.__dst_shut_down)
             if not self.__dst_shut_down:
                 try:
-                    # print '... shutting down %s' % (_id(self.__dst),)
+                    _debug('... shutting down %s', _id(self.__dst))
                     self.__dst.shutdown(nss.io.PR_SHUTDOWN_SEND)
                 except nss.error.NSPRError, e:
                     # The other side might have closed the socket before us
@@ -352,45 +350,44 @@ class _SplittingBuffer(_ForwardingBuffer):
 
     @property
     def _active(self):
-        # print ('b%s active: open:%s, inner:%s, outer: %s' %
-        #        (_id(self), self.__src_open, len(self.__inner_buffer),
-        #         len(self.__outer_buffer)))
+        _debug('b%s active: open:%s, inner:%s, outer: %s', _id(self),
+               self.__src_open, len(self.__inner_buffer),
+               len(self.__outer_buffer))
         return (self.__src_open or len(self.__inner_buffer) > 0 or
                 len(self.__outer_buffer) > 0)
 
     def _prepare_poll(self, poll_descs):
-        # print ('b%s poll: open:%s, inner:%s, outer: %s' %
-        #        (_id(self), self.__src_open, len(self.__inner_buffer),
-        #         len(self.__outer_buffer))),
+        _debug('b%s poll: open:%s, inner:%s, outer: %s', _id(self),
+               self.__src_open, len(self.__inner_buffer),
+               len(self.__outer_buffer))
         if (self.__src_open and
             (max(len(self.__inner_buffer), len(self.__outer_buffer)) <
              self._BUFFER_LEN)):
-            # print ' => read %s' % (_id(self.__src),),
+            _debug(' => read %s', _id(self.__src))
             poll_descs[self.__src] = (poll_descs.get(self.__src, 0) |
                                       nss.io.PR_POLL_READ)
         if len(self.__inner_buffer) > 0:
-            # print ' => write inner %s' % (_id(self.__inner_dst),),
+            _debug(' => write inner %s', _id(self.__inner_dst))
             poll_descs[self.__inner_dst] = \
                 poll_descs.get(self.__inner_dst, 0) | nss.io.PR_POLL_WRITE
         if len(self.__outer_buffer) > 0:
-            # print ' => write outer %s' % (_id(self.__outer_dst),),
+            _debug(' => write outer %s', _id(self.__outer_dst))
             poll_descs[self.__outer_dst] = \
                 poll_descs.get(self.__outer_dst, 0) | nss.io.PR_POLL_WRITE
-        # print
 
     def _handle_errors(self, poll_descs):
         if (poll_descs.get(self.__src, 0) & _POLL_PROBLEM) != 0:
-            # print 'b%s: src %s problem' % (_id(self), _id(self.__src))
+            _debug('b%s: src %s problem', _id(self), _id(self.__src))
             self.__src_open = False
         if (poll_descs.get(self.__inner_dst, 0) & _POLL_PROBLEM) != 0:
-            # print 'b%s: inner dst %s problem' % (_id(self),
-            #                                      _id(self.__inner_dst))
+            _debug('b%s: inner dst %s problem', _id(self),
+                   _id(self.__inner_dst))
             if len(self.__inner_buffer) > 0:
                 logging.debug('_ForwardingBuffer: inner data dropped')
                 self.__inner_buffer = ''
         if (poll_descs.get(self.__outer_dst, 0) & _POLL_PROBLEM) != 0:
-            # print 'b%s: outer dst %s problem' % (_id(self),
-            #                                      _id(self.__outer_dst))
+            _debug('b%s: outer dst %s problem', _id(self),
+                   _id(self.__outer_dst))
             if len(self.__outer_buffer) > 0:
                 logging.debug('_ForwardingBuffer: outer data dropped')
                 self.__outer_buffer = ''
@@ -398,20 +395,18 @@ class _SplittingBuffer(_ForwardingBuffer):
     def _send(self, poll_descs):
         if (poll_descs.get(self.__inner_dst, 0) &
             (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
-            # print ('b%s: sending inner %s: %d' % (_id(self),
-            #                                       _id(self.__inner_dst),
-            #                                       len(self.__inner_buffer))
+            _debug('b%s: sending inner %s: %d', _id(self),
+                   _id(self.__inner_dst), len(self.__inner_buffer))
             sent = self.__inner_dst.send(self.__inner_buffer)
             self.__inner_buffer = self.__inner_buffer[sent:]
-            # print '=> %d' % sent
+            _debug('=> %d', sent)
         if (poll_descs.get(self.__outer_dst, 0) &
             (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
-            # print 'b%s: sending outer %s: %d' % (_id(self),
-            #                                      _id(self.__outer_dst),
-            #                                      len(self.__outer_buffer))
+            _debug('b%s: sending outer %s: %d', _id(self),
+                   _id(self.__outer_dst), len(self.__outer_buffer))
             sent = self.__outer_dst.send(self.__outer_buffer)
             self.__outer_buffer = self.__outer_buffer[sent:]
-            # print '=> %d' % sent
+            _debug('=> %d', sent)
 
     def _receive(self, poll_descs):
         if (poll_descs.get(self.__src, 0) &
@@ -421,21 +416,20 @@ class _SplittingBuffer(_ForwardingBuffer):
                 max(len(self.__inner_buffer), len(self.__outer_buffer)))
         assert left > 0
         try:
-            # print 'b%s: reading from %s: %d' % (_id(self), _id(self.__src),
-            #                                     left)
+            _debug('b%s: reading from %s: %d', _id(self), _id(self.__src), left)
             data = self.__src.recv(left)
         except nss.error.NSPRError, e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
-                # print '...!exception, closing src: %s' % repr(e)
+                _debug('...!exception, closing src: %s', repr(e))
                 data = ''
             elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
-                # print '...!would block: %s' % repr(e)
+                _debug('...!would block: %s', repr(e))
                 return
             else:
                 raise
-        # print '=> %s' % len(data)
+        _debug('=> %s', len(data))
         if len(data) == 0:
-            # print '...!eof, closing src'
+            _debug('...!eof, closing src')
             self.__src_open = False
         while len(data) > 0:
             if self.__inner_bytes_left != 0:
@@ -443,46 +437,45 @@ class _SplittingBuffer(_ForwardingBuffer):
                 self.__inner_buffer += data[:run]
                 self.__inner_bytes_left -= run
                 data = data[run:]
-                # print '... stored %d inner' % run
+                _debug('... stored %d inner', run)
             if self.__outer_bytes_left != 0:
                 run = min(self.__outer_bytes_left, len(data))
                 self.__outer_buffer += data[:run]
                 self.__outer_bytes_left -= run
                 data = data[run:]
-                # print '... stored %d outer' % run
+                _debug('... stored %d outer', run)
             if self.__inner_bytes_left == 0 and self.__outer_bytes_left == 0:
                 run = min(utils.u32_size - len(self.__header_buffer), len(data))
                 self.__header_buffer += data[:run]
                 data = data[run:]
-                # print '... consumed %d header' % run
+                _debug('... consumed %d header', run)
                 assert len(self.__header_buffer) <= utils.u32_size
                 if len(self.__header_buffer) == utils.u32_size:
                     v = utils.u32_unpack(self.__header_buffer)
                     self.__header_buffer = ''
-                    # print '... header: %08x' % v
+                    _debug('... header: %08x', v)
                     if (v & _chunk_inner_mask) != 0:
                         self.__inner_bytes_left = v & ~_chunk_inner_mask
                         if self.__inner_bytes_left == 0:
-                            # print '... got inner EOF'
+                            _debug('... got inner EOF')
                             self.__got_inner_eof = True
                     else:
                         self.__outer_bytes_left = v
                         if self.__outer_bytes_left == 0:
-                            # print '... got outer EOF'
+                            _debug('... got outer EOF')
                             self.__got_outer_eof = True
 
     def _check_shutdown(self):
-        # print ('b%s: shutdown: src:%s, inner:%s/%s, outer: %s/%s' %
-        #        (_id(self), self.__src_open, self.__got_inner_eof,
-        #         len(self.__inner_buffer), self.__got_outer_eof,
-        #         len(self.__outer_buffer))
+        _debug('b%s: shutdown: src:%s, inner:%s/%s, outer: %s/%s', _id(self),
+               self.__src_open, self.__got_inner_eof, len(self.__inner_buffer),
+               self.__got_outer_eof, len(self.__outer_buffer))
         if (((not self.__src_open) or self.__got_inner_eof) and
             len(self.__inner_buffer) == 0):
-            # print ('...inner inactive, shut down: %s' %
-            #        self.__inner_dst_shut_down)
+            _debug('...inner inactive, shut down: %s',
+                   self.__inner_dst_shut_down)
             if not self.__inner_dst_shut_down:
                 try:
-                    # print '...shutting down inner'
+                    _debug('...shutting down inner')
                     self.__inner_dst.shutdown(nss.io.PR_SHUTDOWN_SEND)
                 except nss.error.NSPRError, e:
                     # The other side might have closed the socket before us
@@ -491,11 +484,11 @@ class _SplittingBuffer(_ForwardingBuffer):
                 self.__inner_dst_shut_down = True
         if (((not self.__src_open) or self.__got_outer_eof) and
             len(self.__outer_buffer) == 0):
-            # print ('...outer inactive, shut down: %s' %
-            #        self.__outer_dst_shut_down)
+            _debug('...outer inactive, shut down: %s',
+                   self.__outer_dst_shut_down)
             if not self.__outer_dst_shut_down:
                 try:
-                    # print '...shutting down outer'
+                    _debug('...shutting down outer')
                     self.__outer_dst.shutdown(nss.io.PR_SHUTDOWN_SEND)
                 except nss.error.NSPRError, e:
                     # The other side might have closed the socket before us
@@ -870,29 +863,28 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
 
     @property
     def _active(self):
-        # print 'b%s active: open:%s, len:%s' % (_id(self), self.__src_open,
-        #                                        len(self.__buffer))
+        _debug('b%s active: open:%s, len:%s', _id(self), self.__src_open,
+               len(self.__buffer))
         return self.__src_open or len(self.__buffer) > 0
 
     def _prepare_poll(self, poll_descs):
-        # print 'b%s poll: open:%s, len:%s' % (_id(self), self.__src_open,
-        #                                      len(self.__buffer)),
+        _debug('b%s poll: open:%s, len:%s', _id(self), self.__src_open,
+               len(self.__buffer))
         if self.__src_open and len(self.__buffer) < self._BUFFER_LEN:
-            # print ' => read %s' % (_id(self.__src),),
+            _debug(' => read %s', _id(self.__src))
             poll_descs[self.__src] = (poll_descs.get(self.__src, 0) |
                                       nss.io.PR_POLL_READ)
         if len(self.__buffer) > 0:
-            # print ' => write %s' % (_id(self.__dst),),
+            _debug(' => write %s', _id(self.__dst))
             poll_descs[self.__dst] = (poll_descs.get(self.__dst, 0) |
                                       nss.io.PR_POLL_WRITE)
-        # print
 
     def _handle_errors(self, poll_descs):
         if (poll_descs.get(self.__src, 0) & _POLL_PROBLEM) != 0:
-            # print 'b%s: src %s problem' % (_id(self), _id(self.__src))
+            _debug('b%s: src %s problem', _id(self), _id(self.__src))
             self.__src_open = False
         if (poll_descs.get(self.__dst, 0) & _POLL_PROBLEM) != 0:
-            # print 'b%s: dst %s problem' % (_id(self), _id(self.__dst))
+            _debug('b%s: dst %s problem', _id(self), _id(self.__dst))
             if len(self.__buffer) > 0:
                 logging.debug('_InnerBridgingBuffer: data dropped')
                 self.__buffer = ''
@@ -900,34 +892,33 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
     def _send(self, poll_descs):
         if (poll_descs.get(self.__dst, 0) &
             (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
-            # print 'b%s: sending to %s: %d' % (_id(self), _id(self.__dst),
-            #                                   len(self.__buffer))
+            _debug('b%s: sending to %s: %d', _id(self), _id(self.__dst),
+                   len(self.__buffer))
             sent = self.__dst.send(self.__buffer)
             self.__buffer = self.__buffer[sent:]
-            # print '=> %d' % sent
+            _debug('=> %d', sent)
 
     def _receive(self, poll_descs):
         if (poll_descs.get(self.__src, 0) &
             (nss.io.PR_POLL_READ | nss.io.PR_POLL_ERR)) != nss.io.PR_POLL_READ:
             return
         assert len(self.__buffer) < self._BUFFER_LEN
-        # print 'b%s: reading from %s: %d' % (_id(self), _id(self.__src),
-        #                                     self._BUFFER_LEN -
-        #                                     len(self.__buffer))
+        _debug('b%s: reading from %s: %d', _id(self), _id(self.__src),
+               self._BUFFER_LEN - len(self.__buffer))
         try:
             data = self.__src.recv(self._BUFFER_LEN - len(self.__buffer))
         except nss.error.NSPRError, e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
-                # print '...!exception, closing src: %s' % repr(e)
+                _debug('...!exception, closing src: %s', repr(e))
                 data = ''
             elif e.errno == nss.error.PR_WOULD_BLOCK_ERROR:
-                # print '...!would block: %s' % repr(e)
+                _debug('...!would block: %s', repr(e))
                 return
             else:
                 raise
-        # print '=> %d' % len(data)
+        _debug('=> %d', len(data))
         if len(data) == 0:
-            # print '... closing src'
+            _debug('... closing src')
             self.__src_open = False
         while len(data) > 0:
             if self.__inner_bytes_left != 0:
@@ -935,27 +926,27 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
                 self.__buffer += data[:run]
                 self.__inner_bytes_left -= run
                 data = data[run:]
-                # print '... stored %d inner' % run
+                _debug('... stored %d inner', run)
             if self.__outer_bytes_left != 0:
                 run = min(self.__outer_bytes_left, len(data))
                 self.__outer_data += data[:run]
                 self.__outer_bytes_left -= run
                 data = data[run:]
-                # print '... deferred %d outer' % run
+                _debug('... deferred %d outer', run)
             if self.__inner_bytes_left == 0 and self.__outer_bytes_left == 0:
                 run = min(utils.u32_size - len(self.__header_buffer), len(data))
                 self.__header_buffer += data[:run]
                 data = data[run:]
-                # print '... consumed %d header' % run
+                _debug('... consumed %d header', run)
                 assert len(self.__header_buffer) <= utils.u32_size
                 if len(self.__header_buffer) == utils.u32_size:
                     v = utils.u32_unpack(self.__header_buffer)
-                    # print '... header: %08x' % v
+                    _debug('... header: %08x', v)
                     if (v & _chunk_inner_mask) != 0:
                         self.__buffer += self.__header_buffer
                         self.__inner_bytes_left = v & ~_chunk_inner_mask
                         if self.__inner_bytes_left == 0:
-                            # print '... got inner EOF'
+                            _debug('... got inner EOF')
                             self.__src_open = False
                             # Don't send additional EOF
                             self.__dst_shut_down = True
@@ -965,10 +956,10 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
 
     def _check_shutdown(self):
         if not self._active:
-            # print 'b%s: inactive, shut down: %s' % (_id(self),
-            #                                         self.__dst_shut_down)
+            _debug('b%s: inactive, shut down: %s', _id(self),
+                   self.__dst_shut_down)
             if not self.__dst_shut_down:
-                # print '... sending inner EOF'
+                _debug('... sending inner EOF')
                 self.__buffer += utils.u32_pack(_chunk_inner_mask)
                 self.__dst_shut_down = True
 

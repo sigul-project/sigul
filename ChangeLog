@@ -1,3 +1,10 @@
+2010-04-06  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/double_tls.py: (__next_id, __ids, _id): Uncomment.
+	(_debug): New function.  Use everywhere instead of commented-out `print'
+	to make debugging easier to enable.
+	(_CombiningBuffer._prepare_poll): Fix a debug print pasto.
+
 2010-04-02  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/double_tls.py: Drop some unused imports.
