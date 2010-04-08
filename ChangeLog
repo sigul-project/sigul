@@ -1,3 +1,16 @@
+2010-04-08  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/double_tls.py (_ForwardingBuffer._handle_errors)
+	(_ForwardingBuffer._receive): Comment on possible combinations of
+	PR_POLL_IN with other flags.
+	(_CombiningBuffer._handle_errors)
+	(_CombiningBuffer.__receive_inner)
+	(_CombiningBuffer.__receive_outer)
+	(_SplittingBuffer._handle_errors, _SplittingBuffer._receive)
+	(_InnerBridgingBuffer._handle_errors)
+	(_InnerBridgingBuffer._receive): If PR_POLL_IN is set, ignore
+	PR_POLL_HUP and PR_POLL_ERR in this iteration.
+
 2010-04-06  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/double_tls.py: (__next_id, __ids, _id): Uncomment.

@@ -109,6 +109,9 @@ class _ForwardingBuffer(object):
 
     def _handle_errors(self, poll_descs):
         '''Handle errors reported in poll_descs.'''
+        # Only consider the input an error if PR_POLL_READ is not set, to give
+        # self._receive() chance to handle pending data, if any.  We'll see the
+        # error state in self._receive(), or in the next iteration.
         raise NotImplementedError
 
     def _send(self, poll_descs):
@@ -117,9 +120,10 @@ class _ForwardingBuffer(object):
 
     def _receive(self, poll_descs):
         '''Receive data to buffer, if necessary and possible.'''
-        # Only check PR_POLL_ERR, not PR_POLL_HUP in implementations: It is
-        # possible to get PR_POLL_IN | PR_POLL_HUP if data was written and
-        # socket was shut down fast enough
+        # Ignore PR_POLL_ERR and PR_POLL_HUP in implementations: It is possible
+        # to get e.g. PR_POLL_IN | PR_POLL_HUP on a closed socket if data is
+        # still pending.  Instead, make sure to handle
+        # nss.error.PR_CONNECT_RESET_ERROR gracefully.
         raise NotImplementedError
 
     def _check_shutdown(self):
@@ -203,14 +207,16 @@ class _CombiningBuffer(_ForwardingBuffer):
                                       nss.io.PR_POLL_WRITE)
 
     def _handle_errors(self, poll_descs):
-        if (poll_descs.get(self.__inner_src, 0) & _POLL_PROBLEM) != 0:
+        v = poll_descs.get(self.__inner_src, 0)
+        if (v & _POLL_PROBLEM) != 0 and (v & nss.io.PR_POLL_READ) == 0:
             _debug('b%s: inner src %s problem, adding EOF', _id(self),
                    _id(self.__inner_src))
             self.__inner_src_open = False
             # Append the EOF even if the buffer is too large - this can only
             # happen once per source.
             self.__buffer += utils.u32_pack(_chunk_inner_mask)
-        if (poll_descs.get(self.__outer_src, 0) & _POLL_PROBLEM) != 0:
+        v = poll_descs.get(self.__outer_src, 0)
+        if (v & _POLL_PROBLEM) != 0 and (v & nss.io.PR_POLL_READ) == 0:
             _debug('b%s: outer src %s problem, adding EOF', _id(self),
                    _id(self.__outer_src))
             self.__outer_src_open = False
@@ -238,8 +244,7 @@ class _CombiningBuffer(_ForwardingBuffer):
         Return True if something was received.
 
         '''
-        if (poll_descs.get(self.__inner_src, 0) &
-            (nss.io.PR_POLL_READ | nss.io.PR_POLL_ERR)) != nss.io.PR_POLL_READ:
+        if (poll_descs.get(self.__inner_src, 0) & nss.io.PR_POLL_READ) == 0:
             return False
         assert len(self.__buffer) + utils.u32_size < self._BUFFER_LEN
         _debug('b%s: reading inner %s: %d', _id(self), _id(self.__inner_src),
@@ -271,8 +276,7 @@ class _CombiningBuffer(_ForwardingBuffer):
         Return True if something was received.
 
         '''
-        if (poll_descs.get(self.__outer_src, 0) &
-            (nss.io.PR_POLL_READ | nss.io.PR_POLL_ERR)) != nss.io.PR_POLL_READ:
+        if (poll_descs.get(self.__outer_src, 0) & nss.io.PR_POLL_READ) == 0:
             return False
         _debug('b%s: reading outer %s: %d', _id(self), _id(self.__outer_src),
                self._BUFFER_LEN - len(self.__buffer))
@@ -376,7 +380,8 @@ class _SplittingBuffer(_ForwardingBuffer):
                 poll_descs.get(self.__outer_dst, 0) | nss.io.PR_POLL_WRITE
 
     def _handle_errors(self, poll_descs):
-        if (poll_descs.get(self.__src, 0) & _POLL_PROBLEM) != 0:
+        v = poll_descs.get(self.__src, 0)
+        if (v & _POLL_PROBLEM) != 0 and (v & nss.io.PR_POLL_READ) == 0:
             _debug('b%s: src %s problem', _id(self), _id(self.__src))
             self.__src_open = False
         if (poll_descs.get(self.__inner_dst, 0) & _POLL_PROBLEM) != 0:
@@ -409,8 +414,7 @@ class _SplittingBuffer(_ForwardingBuffer):
             _debug('=> %d', sent)
 
     def _receive(self, poll_descs):
-        if (poll_descs.get(self.__src, 0) &
-            (nss.io.PR_POLL_READ | nss.io.PR_POLL_ERR)) != nss.io.PR_POLL_READ:
+        if (poll_descs.get(self.__src, 0) & nss.io.PR_POLL_READ) == 0:
             return
         left = (self._BUFFER_LEN -
                 max(len(self.__inner_buffer), len(self.__outer_buffer)))
@@ -880,7 +884,8 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
                                       nss.io.PR_POLL_WRITE)
 
     def _handle_errors(self, poll_descs):
-        if (poll_descs.get(self.__src, 0) & _POLL_PROBLEM) != 0:
+        v = poll_descs.get(self.__src, 0)
+        if (v & _POLL_PROBLEM) != 0 and (v & nss.io.PR_POLL_READ) == 0:
             _debug('b%s: src %s problem', _id(self), _id(self.__src))
             self.__src_open = False
         if (poll_descs.get(self.__dst, 0) & _POLL_PROBLEM) != 0:
@@ -899,8 +904,7 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
             _debug('=> %d', sent)
 
     def _receive(self, poll_descs):
-        if (poll_descs.get(self.__src, 0) &
-            (nss.io.PR_POLL_READ | nss.io.PR_POLL_ERR)) != nss.io.PR_POLL_READ:
+        if (poll_descs.get(self.__src, 0) & nss.io.PR_POLL_READ) == 0:
             return
         assert len(self.__buffer) < self._BUFFER_LEN
         _debug('b%s: reading from %s: %d', _id(self), _id(self.__src),
