@@ -498,7 +498,7 @@ class _SplittingBuffer(_ForwardingBuffer):
                     # The other side might have closed the socket before us
                     if e.errno != nss.error.PR_NOT_CONNECTED_ERROR:
                         raise
-                self.__outer_shut_down = True
+                self.__outer_dst_shut_down = True
 
 class DoubleTLSClient(object):
     '''A client "socket" that allows creating a nested TLS session.

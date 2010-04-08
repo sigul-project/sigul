@@ -1,5 +1,8 @@
 2010-04-08  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/double_tls.py (_SplittingBuffer._check_shutdown): Fix variable
+	name, don't shut down self.__outer_dst over and over.
+
 	* src/double_tls.py (_ForwardingBuffer._handle_errors)
 	(_ForwardingBuffer._receive): Comment on possible combinations of
 	PR_POLL_IN with other flags.
