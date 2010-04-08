@@ -1,5 +1,9 @@
 2010-04-08  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/double_tls.py (OuterBuffer.read, OuterBuffer.write)
+	(OuterBuffer.pending_inner_packets, OuterBuffer.add_outer_data): Add
+	debug output.
+
 	* src/double_tls.py (_SplittingBuffer._check_shutdown): Fix variable
 	name, don't shut down self.__outer_dst over and over.
 

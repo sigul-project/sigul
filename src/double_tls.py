@@ -799,6 +799,7 @@ class OuterBuffer(object):
         res = ''
         while len(res) < buf_size:
             run = min(buf_size - len(res), len(self.__outer_data))
+            _debug('o%s: consuming %d outer data bytes', _id(self), run)
             res += self.__outer_data[:run]
             self.__outer_data = self.__outer_data[run:]
             if len(res) == buf_size:
@@ -806,14 +807,18 @@ class OuterBuffer(object):
             assert len(self.__outer_data) == 0
             header = self.__recv_exact(utils.u32_size)
             v = utils.u32_unpack(header)
+            _debug('o%s: header %08X', _id(self), v)
             if (v & _chunk_inner_mask) != 0:
                 self.__inner_packets += header
                 self.__inner_packets += self.__recv_exact(v &
                                                           ~_chunk_inner_mask)
+                _debug('o%s: added %d inner bytes, total %d', _id(self),
+                       v & ~_chunk_inner_mask, len(self.__inner_packets))
             else:
                 if v == 0:
                     raise EOFError, 'Unexpected EOF on outer stream'
                 self.__outer_data += self.__recv_exact(v)
+                _debug('o%s: received %d outer data bytes', _id(self), v)
         return res
 
     def write(self, data):
@@ -823,6 +828,7 @@ class OuterBuffer(object):
 
         '''
         assert len(data) < _chunk_inner_mask
+        _debug('o%s: sending %d bytes', _id(self), len(data))
         self.__socket.send(utils.u32_pack(len(data)))
         self.__socket.send(data)
 
@@ -833,6 +839,8 @@ class OuterBuffer(object):
         packets.
 
         '''
+        _debug('o%s: %d bytes of pending inner packets returned', _id(self),
+               len(self.__inner_packets))
         res = self.__inner_packets
         self.__inner_packets = ''
         return res
@@ -840,6 +848,8 @@ class OuterBuffer(object):
     def add_outer_data(self, data):
         '''Add data to be read as coming from the outer stream.'''
         self.__outer_data += data
+        _debug('o%s: accepted %d bytes of outer data (total %d)', _id(self),
+               len(data), len(self.__outer_data))
 
 class _InnerBridgingBuffer(_ForwardingBuffer):
     '''A buffer that forwards the inner stream, saving outer stream packets.'''
