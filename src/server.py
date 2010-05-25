@@ -70,7 +70,8 @@ class ServerConfiguration(server_common.GPGConfiguration,
                          'max-memory-payload-size': 1024 * 1024,
                          'max-rpms-payloads-size': 10 * 1024 * 1024 * 1024,
                          'passphrase-length': 64,
-                         'server-cert-nickname': 'sigul-server-cert'})
+                         'server-cert-nickname': 'sigul-server-cert',
+                         'signing-timeout': 60})
 
     def _read_configuration(self, parser):
         super(ServerConfiguration, self)._read_configuration(parser)
@@ -94,6 +95,7 @@ class ServerConfiguration(server_common.GPGConfiguration,
         self.max_rpms_payloads_size = parser.getint('server',
                                                     'max-rpms-payloads-size')
         self.server_cert_nickname = parser.get('server', 'server-cert-nickname')
+        self.signing_timeout = parser.getint('server', 'signing-timeout')
 
 class RequestHandled(Exception):
     '''Used to terminate further processing of the request.'''
@@ -801,20 +803,26 @@ class SigningContext(object):
         self.__env = dict(os.environ) # Shallow copy, uses our $GNUPGHOME
         self.__env['LC_ALL'] = 'C'
 
-    def sign_rpm(self, rpm):
-        '''Sign rpm.
+    def sign_rpm(self, config, rpm):
+        '''Sign rpm, using config.
 
         Raise RPMFileError on error.
 
         '''
-        child = pexpect.spawn('rpm', self.__argv + ['--addsign', rpm.path],
-                              env=self.__env)
-        child.expect('Enter pass phrase: ')
-        child.sendline(self.__key_passphrase)
-        answer = child.expect(['Pass phrase is good\.',
-                               'Pass phrase check failed'])
-        child.expect(pexpect.EOF)
-        child.close()
+        try:
+            child = pexpect.spawn('rpm', self.__argv + ['--addsign', rpm.path],
+                                  env=self.__env,
+                                  timeout=config.signing_timeout)
+            child.expect('Enter pass phrase: ')
+            child.sendline(self.__key_passphrase)
+            answer = child.expect(['Pass phrase is good\.',
+                                   'Pass phrase check failed'])
+            child.expect(pexpect.EOF)
+            child.close()
+        except pexpect.ExceptionPexpect, e:
+            msg = str(e).splitlines()[0] # We don't want all of the pexpect dump
+            rpm.status = errors.UNKNOWN_ERROR
+            raise RPMFileError('Error signing %s: %s' % (rpm.rpm_id, msg))
         if (not os.WIFEXITED(child.status) or
             os.WEXITSTATUS(child.status) != 0 or answer != 0):
             rpm.status = errors.UNKNOWN_ERROR
@@ -1166,7 +1174,7 @@ def cmd_sign_rpm(db, conn):
 
     ctx = SigningContext(conn, access.key, key_passphrase)
     try:
-        ctx.sign_rpm(rpm)
+        ctx.sign_rpm(conn.config, rpm)
     except RPMFileError, e:
         logging.error(str(e))
         conn.send_error(rpm.status)
@@ -1268,11 +1276,12 @@ class SignRPMsSignerThread(utils.WorkerThread):
 
     '''
 
-    def __init__(self, dst_queue, src_queue, ctx):
+    def __init__(self, config, dst_queue, src_queue, ctx):
         super(SignRPMsSignerThread, self).__init__ \
             ('sign-rpms:signing', 'signer thread',
              input_queues=((src_queue, None),),
              output_queues=((dst_queue, None),))
+        self.__config = config
         self.__dst = dst_queue
         self.__src = src_queue
         self.__ctx = ctx
@@ -1302,7 +1311,7 @@ class SignRPMsSignerThread(utils.WorkerThread):
 
         logging.debug(8)
         try:
-            self.__ctx.sign_rpm(rpm)
+            self.__ctx.sign_rpm(self.__config, rpm)
         except RPMFileError, e:
             logging.error(str(e))
 
@@ -1408,7 +1417,7 @@ def cmd_sign_rpms(db, conn):
                                              subrequest_header_nss_key,
                                              subrequest_payload_nss_key,
                                              tmp_dir))
-        threads.append(SignRPMsSignerThread(q2, q1, signing_ctx))
+        threads.append(SignRPMsSignerThread(conn.config, q2, q1, signing_ctx))
         threads.append(SignRPMsReplyThread(conn, q2, subreply_header_nss_key,
                                            subreply_payload_nss_key))
 

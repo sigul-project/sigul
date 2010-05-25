@@ -1,5 +1,13 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server.py (ServerConfiguration._add_defaults): New option
+	signing-timeout.
+	(ServerConfiguration._read_configuration): Handle signing-timeout.
+	(SigningContext.sign_rpm): Catch pexpect exceptions.  Use
+	signing-timeout.  New parameter config.  All callers changed.
+	(SignRPMsSignerThread.__init__): New parameter config.  Caller changed.
+	* config/server.conf (bridge-hostname): Document signing-timeout.
+
 	* src/utils.py (_derivation_counter_1): New definition.
 	(derived_key): New function.
 	(SHA512HashAndHMACReader, WorkerThread): New classes.
