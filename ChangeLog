@@ -1,5 +1,8 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/client.py (ClientsConnection.send_payload_from_file): Rename
+	parameter.
+
 	* src/client.py (ClientsConnection.__send_payload_size): Rename from
 	ClientsConnection.__start_payload().  All users changed.
 

@@ -114,15 +114,15 @@ class ClientsConnection(object):
         self.__send_payload_size(len(data))
         self.__request_payload_writer.write(data)
 
-    def send_payload_from_file(self, file):
-        '''Send contents of file as payload.'''
-        file.seek(0)
-        file_size = os.fstat(file.fileno()).st_size
+    def send_payload_from_file(self, fd):
+        '''Send contents of fd as payload.'''
+        fd.seek(0)
+        file_size = os.fstat(fd.fileno()).st_size
         self.__send_payload_size(file_size)
 
         sent = 0
         while True:
-            data = file.read(4096)
+            data = fd.read(4096)
             if len(data) == 0:
                 break
             self.__request_payload_writer.write(data)
