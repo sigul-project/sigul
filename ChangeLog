@@ -1,5 +1,9 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (copy_data): New function.
+	* src/bridge.py (copy_file_data): Rename from copy_data.  Use
+	utils.copy_data.  All callers changed.
+
 	* src/utils.py (write_new_file): Rename parameter.
 
 2010-04-08  Miloslav Trmač  <mitr@redhat.com>

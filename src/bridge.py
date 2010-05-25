@@ -100,12 +100,9 @@ class ForwardingError(Exception):
     '''An error was detected while forwarding or modifying the communication.'''
     pass
 
-def copy_data(dest, src, size):
+def copy_file_data(dest, src, size):
     '''Copy size bytes from file-like src to file-like dst.'''
-    while size > 0:
-        data = src.read(min(size, 4096))
-        dest.write(data)
-        size -= len(data)
+    utils.copy_data(dest.write, src.read, size)
 
  # Request verification
 
@@ -175,12 +172,12 @@ class RequestType(object):
                                 unused_fields):
         '''Forward (optionally modify) payload from client_buf to server_buf.'''
         server_buf.write(utils.u32_pack(payload_size))
-        copy_data(server_buf, client_buf, payload_size)
+        copy_file_data(server_buf, client_buf, payload_size)
 
     def forward_reply_payload(self, client_buf, server_buf, payload_size):
         '''Forward (optionally modify) payload from server_buf to client_buf.'''
         client_buf.write(utils.u32_pack(payload_size))
-        copy_data(client_buf, server_buf, payload_size)
+        copy_file_data(client_buf, server_buf, payload_size)
 
     def close(self):
         '''Deinitialize any costly state.'''
@@ -233,7 +230,7 @@ class SignRpmRequestType(RequestType):
                     raise ForwardingError('Content-Length not returned for %s' %
                                           url)
             server_buf.write(utils.u32_pack(payload_size))
-            copy_data(server_buf, src, payload_size)
+            copy_file_data(server_buf, src, payload_size)
         finally:
             src.close()
 
@@ -251,7 +248,7 @@ class SignRpmRequestType(RequestType):
             tmp_file = None
             try:
                 tmp_file = os.fdopen(fd, 'w+')
-                copy_data(tmp_file, server_buf, payload_size)
+                copy_file_data(tmp_file, server_buf, payload_size)
                 tmp_file.close()
                 tmp_file = None
                 try:
@@ -288,7 +285,7 @@ class SignRpmRequestType(RequestType):
                 else:
                     tmp_file = open(tmp_path, 'rb')
                     client_buf.write(utils.u32_pack(payload_size))
-                    copy_data(client_buf, tmp_file, payload_size)
+                    copy_file_data(client_buf, tmp_file, payload_size)
             finally:
                 if tmp_file is not None:
                     tmp_file.close()

@@ -433,6 +433,13 @@ def sigterm_handler(*unused_args):
 
  # Miscellaneous utilities
 
+def copy_data(write_fn, read_fn, size):
+    '''Copy size bytes using write_fn and read_fn.'''
+    while size > 0:
+        data = read_fn(min(size, 4096))
+        write_fn(data)
+        size -= len(data)
+
 def write_new_file(path, write_fn):
     '''Atomically replace file at path with data written by write_fn(fd).'''
     (dirname, basename) = os.path.split(path)
