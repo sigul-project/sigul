@@ -1,5 +1,8 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (SignRPMRequestType): Rename from SignRpmRequestType.
+	All references updated.
+
 	* src/utils.py (md5_digest): Remove no longer necessary conversions
 	between str and buffer.  Fold into the only caller.
 	* src/bridge.py (RPMObject, KojiClient): Split from SignRpmRequestType.

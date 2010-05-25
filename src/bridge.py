@@ -383,11 +383,11 @@ class KojiClient(object):
             utils.koji_disconnect(self.__koji_session)
             self.__koji_session = None
 
-class SignRpmRequestType(RequestType):
+class SignRPMRequestType(RequestType):
     '''A specialized handler for the 'sign-rpm' request.'''
 
     def __init__(self, *args, **kwargs):
-        super(SignRpmRequestType, self).__init__(*args, **kwargs)
+        super(SignRPMRequestType, self).__init__(*args, **kwargs)
         self.__request_fields = None
         self.__koji_client = None
         self.__rpm = None
@@ -399,7 +399,7 @@ class SignRpmRequestType(RequestType):
         self.__koji_client = KojiClient(fields)
         self.__rpm = RPMObject(fields, None, payload_size)
         if payload_size != 0:
-            return super(SignRpmRequestType, self). \
+            return super(SignRPMRequestType, self). \
                 forward_request_payload(server_buf, client_buf, payload_size,
                                         fields)
 
@@ -438,14 +438,14 @@ class SignRpmRequestType(RequestType):
             finally:
                 self.__rpm.remove_tmp_path()
         elif self.__request_fields.get('return-data') != utils.u32_pack(0):
-            super(SignRpmRequestType, self).forward_reply_payload(client_buf,
+            super(SignRPMRequestType, self).forward_reply_payload(client_buf,
                                                                   server_buf,
                                                                   payload_size)
         else:
             client_buf.write(utils.u32_pack(0))
 
     def close(self):
-        super(SignRpmRequestType, self).close()
+        super(SignRPMRequestType, self).close()
         self.__request_fields = None
         if self.__koji_client is not None:
             self.__koji_client.close()
@@ -481,7 +481,7 @@ request_types = {
     'change-passphrase': RT((SF('key'),)),
     'sign-text': RT((SF('key'),), max_payload=1024*1024*1024),
     'sign-data': RT((SF('key'),), max_payload=1024*1024*1024),
-    'sign-rpm': SignRpmRequestType((SF('key'), SF('rpm-name', optional=True),
+    'sign-rpm': SignRPMRequestType((SF('key'), SF('rpm-name', optional=True),
                                     SF('rpm-epoch', optional=True),
                                     SF('rpm-version', optional=True),
                                     SF('rpm-release', optional=True),
