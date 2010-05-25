@@ -105,6 +105,22 @@ class ClientsConnection(object):
         '''Prepare for sending payload of payload_size.'''
         self.__client.outer_write(utils.u32_pack(payload_size))
 
+    def __send_payload_from_file(self, writer, fd):
+        '''Send contents of fd to the server as payload, using writer.'''
+        fd.seek(0)
+        file_size = os.fstat(fd.fileno()).st_size
+        self.__send_payload_size(file_size)
+
+        sent = 0
+        while True:
+            data = fd.read(4096)
+            if len(data) == 0:
+                break
+            writer.write(data)
+            sent += len(data)
+        if sent != file_size:
+            raise IOError('File size did not match size returned by fstat()')
+
     def empty_payload(self):
         '''Send an empty payload.'''
         self.__send_payload_size(0)
@@ -115,20 +131,8 @@ class ClientsConnection(object):
         self.__request_payload_writer.write(data)
 
     def send_payload_from_file(self, fd):
-        '''Send contents of fd as payload.'''
-        fd.seek(0)
-        file_size = os.fstat(fd.fileno()).st_size
-        self.__send_payload_size(file_size)
-
-        sent = 0
-        while True:
-            data = fd.read(4096)
-            if len(data) == 0:
-                break
-            self.__request_payload_writer.write(data)
-            sent += len(data)
-        if sent != file_size:
-            raise IOError('File size did not match size returned by fstat()')
+        '''Send contents of file as payload.'''
+        self.__send_payload_from_file(self.__request_payload_writer, fd)
 
     def send_inner(self, inner_fields, omit_payload_auth=False):
         '''Send the inner header, including inner_fields.'''
