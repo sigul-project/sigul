@@ -1,5 +1,9 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/double_tls.py (OuterBuffer.__recv_exact): Add a parameter to the
+	EOFError exception.
+	(OuterBuffer.read): Update docstring.
+
 	* src/bridge.py (SignRPMRequestType): Rename from SignRpmRequestType.
 	All references updated.
 

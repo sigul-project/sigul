@@ -786,14 +786,14 @@ class OuterBuffer(object):
         while len(res) < buf_size:
             run = self.__socket.recv(buf_size - len(res))
             if len(run) == 0:
-                raise EOFError
+                raise EOFError, 'Unexpected EOF on _DoubleTLS'
             res += run
         return res
 
     def read(self, buf_size):
         '''Return exactly buf_size bytes from the outer packet.
 
-        Raise IOError on EOF.
+        Raise EOFError on EOF.
 
         '''
         res = ''
