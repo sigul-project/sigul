@@ -442,9 +442,7 @@ def handle_connection(client_buf, server_buf):
     buf = client_buf.read(utils.u32_size)
     payload_size = utils.u32_unpack(buf)
 
-    s = ', '.join(('%s = %s' % (repr(key), repr(value))
-                   for (key, value) in fields.iteritems()))
-    logging.info('Request: %s', s)
+    logging.info('Request: %s', utils.readable_fields(fields))
     try:
         op = fields['op']
     except KeyError:

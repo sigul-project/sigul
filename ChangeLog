@@ -1,5 +1,10 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (readable_fields): New function.
+	* src/bridge.py (handle_connection)
+	* src/server.py (ServersConnection.read_request): Use
+	utils.readable_fields.
+
 	* src/utils.py (copy_data): New function.
 	* src/bridge.py (copy_file_data): Rename from copy_data.  Use
 	utils.copy_data.  All callers changed.

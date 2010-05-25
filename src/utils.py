@@ -318,6 +318,11 @@ def format_fields(fields):
         data += value
     return data
 
+def readable_fields(fields):
+    '''Return a string representing fields.'''
+    keys = sorted(fields.iterkeys())
+    return ', '.join(('%s = %s' % (repr(k), repr(fields[k])) for k in keys))
+
 def string_is_safe(s):
     '''Return True if s an allowed readable string.'''
     # Motivated by 100% readable logs

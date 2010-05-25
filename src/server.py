@@ -238,10 +238,7 @@ class ServersConnection(object):
             self.__outer_fields = utils.read_fields(proxy.stored_outer_read)
         except utils.InvalidFieldsError, e:
             raise InvalidRequestError(str(e))
-        # print repr(self.__outer_fields)
-        s = ', '.join(('%s = %s' % (repr(key), repr(value))
-                       for (key, value) in self.__outer_fields.iteritems()))
-        logging.info('Request: %s', s)
+        logging.info('Request: %s', utils.readable_fields(self.__outer_fields))
         header_data = proxy.stored_data()
         buf = self.__client.outer_read(utils.u32_size)
         payload_size = utils.u32_unpack(buf)
