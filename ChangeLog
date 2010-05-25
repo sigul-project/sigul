@@ -1,5 +1,9 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (InvalidReplyError): New class.
+	(handle_connection): Raise InvalidReplyError, not InvalidRequestError.
+	(bridge_one_request): Handle InvalidReplyError.
+
 	* src/utils.py (readable_fields): New function.
 	* src/bridge.py (handle_connection)
 	* src/server.py (ServersConnection.read_request): Use

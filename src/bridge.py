@@ -96,6 +96,10 @@ class InvalidRequestError(Exception):
     '''The client's request was invalid.'''
     pass
 
+class InvalidReplyError(Exception):
+    '''The server's reply was invalid.'''
+    pass
+
 class ForwardingError(Exception):
     '''An error was detected while forwarding or modifying the communication.'''
     pass
@@ -464,7 +468,7 @@ def handle_connection(client_buf, server_buf):
         try:
             fields = utils.read_fields(server_proxy.stored_read)
         except utils.InvalidFieldsError, e:
-            raise InvalidRequestError(str(e))
+            raise InvalidReplyError(str(e))
         error_code = utils.u32_unpack(buf)
         if error_code != errors.OK:
             msg = fields.get('message')
@@ -542,6 +546,8 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
                 server_sock.close()
     except InvalidRequestError, e:
         logging.warning('Invalid request: %s', str(e))
+    except InvalidReplyError, e:
+        logging.warning('Invalid reply: %s', str(e))
     except ForwardingError, e:
         logging.warning('Error working with request data: %s', str(e))
     except IOError, e:
