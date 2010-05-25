@@ -528,6 +528,18 @@ def copy_data(write_fn, read_fn, size):
         write_fn(data)
         size -= len(data)
 
+def file_size_in_blocks(fd):
+    '''Return size of fd, taking into account block sizes.'''
+    st = os.fstat(fd.fileno())
+    # 512 is what (info libc) says.  See also <sys/stat.h> in POSIX.
+    return st.st_blocks * 512
+
+def path_size_in_blocks(path):
+    '''Return size of path, taking into account block sizes.'''
+    st = os.stat(path)
+    # 512 is what (info libc) says.  See also <sys/stat.h> in POSIX.
+    return st.st_blocks * 512
+
 def write_new_file(path, write_fn):
     '''Atomically replace file at path with data written by write_fn(fd).'''
     (dirname, basename) = os.path.split(path)

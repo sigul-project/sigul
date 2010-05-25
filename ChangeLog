@@ -1,5 +1,8 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (file_size_in_blocks, path_size_in_blocks): New
+	functions.
+
 	* src/server.py (ServersConnection.__send_payload_from_file): Split from
 	ServersConnection.send_payload_from_file().
 
