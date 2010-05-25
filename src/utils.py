@@ -25,10 +25,12 @@ import optparse
 import os
 import pwd
 import re
+import socket
 import stat
 import struct
 import sys
 import tempfile
+import threading
 import xmlrpclib
 
 import nss.error
@@ -245,6 +247,24 @@ def nss_init(config):
     nss.ssl.set_domestic_policy()
     nss.ssl.config_server_session_id_cache()
 
+_derivation_counter_1 = u32_pack(1)
+def derived_key(nss_base_key, instance):
+    '''Return a NSS HMAC key derived from nss_base_key and instance number.'''
+    # This is a degenerate case of NIST SP 800-56A section 5.8, with
+    # AlgorithmInfo empty (SHA-512 HMAC implied), PartyUInfo empty, PartyVInfo
+    # empty, instance number as SuppPubInfo
+    # reps = 1
+    # Hash1 == Hash == DerivedKeyingMaterial
+    digest = nss.nss.create_digest_context(nss.nss.SEC_OID_SHA512)
+    digest.digest_op(_derivation_counter_1)
+    digest.digest_key(nss_base_key)
+    digest.digest_op(u32_pack(instance))
+    raw = digest.digest_final()
+    mech = nss.nss.CKM_SHA512_HMAC
+    return nss.nss.import_sym_key(nss.nss.get_best_slot(mech), mech,
+                                  nss.nss.PK11_OriginDerive, nss.nss.CKA_SIGN,
+                                  nss.nss.SecItem(raw))
+
 class _DigestsReader(object):
     '''A wrapper with a .read method, computing digests of the data.'''
 
@@ -293,6 +313,29 @@ class SHA512HMACReader(_DigestsReader):
         assert len(digest) == 64
         auth = self._read_fn(64)
         return auth == digest
+
+class SHA512HashAndHMACReader(_DigestsReader):
+    '''A wrapper with a .read method, computing a SHA-512 hash and HMAC.'''
+
+    def __init__(self, read_fn, nss_key):
+        self.__digest = nss.nss.create_digest_context(nss.nss.SEC_OID_SHA512)
+        self.__hmac = nss.nss.create_context_by_sym_key \
+            (nss.nss.CKM_SHA512_HMAC, nss.nss.CKA_SIGN, nss_key, None)
+        super(SHA512HashAndHMACReader, self).__init__(read_fn, self.__digest,
+                                                      self.__hmac)
+
+    def hmac(self):
+        '''Return HMAC of the data sent so far.'''
+        auth = self.__hmac.digest_final()
+        self.__hmac = None # Just to be sure nothing unexpected happens
+        assert len(auth) == 64
+        return auth
+
+    def sha512(self):
+        '''Return a SHA-512 hash of the data sent so far.'''
+        digest = self.__digest.digest_final()
+        self.__digest = None # Just to be sure nothing unexpected happens
+        return digest
 
 class _DigestsWriter(object):
     '''A wrapper with a .write method, computing digests of the data.'''
@@ -425,6 +468,82 @@ def yyyy_mm_dd_is_valid(s):
         return False
     return True
 
+ # Threading utilities
+
+class WorkerThread(threading.Thread):
+    '''A temporary thread, with exception logging done in parent.
+
+    Output may go into a queue, which is automatically terminated after the
+    _real_run method finishes.'''
+
+    def __init__(self, name, description, input_queues=(), output_queues=()):
+        '''Initialize.
+
+        If input_queues and/or output_queues is specified, it is a list of
+        (queue, EOF value) pairs.  A single queue may be repeated in the queue
+        lists.
+
+        '''
+        super(WorkerThread, self).__init__(name=name)
+        self.description = description
+        self.input_queues = input_queues
+        self.output_queues = output_queues
+        self.exc_info = None
+
+    def run(self):
+        try:
+            try:
+                self._real_run()
+            finally:
+                for (queue, eof) in self.output_queues:
+                    try:
+                        queue.put(eof)
+                    except:
+                        logging.warning('%s: Error sending queue EOF',
+                                        self.name, exc_info=True)
+        except:
+            self.exc_info = sys.exc_info()
+
+    def _real_run(self):
+        '''The real body of the thread.'''
+        raise NotImplementedError
+
+def run_worker_threads(threads, exception_types=()):
+    '''Run the specified WorkerThreads.
+
+    Start all threads, and wait for them in the specified order; make sure the
+    EOF value is sent, if relevant.  Automatically log exceptions, except for
+    exceptions in exception_types - be silent about such exceptions, only
+    collect the exception info of first such exception.
+
+    Return (no exceptions raised, first collected exception info).
+
+    '''
+    for t in threads:
+        t.start()
+
+    ok = True
+    exception = None
+    for t in threads:
+        # Terminate the input queues in case the producer threads crashed.  All
+        # queues should be large enough that we can (eventually) safely add one
+        # more element; if "t" livelocks and never reads the queue, we would
+        # block on t.join() anyway.
+        logging.debug('Sending final EOFs to %s...', t.name)
+        for (queue, eof) in t.input_queues:
+            queue.put(eof)
+        logging.debug('Waiting for %s...', t.name)
+        t.join()
+        logging.debug('%s finished, exc_info: %s', t.name, repr(t.exc_info))
+        if t.exc_info is not None:
+            ok = False
+            if not isinstance(t.exc_info[1], exception_types):
+                log_exception(t.exc_info,
+                              ('Unexpected error in %s' % t.description))
+            elif exception is None:
+                exception = t.exc_info
+    return (ok, exception)
+
  # Utilities for daemons
 
 class DaemonIDConfiguration(Configuration):
@@ -539,6 +658,21 @@ def path_size_in_blocks(path):
     st = os.stat(path)
     # 512 is what (info libc) says.  See also <sys/stat.h> in POSIX.
     return st.st_blocks * 512
+
+def log_exception(exc_info, default_msg):
+    '''Log exc_info, using default_msg if nothing better is known.'''
+    e = exc_info[1]
+    if isinstance(e, (IOError, EOFError, socket.error)):
+        logging.error('I/O error: %s' % repr(e))
+    elif isinstance(e, nss.error.NSPRError):
+        if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
+            logging.error('I/O error: NSPR connection reset')
+        elif e.errno == nss.error.PR_END_OF_FILE_ERROR:
+            logging.error('I/O error: Unexpected EOF in NSPR')
+        else:
+            logging.error('NSPR error', exc_info=exc_info)
+    else:
+        logging.error(default_msg, exc_info=exc_info)
 
 def write_new_file(path, write_fn):
     '''Atomically replace file at path with data written by write_fn(fd).'''

@@ -1,4 +1,4 @@
-# Copyright (C) 2008, 2009 Red Hat, Inc.  All rights reserved.
+# Copyright (C) 2008, 2009, 2010 Red Hat, Inc.  All rights reserved.
 #
 # This copyrighted material is made available to anyone wishing to use, modify,
 # copy, or redistribute it subject to the terms and conditions of the GNU
@@ -15,14 +15,17 @@
 #
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 
+import Queue
 import base64
 import binascii
 import errors
 import logging
 import os
 import signal
+import shutil
 import sys
 import tempfile
+import threading
 
 try:
     import fedora.client
@@ -53,6 +56,7 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.NSSConfiguration,
         super(BridgeConfiguration, self)._add_defaults(defaults)
         defaults.update({'bridge-cert-nickname': 'sigul-bridge-cert',
                          'client-listen-port': 44334,
+                         'max-rpms-payloads-size': 10 * 1024 * 1024 * 1024,
                          'required-fas-group': '',
                          'server-listen-port': 44333})
         # Override NSSConfiguration default
@@ -71,6 +75,8 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.NSSConfiguration,
                                                'authentication not supported')
             self.fas_user_name = parser.get('bridge', 'fas-user-name')
             self.fas_password = parser.get('bridge', 'fas-password')
+        self.max_rpms_payloads_size = parser.getint('bridge',
+                                                    'max-rpms-payloads-size')
         self.server_listen_port = parser.getint('bridge', 'server-listen-port')
 
 def create_listen_sock(config, port):
@@ -168,7 +174,7 @@ class RPMObject(object):
         rpm_info = self.get_rpm_info(koji_client)
         koji_client.add_signature(rpm_info, self.tmp_path)
 
- # Request verification
+ # Request type-specific code
 
 class Field(object):
     '''A field.'''
@@ -215,8 +221,11 @@ class YYYYMMDDField(Field):
 class RequestType(object):
     '''A supported request type.'''
 
-    def __init__(self, fields, max_payload=0):
-        self.__fields = fields + (StringField('user'), StringField('op'))
+    def __init__(self, fields, max_payload=0, default_fields=True):
+        if default_fields:
+            self.__fields = fields + (StringField('user'), StringField('op'))
+        else:
+            self.__fields = fields
         self.__known_fields = set()
         for f in self.__fields:
             self.__known_fields.add(f.name)
@@ -242,6 +251,10 @@ class RequestType(object):
         '''Forward (optionally modify) payload from server_buf to client_buf.'''
         client_buf.write(utils.u32_pack(payload_size))
         copy_file_data(client_buf, server_buf, payload_size)
+
+    def post_request_phase(self, config, client_buf, server_buf):
+        '''Optional additional actions with client_buf and server_buf.'''
+        pass
 
     def close(self):
         '''Deinitialize any costly state.'''
@@ -452,6 +465,456 @@ class SignRPMRequestType(RequestType):
             self.__koji_client = None
         self.__rpm = None
 
+class SubrequestMap(object):
+    '''A map of subrequest ID => RPMObject, internally serialized.'''
+
+    def __init__(self):
+        self.__map = {}
+        self.__lock = threading.Lock()
+
+    def add(self, rpm):
+        '''Add a RPMObject to the map.'''
+        self.__lock.acquire()
+        try:
+            id_ = rpm.request_fields['id']
+            assert id_ not in self.__map
+            self.__map[id_] = rpm
+        finally:
+            self.__lock.release()
+
+    def get(self, id_):
+        '''Return an RPMObject matching id_.  Raise KeyError.'''
+        self.__lock.acquire()
+        try:
+            return self.__map[id_]
+        finally:
+            self.__lock.release()
+
+class SignRPMsReadRequestThread(utils.WorkerThread):
+    '''A thread that reads sign-rpm subrequests.
+
+    The requests are put into dest_queue as RPMObject objects, with
+    SignRPMsReadRequestThread.eof marking end of the requests.
+
+    '''
+
+    eof = object()              # Used only for "... is eof"
+
+    # Only used for subheader validation
+    __subheader_RT = RequestType((Field('id'),
+                                  StringField('rpm-name', optional=True),
+                                  StringField('rpm-epoch', optional=True),
+                                  StringField('rpm-version', optional=True),
+                                  StringField('rpm-release', optional=True),
+                                  StringField('rpm-arch', optional=True),
+                                  Field('rpm-sigmd5', optional=True)),
+                                 max_payload=1024*1024*1024,
+                                 default_fields=False)
+
+    def __init__(self, config, dest_queue, client_buf, subrequest_map, tmp_dir):
+        super(SignRPMsReadRequestThread, self). \
+            __init__('sign-rpms:read requests', 'read request thread',
+                     output_queues=((dest_queue, self.eof),))
+        self.__config = config
+        self.__dest = dest_queue
+        self.__client_buf = client_buf
+        self.__subrequest_map = subrequest_map
+        self.__tmp_dir = tmp_dir
+
+    def _real_run(self):
+        logging.debug(100)
+        total_size = 0
+        while True:
+            (rpm, size) = self.__read_one_request \
+                (self.__config.max_rpms_payloads_size - total_size)
+            if rpm is None:
+                break
+            total_size += size
+            self.__subrequest_map.add(rpm)
+            self.__dest.put(rpm)
+        logging.debug(200)
+
+    def __read_one_request(self, remaining_size):
+        '''Read one request from self.__client_buf.
+
+        Return (RPMObject, file size), (None, None) on EOF.  Raise
+        InvalidRequestError, others.  Only allow remaining_size bytes for the
+        payload.
+
+        '''
+        logging.debug(1)
+        client_proxy = StoringProxy(self.__client_buf)
+        try:
+            fields = utils.read_fields(client_proxy.stored_read)
+        except EOFError:
+            return (None, None)
+        except utils.InvalidFieldsError, e:
+            raise InvalidRequestError(str(e))
+        s = utils.readable_fields(fields)
+        logging.debug('%s: Started handling %s', self.name, s)
+        logging.info('Subrequest: %s', s)
+        client_proxy.stored_read(64) # Ignore value
+        logging.debug(3)
+
+        buf = self.__client_buf.read(utils.u32_size)
+        payload_size = utils.u32_unpack(buf)
+
+        self.__subheader_RT.validate(fields, payload_size)
+        rpm = RPMObject(fields, client_proxy.stored_data(), payload_size)
+
+        if payload_size == 0:
+            size = 0
+        else:
+            if payload_size > remaining_size:
+                raise InvalidRequestError('Total payload size too large')
+            (fd, rpm.tmp_path) = tempfile.mkstemp(text=False,
+                                                  dir=self.__tmp_dir)
+            dst = os.fdopen(fd, 'w+')
+            try:
+                logging.debug(4)
+                copy_file_data(dst, self.__client_buf, payload_size)
+                # Count whole blocks to avoid millions of 1-byte files filling
+                # the hard drive due to internal fragmentation.
+                size = utils.file_size_in_blocks(dst)
+            finally:
+                dst.close()
+            logging.debug(5)
+        rpm.request_payload_digest = self.__client_buf.read(64)
+        logging.debug(6)
+        return (rpm, size)
+
+class SignRPMsKojiThread(utils.WorkerThread):
+    '''A thread that talks to koji for sign-rpm subrequests and subreplies.
+
+    The requests in request_dst_queue, reply_dst_queue and src_queue are
+    RPMObject objects, with None marking end of the requests in *_dst_queue, and
+    SignRPMsReadRequestThread.eof and SignRPMsReadReplyThread.eof marking the
+    end of requests/replies in src_queue.
+
+    '''
+
+    def __init__(self, config, request_dst_queue, reply_dst_queue, src_queue,
+                 request_fields):
+        super(SignRPMsKojiThread, self). \
+            __init__('sign-rpms:koji requests', 'koji thread',
+                     input_queues=((src_queue, SignRPMsReadRequestThread.eof),
+                                   (src_queue, SignRPMsReadReplyThread.eof)),
+                     output_queues=((request_dst_queue, None),
+                                    (reply_dst_queue, None)))
+        self.__config = config
+        self.__request_dst = request_dst_queue
+        self.__reply_dst = reply_dst_queue
+        self.__src = src_queue
+        self.__request_fields = request_fields
+
+    def _real_run(self):
+        '''Read and handle all koji subrequests.'''
+        logging.debug(101)
+        koji_client = KojiClient(self.__request_fields)
+        try:
+            total_size = 0
+            got_request_eof = False
+            got_reply_eof = False
+            while not (got_request_eof and got_reply_eof):
+                logging.debug(7)
+                rpm = self.__src.get()
+                if rpm is SignRPMsReadRequestThread.eof:
+                    logging.debug(70)
+                    self.__request_dst.put(None)
+                    got_request_eof = True
+                elif rpm is SignRPMsReadReplyThread.eof:
+                    logging.debug(71)
+                    self.__reply_dst.put(None)
+                    got_reply_eof = True
+                elif rpm.reply_fields is None:
+                    size = self.__handle_one_request_rpm(rpm, koji_client)
+                    total_size += size
+                    if total_size > self.__config.max_rpms_payloads_size:
+                        raise InvalidRequestError('Total payload size too '
+                                                  'large')
+                    self.__request_dst.put(rpm)
+                else:
+                    self.__handle_one_reply_rpm(rpm, koji_client)
+                    self.__reply_dst.put(rpm)
+        finally:
+            koji_client.close()
+        logging.debug(201)
+
+    def __handle_one_request_rpm(self, rpm, koji_client):
+        '''Handle an incoming request using koji_client.
+
+        Return RPM size.
+
+        '''
+        logging.debug('%s: Started handling request %s', self.name,
+                      utils.readable_fields(rpm.request_fields))
+        if rpm.request_payload_size == 0:
+            logging.debug(8)
+            rpm.compute_payload_url(koji_client)
+            rpm_info = rpm.get_rpm_info(koji_client)
+            size = rpm_info['size']
+        else:
+            # Count whole blocks to avoid millions of 1-byte files
+            # filling the hard drive due to internal fragmentation.
+            size = utils.path_size_in_blocks(rpm.tmp_path)
+        return size
+
+    def __handle_one_reply_rpm(self, rpm, koji_client):
+        '''Handle an incoming reply using koji_client.
+
+        Raise ForwardingError.
+
+        '''
+        logging.debug('%s: Started handling reply %s', self.name,
+                      utils.readable_fields(rpm.reply_fields))
+        # Zero-length response should happen only on error.
+        if (rpm.reply_payload_size != 0 and
+            self.__request_fields.get('import-signature') == utils.u32_pack(1)):
+            rpm.add_signature_to_koji(koji_client)
+
+class SignRPMsSendRequestThread(utils.WorkerThread):
+    '''A thread that forwards sign-rpm subrequests.
+
+    The requests in src_queue are RPMObject objects, with None marking end of
+    the requests.
+
+    '''
+
+    def __init__(self, src_queue, server_buf):
+        super(SignRPMsSendRequestThread, self). \
+            __init__('sign-rpms:send requests', 'send request thread',
+                     input_queues=((src_queue, None),))
+        self.__src = src_queue
+        self.__server_buf = server_buf
+
+    def _real_run(self):
+        logging.debug(102)
+        try:
+            while True:
+                rpm = self.__src.get()
+                if rpm is None:
+                    break
+                self.__handle_one_rpm(rpm)
+        finally:
+            self.__server_buf.send_outer_eof()
+        logging.debug(202)
+
+    def __handle_one_rpm(self, rpm):
+        '''Send an incoming request.'''
+        logging.debug('%s: Started handling %s', self.name,
+                      utils.readable_fields(rpm.request_fields))
+
+        self.__server_buf.write(rpm.request_header_data)
+        logging.debug(10)
+
+        payload_size = rpm.request_payload_size
+        if payload_size != 0:
+            src = open(rpm.tmp_path, 'rb')
+        else:
+            (src, payload_size) = urlgrabber_open(rpm.request_payload_url)
+        try:
+            logging.debug(11)
+            self.__server_buf.write(utils.u32_pack(payload_size))
+            logging.debug(12)
+            copy_file_data(self.__server_buf, src, payload_size)
+        finally:
+            src.close()
+        logging.debug(13)
+        self.__server_buf.write(rpm.request_payload_digest)
+
+        rpm.remove_tmp_path()
+
+class SignRPMsReadReplyThread(utils.WorkerThread):
+    '''A thread that reads sign-rpm subreplies.
+
+    The replies are put into dest_queue as RPMObject objects, with
+    SignRPMsReadReplyThread.eof marking end of the replies.
+
+    '''
+    eof = object()              # Used only for "... is eof"
+
+    def __init__(self, dest_queue, server_buf, subrequest_map, tmp_dir):
+        super(SignRPMsReadReplyThread, self). \
+            __init__('sign-rpms:read replies', 'read reply thread',
+                     output_queues=((dest_queue, self.eof),))
+        self.__dest = dest_queue
+        self.__server_buf = server_buf
+        self.__subrequest_map = subrequest_map
+        self.__tmp_dir = tmp_dir
+
+    def _real_run(self):
+        logging.debug(103)
+        while True:
+            rpm = self.__read_one_reply()
+            if rpm is None:
+                break
+            self.__dest.put(rpm)
+        logging.debug(203)
+
+    def __read_one_reply(self):
+        '''Read one reply from self.__server_buf.
+
+        Return the relevant RPMObject or None.  Raise InvalidReplyError.
+
+        '''
+        server_proxy = StoringProxy(self.__server_buf)
+        try:
+            fields = utils.read_fields(server_proxy.stored_read)
+        except EOFError:
+            return None
+        except utils.InvalidFieldsError, e:
+            raise InvalidReplyError(str(e))
+        logging.debug('%s: Started handling %s', self.name,
+                      utils.readable_fields(fields))
+        if 'id' not in fields:
+            raise InvalidReplyError('Required field id missing')
+        # We add the RPMObject into self.__subrequest_map as soon as the
+        # request is read - before sending it to the server, so if we are
+        # reading a reply from the server, the RPMObject must have already been
+        # inserted into the map and there is no race.
+        try:
+            rpm = self.__subrequest_map.get(fields['id'])
+        except KeyError:
+            raise InvalidReplyError('Invalid subreply ID %s' %
+                                    repr(fields['id']))
+
+        try:
+            buf = fields['status']
+        except KeyError:
+            raise InvalidReplyError('Required field status missing')
+        if len(buf) != utils.u32_size:
+            raise InvalidReplyError('Invalid field status')
+        error_code = utils.u32_unpack(buf)
+        if error_code != errors.OK:
+            msg = fields.get('message')
+            if msg is not None:
+                logging.info('Subreply %s error: %s, %s', fields['id'],
+                             errors.message(error_code), msg)
+            else:
+                logging.info('Subreply %s error: %s', fields['id'],
+                             errors.message(error_code))
+        logging.debug('Subreply: %s', utils.readable_fields(fields))
+
+        rpm.reply_fields = fields
+        server_proxy.stored_read(64) # Ignore value
+        rpm.reply_header_data = server_proxy.stored_data()
+
+        logging.debug(16)
+        buf = self.__server_buf.read(utils.u32_size)
+        rpm.reply_payload_size = utils.u32_unpack(buf)
+        assert rpm.tmp_path is None
+        (fd, rpm.tmp_path) = tempfile.mkstemp(text=False, dir=self.__tmp_dir)
+        dst = os.fdopen(fd, 'w+')
+        try:
+            copy_file_data(dst, self.__server_buf, rpm.reply_payload_size)
+        finally:
+            dst.close()
+        logging.debug(17)
+        rpm.reply_payload_digest = self.__server_buf.read(64)
+        return rpm
+
+class SignRPMsSendReplyThread(utils.WorkerThread):
+    '''A thread that forwards sign-rpm subreplies.
+
+    The replies in src_queue are RPMObject objects, with None marking end of
+    the replies.
+
+    '''
+
+    def __init__(self, src_queue, client_buf, request_fields):
+        super(SignRPMsSendReplyThread, self). \
+            __init__('sign-rpms:send replies', 'send reply thread',
+                     input_queues=((src_queue, None),))
+        self.__src = src_queue
+        self.__client_buf = client_buf
+        self.__request_fields = request_fields
+
+    def _real_run(self):
+        logging.debug(104)
+        while True:
+            rpm = self.__src.get()
+            if rpm is None:
+                break
+            self.__handle_one_rpm(rpm)
+        logging.debug(204)
+
+    def __handle_one_rpm(self, rpm):
+        '''Send an incoming request.'''
+        logging.debug('%s: Started handling %s', self.name,
+                      utils.readable_fields(rpm.reply_fields))
+        self.__client_buf.write(rpm.reply_header_data)
+        logging.debug(20)
+
+        if self.__request_fields.get('return-data') != utils.u32_pack(0):
+            payload_size = rpm.reply_payload_size
+            src = open(rpm.tmp_path, 'rb')
+        else:
+            payload_size = 0
+            src = None
+        try:
+            self.__client_buf.write(utils.u32_pack(payload_size))
+            logging.debug(21)
+            if src is not None:
+                copy_file_data(self.__client_buf, src, payload_size)
+        finally:
+            if src is not None:
+                src.close()
+        logging.debug(22)
+        self.__client_buf.write(rpm.reply_payload_digest)
+        logging.debug(23)
+
+        rpm.remove_tmp_path()
+
+class SignRPMsRequestType(RequestType):
+    '''A specialized handler for the 'sign-rpms' request.'''
+
+    def forward_request_payload(self, server_buf, client_buf, payload_size,
+                                fields):
+        super(SignRPMsRequestType, self).forward_request_payload \
+            (server_buf, client_buf, payload_size, fields)
+        self.__request_fields = fields
+
+    def post_request_phase(self, config, client_buf, server_buf):
+        logging.debug('In post_request_phase')
+        subrequest_map = SubrequestMap()
+
+        tmp_dir = tempfile.mkdtemp()
+        exception = None
+        try:
+            client_buf.set_full_duplex(True)
+            server_buf.set_full_duplex(True)
+
+            koji_queue = Queue.Queue(100)
+            q1 = Queue.Queue(100)
+            q2 = Queue.Queue(100)
+
+            threads = []
+            threads.append(SignRPMsReadRequestThread(config, koji_queue,
+                                                     client_buf, subrequest_map,
+                                                     tmp_dir))
+            threads.append(SignRPMsReadReplyThread(koji_queue, server_buf,
+                                                   subrequest_map, tmp_dir))
+            threads.append(SignRPMsKojiThread(config, q1, q2, koji_queue,
+                                              self.__request_fields))
+            threads.append(SignRPMsSendRequestThread(q1, server_buf))
+            threads.append(SignRPMsSendReplyThread(q2, client_buf,
+                                                   self.__request_fields))
+
+            (_, exception) = utils.run_worker_threads(threads,
+                                                      (InvalidRequestError,
+                                                       InvalidReplyError,
+                                                       ForwardingError))
+        finally:
+            shutil.rmtree(tmp_dir)
+            client_buf.set_full_duplex(False)
+            server_buf.set_full_duplex(False)
+        if exception is not None:
+            raise exception[0], exception[1], exception[2]
+
+    def close(self):
+        super(SignRPMsRequestType, self).close()
+        self.__request_fields = None
+
 RT = RequestType
 SF = StringField
 request_types = {
@@ -492,8 +955,13 @@ request_types = {
                                     BoolField('return-data', optional=True),
                                     BoolField('v3-signature', optional=True)),
                                    max_payload=1024*1024*1024),
+    'sign-rpms': SignRPMsRequestType((SF('key'), BoolField('import-signature',
+                                                           optional=True),
+                                      BoolField('return-data', optional=True),
+                                      BoolField('v3-signature', optional=True)))
     }
 del RT
+del SF
 
  # Request handling
 
@@ -521,7 +989,7 @@ class StoringProxy(object):
         self.__stored = ''
         return res
 
-def handle_connection(client_buf, server_buf):
+def handle_connection(config, client_buf, server_buf):
     '''Handle a single connection.'''
     # FIXME: handle server's reporting of unknown protocol version - there
     # is no inner session
@@ -578,6 +1046,8 @@ def handle_connection(client_buf, server_buf):
         rt.forward_reply_payload(client_buf, server_buf, payload_size)
         buf = server_buf.read(64)
         client_buf.write(buf)
+
+        rt.post_request_phase(config, client_buf, server_buf)
 
         # Closing the socket should technically be enough, but make sure the
         # client is not waiting for more input...
@@ -655,7 +1125,7 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
             client_buf = double_tls.OuterBuffer(client_sock)
             server_buf = double_tls.OuterBuffer(server_sock)
 
-            handle_connection(client_buf, server_buf)
+            handle_connection(config, client_buf, server_buf)
         finally:
             if client_sock is not None:
                 client_sock.close()

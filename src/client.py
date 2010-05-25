@@ -1,4 +1,4 @@
-# Copyright (C) 2008, 2009 Red Hat, Inc.  All rights reserved.
+# Copyright (C) 2008, 2009, 2010 Red Hat, Inc.  All rights reserved.
 #
 # This copyrighted material is made available to anyone wishing to use, modify,
 # copy, or redistribute it subject to the terms and conditions of the GNU
@@ -16,6 +16,7 @@
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 
 import binascii
+import errno
 import getpass
 import logging
 import optparse
@@ -30,6 +31,8 @@ import double_tls
 import errors
 import settings
 import utils
+
+MAX_SIGN_RPMS_PAYLOAD_SIZE = 9 * 1024 * 1024 * 1024
 
 class ClientError(Exception):
     '''Any error in the client.'''
@@ -102,11 +105,20 @@ class ClientsConnection(object):
         self.__request_header_writer.write(utils.format_fields(fields))
 
     def __send_payload_size(self, payload_size):
-        '''Prepare for sending payload of payload_size.'''
+        '''Prepare for sending payload of payload_size.
+
+        Valid both for the primary payload and for subrequest payloads.
+
+        '''
         self.__client.outer_write(utils.u32_pack(payload_size))
 
     def __send_payload_from_file(self, writer, fd):
-        '''Send contents of fd to the server as payload, using writer.'''
+        '''Send contents of fd to the server as payload, using writer.
+
+        Valid both for the primary payload and for subreply payloads.  Note that
+        the subrequest HMAC, if any, is not sent!
+
+        '''
         fd.seek(0)
         file_size = os.fstat(fd.fileno()).st_size
         self.__send_payload_size(file_size)
@@ -257,6 +269,60 @@ class ClientsConnection(object):
                 raise InvalidResponseError('Boolean field has invalid value')
         return v
 
+    def send_subheader(self, fields, nss_key):
+        '''Send fields in a subrequest header authenticated using nss_key.'''
+        writer = utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
+        writer.write(utils.format_fields(fields))
+        writer.write_64B_hmac()
+
+    def send_empty_subpayload(self, nss_key):
+        '''Send an empty subrequest payload authenticated using nss_key.'''
+        self.__send_payload_size(0)
+        writer = utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
+        writer.write_64B_hmac()
+
+    def send_subpayload_from_file(self, fd, nss_key):
+        '''Send a subrequest payload from fd authenticated using key.'''
+        writer = utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
+        self.__send_payload_from_file(writer, fd)
+        writer.write_64B_hmac()
+
+    def read_subheader(self, nss_key):
+        '''Read fields in a subreply header authenticated using nss_key.'''
+        reader = utils.SHA512HMACReader(self.__client.outer_read, nss_key)
+        try:
+            fields = utils.read_fields(reader.read)
+        except utils.InvalidFieldsError, e:
+            raise InvalidResponseError('Invalid response format: %s' % str(e))
+        if not reader.verify_64B_hmac_authenticator():
+            raise InvalidResponseError('Subreply header authentication failed')
+        return fields
+
+    def read_empty_subpayload(self, nss_key, ignore_auth=False):
+        '''Read an empty subreply payload authenticated using nss_key.'''
+        buf = self.__client.outer_read(utils.u32_size)
+        if utils.u32_unpack(buf) != 0:
+            raise InvalidResponseError('Unexpected payload in subreply')
+        if not ignore_auth:
+            reader = utils.SHA512HMACReader(self.__client.outer_read, nss_key)
+            if not reader.verify_64B_hmac_authenticator():
+                raise InvalidResponseError('Subreply payload authentication '
+                                           'failed')
+        else:
+            self.__client.outer_read(64) # Ignore
+
+    def write_subpayload_to_file(self, nss_key, f):
+        '''Write server's payload to f, authenticate using nss_key.'''
+        buf = self.__client.outer_read(utils.u32_size)
+        payload_size = utils.u32_unpack(buf)
+        reader = utils.SHA512HMACReader(self.__client.outer_read, nss_key)
+        utils.copy_data(f.write, reader.read, payload_size)
+        if not reader.verify_64B_hmac_authenticator():
+            raise InvalidResponseError('Subreply payload authentication failed')
+
+    def outer_shutdown_write(self):
+        '''Shutdown the outer pipe for writing.'''
+        self.__client.outer_shutdown(nss.io.PR_SHUTDOWN_SEND)
 
     def close(self):
         '''Close the connection.
@@ -868,6 +934,234 @@ def cmd_sign_rpm(conn, args):
     else:
         conn.read_empty_unauthenticated_payload()
 
+class SignRPMsRequestThread(utils.WorkerThread):
+    '''A thread that sends sign-rpm subrequests.'''
+
+    def __init__(self, conn, args, header_nss_key, payload_nss_key):
+        super(SignRPMsRequestThread, self).__init__('sign-rpms:requests',
+                                                    'request thread')
+        self.results = {}
+        self.__conn = conn
+        self.__args = args
+        self.__header_nss_key = header_nss_key
+        self.__payload_nss_key = payload_nss_key
+
+    def _real_run(self):
+        examiner = SignRPMArgumentExaminer()
+        try:
+            self.__run_with_examiner(examiner)
+        finally:
+            try:
+                self.__conn.outer_shutdown_write()
+            finally:
+                examiner.close()
+
+    def __run_with_examiner(self, examiner):
+        '''Send subrequests corresponding to self.__args using examiner.
+
+        Store error messages in self.results for subrequests that were not
+        sent.
+
+        '''
+        server_idx = 0
+        total_size = 0
+        for (arg_idx, arg) in enumerate(self.__args):
+            logging.debug('%s: Started handling %s', self.name, repr(arg))
+            fields = {'id': utils.u32_pack(arg_idx)}
+            try:
+                (rpm_file, size) = examiner.open_rpm(arg, fields)
+                # Round up to 32k for good measure.
+                size = (size + 32767) / 32768 * 32768
+                if size > MAX_SIGN_RPMS_PAYLOAD_SIZE:
+                    raise ClientError('%s is too large' % arg)
+            except ClientError, e:
+                self.results[arg_idx] = str(e)
+                continue
+
+            try:
+                total_size += size
+                if total_size > MAX_SIGN_RPMS_PAYLOAD_SIZE:
+                    # This is pretty user-unfriendly - but we can't split the
+                    # input automatically because we need to open the
+                    # connections before using koji, and without koji we don't
+                    # know how many connections we need.  We could guess, but
+                    # our caller can guess just as well or better.
+                    raise ClientError('Total payload size is too large, limit '
+                                      'exceeded with %s', arg)
+
+                nss_key = utils.derived_key(self.__header_nss_key, server_idx)
+                self.__conn.send_subheader(fields, nss_key)
+
+                nss_key = utils.derived_key(self.__payload_nss_key, server_idx)
+                if rpm_file is not None:
+                    self.__conn.send_subpayload_from_file(rpm_file, nss_key)
+                else:
+                    self.__conn.send_empty_subpayload(nss_key)
+            finally:
+                if rpm_file is not None:
+                    rpm_file.close()
+            server_idx += 1
+
+class SignRPMsReplyThread(utils.WorkerThread):
+    '''A thread that handles sign-rpm subreplies.'''
+
+    def __init__(self, conn, args, o2, header_nss_key, payload_nss_key):
+        super(SignRPMsReplyThread, self).__init__('sign-rpms:replies',
+                                                  'reply thread')
+        self.results = {}
+        self.__conn = conn
+        self.__args = args
+        self.__o2 = o2
+        self.__header_nss_key = header_nss_key
+        self.__payload_nss_key = payload_nss_key
+
+    def _real_run(self):
+        server_idx = 0
+        while True:
+            try:
+                nss_key = utils.derived_key(self.__header_nss_key, server_idx)
+                fields = self.__conn.read_subheader(nss_key)
+            except EOFError:
+                break
+
+            logging.debug('%s: Started handling %s', self.name,
+                          utils.readable_fields(fields))
+            try:
+                buf = fields['id']
+            except KeyError:
+                raise InvalidResponseError('Required field id missing')
+            try:
+                arg_idx = utils.u32_unpack(buf)
+            except struct.error:
+                raise InvalidResponseError('Integer field has incorrect length')
+            if arg_idx > len(self.__args):
+                raise InvalidResponseError('Invalid subreply id')
+            if arg_idx in self.results:
+                raise InvalidResponseError('Duplicate subreply id %d' % arg_idx)
+
+            try:
+                buf = fields['status']
+            except KeyError:
+                raise InvalidResponseError('Required field status missing')
+            try:
+                error_code = utils.u32_unpack(buf)
+            except struct.error:
+                raise InvalidResponseError('Integer field has incorrect length')
+
+            nss_key = utils.derived_key(self.__payload_nss_key, server_idx)
+            if error_code != errors.OK:
+                message = fields.get('message')
+                if message is not None:
+                    msg = '%s: %s' % (errors.message(error_code), message)
+                else:
+                    msg = errors.message(error_code)
+                self.results[arg_idx] = msg
+                self.__conn.read_empty_subpayload(nss_key)
+                continue
+
+            if not self.__o2.koji_only:
+                arg = self.__args[arg_idx]
+                if not arg.endswith('.rpm'):
+                    arg += '.rpm'
+                output_path = os.path.join(self.__o2.output,
+                                           os.path.basename(arg))
+                try:
+                    writer = lambda f: \
+                        self.__conn.write_subpayload_to_file(nss_key, f)
+                    utils.write_new_file(output_path, writer)
+                except IOError, e:
+                    raise ClientError('Error writing to %s: %s' %
+                                      (output_path, e.strerror))
+            else:
+                self.__conn.read_empty_subpayload(nss_key, ignore_auth=True)
+            self.results[arg_idx] = None # Mark arg_idx as succesful
+            server_idx += 1
+
+def cmd_sign_rpms(conn, args):
+    p2 = optparse.OptionParser(usage='%prog sign-rpms [options] '
+                               'key rpmfile-or-nevra...',
+                               description='Sign one or more RPMs')
+    p2.add_option('-o', '--output', metavar='DIR',
+                  help='Write output to this directory')
+    p2.add_option('--store-in-koji', action='store_true',
+                  help='Store the generated RPM signatures to Koji')
+    p2.add_option('--koji-only', action='store_true',
+                  help='Do not save the signed RPMs locally, store them only '
+                  'to Koji')
+    p2.add_option('--v3-signature', action='store_true',
+                  help='Create v3 signatures (currently necessary for RSA'
+                  'keys)')
+    p2.set_defaults(store_in_koji=False, koji_only=False, v3_signature=False)
+    (o2, args) = p2.parse_args(args)
+    if len(args) < 2:
+        p2.error('key name and at least one RPM path or identification '
+                 'expected')
+    if o2.koji_only and not o2.store_in_koji:
+        p2.error('--koji-only is valid only with --store-in-koji')
+    if o2.output is not None:
+        try:
+            os.mkdir(o2.output)
+        except OSError, e:
+            if e.errno != errno.EEXIST or not os.path.isdir(o2.output):
+                raise ClientError('Error creating %s: %s' %
+                                  (o2.output, e.strerror))
+    elif not o2.koji_only:
+        p2.error('--output is mandatory without --koji-only')
+    passphrase = read_key_passphrase(conn.config)
+
+    f = {'key': safe_string(args[0])}
+    if o2.store_in_koji:
+        f['import-signature'] = True
+    if o2.koji_only:
+        f['return-data'] = False
+    if o2.v3_signature:
+        f['v3-signature'] = True
+    conn.connect('sign-rpms', f)
+    conn.empty_payload()
+
+    mech = nss.nss.CKM_GENERIC_SECRET_KEY_GEN
+    slot = nss.nss.get_best_slot(mech)
+    subrequest_header_nss_key = slot.key_gen(mech, None, 64)
+    subrequest_payload_nss_key = slot.key_gen(mech, None, 64)
+    subreply_header_nss_key = slot.key_gen(mech, None, 64)
+    subreply_payload_nss_key = slot.key_gen(mech, None, 64)
+    f = {'passphrase': passphrase,
+         'subrequest-header-auth-key': subrequest_header_nss_key.key_data,
+         'subrequest-payload-auth-key': subrequest_payload_nss_key.key_data,
+         'subreply-header-auth-key': subreply_header_nss_key.key_data,
+         'subreply-payload-auth-key': subreply_payload_nss_key.key_data}
+    conn.send_inner(f)
+    conn.read_response(no_payload=True)
+
+    args = args[1:]
+    request_thread = SignRPMsRequestThread \
+        (conn, args, subrequest_header_nss_key, subrequest_payload_nss_key)
+    reply_thread = SignRPMsReplyThread(conn, args, o2, subreply_header_nss_key,
+                                       subreply_payload_nss_key)
+
+    (ok, _) = utils.run_worker_threads((request_thread, reply_thread))
+
+    results = request_thread.results.copy()
+    for (k, v) in reply_thread.results.iteritems():
+        # If the result was set by request_thread, server never saw the request
+        # and there should be no reply.
+        assert k not in results
+        results[k] = v
+
+    if ok:
+        # Don't bother if exception in one of the threads was the primary cause
+        for idx in xrange(len(args)):
+            if idx not in results:
+                results[idx] = 'No reply from server received'
+    if any([v is not None for v in results.itervalues()]):
+        for i in sorted(results.keys()):
+            if results[i] is not None:
+                logging.error('Error signing %s: %s', args[i], results[i])
+        ok = False
+    if not ok:
+        raise ClientError('')
+
+
 # name: (handler, help)
 command_handlers = {
     'list-users': (cmd_list_users, 'List users'),
@@ -893,6 +1187,7 @@ command_handlers = {
     'sign-text': (cmd_sign_text, 'Output a cleartext signature of a text'),
     'sign-data': (cmd_sign_data, 'Create a detached signature'),
     'sign-rpm': (cmd_sign_rpm, 'Sign a RPM'),
+    'sign-rpms': (cmd_sign_rpms, 'Sign one or more RPMs'),
     }
 
 
@@ -952,7 +1247,10 @@ def main():
                     double_tls.ChildUnrecoverableError), e:
                 child_exception = e
     except ClientError, e:
-        sys.exit(str(e))
+        if str(e) != '':
+            sys.exit(str(e))
+        else:
+            sys.exit(1)
     except (IOError, EOFError, socket.error), e:
         logging.error('I/O error: %s', repr(e))
         sys.exit(1)

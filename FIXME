@@ -1,5 +1,2 @@
 - bridge ignores SIGINT (caused by "import rpm")
-- should be able to submit more than one signing operation per connection?
 - should be able to service requests within the server in parallel?
-- pygpgme upstream is not very responsive - look at
-  http://pyme.sourceforge.net/ ?

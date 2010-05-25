@@ -39,44 +39,32 @@ ENDPOINT PROTOCOL
 The endpoints (client and server) use the stream protocol to talk to the bridge,
 which forwards the communication between them.  The inner stream uses
 a nested TLS session, uses of the inner stream are marked with "|" characters.
+
+A "header" uses the following format:
+* u8 N number of key-value pairs
+  N <= 255
+* N times:
+** u8 L key length
+   L <= 255
+** u8[L] key: string
+** u8 L value length
+   L <= 255
+** u8[L] value
+
 * request: TLS to bridge / from bridge
 ** u32 version ID == 0
-** u8 N number of key-value pairs
-   N <= 255
-** N times:
-*** u8 L key length
-    L <= 255
-*** u8[L] key: string
-*** u8 L value length
-    L <= 255
-*** u8[L] value
+** "header"
 ** u32 L payload length
    The payload length limit is request-specific.
    FIXME: should be u64?
 ** u8[L] payload
 ** client sends EOF on the outer stream at this point
 ** |TLS: client - server initialized
-** |u8 N number of key-value pairs
-   |N <= 255
-** |N times:
-*** |u8 L key length
-    |L <= 255
-*** |u8[L] key: string
-*** |u8 L value length
-    |L <= 255
-*** |u8[L] value
+** |"header"
 ** |now both sides close the inner stream and send EOF on it
 * reply:
 ** u32 error code - 0 OK, others defined
-** u8 N number of key-value pairs
-   N <= 255
-** N times:
-*** u8 L key length
-    L <= 255
-*** u8[L] key: string
-*** u8 L name length
-    L <= 255
-*** u8[L] value
+** "header"
 ** u8[64] header auth
    hmac-sha512 of header (including error code), using |header-auth-key
 ** u32 L payload length
@@ -84,8 +72,8 @@ a nested TLS session, uses of the inner stream are marked with "|" characters.
 ** u8[L] payload
 ** u8[64] payload auth
    hmac-sha512 of payload, using |payload-auth-key
-
-** server sends EOF on the outer stream at this point
+* Optional request-specific communication (in both directions) may happen now
+* Server sends EOF on the outer stream
 
 COMMON REQUEST FIELDS
 ---------------------
@@ -242,7 +230,6 @@ modified by bridge to supply complete payload
    default: false
 ** [return-data: bool]
    default: true
-All of the fields above are only used by the bridge
 ** [v3-signature: bool]
    default: false
 ** _payload_: complete RPM, added by bridge if empty
@@ -254,3 +241,68 @@ All of the fields above are only used by the bridge
    imported into koji by bridge if import-signature
    dropped by bridge if !return-package; in that case the payload auth field
    is present, but ignored.
+* op="sign-rpms"
+modified by bridge to supply complete payloads
+** [import-signature: bool]
+   default: false
+** [return-data: bool]
+   default: true
+All of the fields above are only used by the bridge
+** [v3-signature: bool]
+   default: false
+** |subrequest-header-auth-key: blob, >= 64 bytes
+   For authenticating headers in subrequests
+** |subrequest-payload-auth-key: blob, >= 64 bytes
+   For authenticating payloads in subrequests
+** |subreply-header-auth-key: blob, >= 64 bytes
+   For authenticating headers in subrequests
+** |subreply-payload-auth-key: blob, >= 64 bytes
+   For authenticating payloads in subrequests
+** =>
+** =>
+** subrequests/subreplies
+subrequests and subreplies are sent asynchronously (subrequests may be send
+without waiting for corresponding subreplies), terminated by EOF on each side.
+Subrequests are numbered, starting from 0.  Each subrequest has the following
+format:
+*** "header"
+**** id: blob
+     Semantics defined by the client
+**** [rpm-name: string]
+**** [rpm-epoch: string]
+**** [rpm-version: string]
+**** [rpm-release: string]
+**** [rpm-arch: string]
+**** [rpm-sigmd5: blob]
+*** u8[64] header auth
+    hmac-sha512 of header, using
+    sha-512('\0\0\0\1' || |subrequest-header-auth-key || subrequest number) as
+    key
+*** u32 L payload length
+    FIXME: should be u64?
+*** u8[L] payload: complete RPM, added by bridge if empty
+*** u8[64] payload auth
+    hmac-sha512 of payload, using
+    sha-512('\0\0\0\1' || |subrequest-payload-auth-key || subrequest number) as
+    key
+    Ignored if "rpm-sigmd5" is present in the associated header.
+Each subreply has the following format:
+*** "header"
+**** id: blob
+     Unmodified value of id from the subrequest
+**** status: u32 error code - 0 OK, others defined
+**** [message: string]
+     if status != 0
+*** u8[64] header auth
+    hmac-sha512 of header, using
+    sha-512(|subreply-header-auth-key || subrequest number) as key
+*** u32 L payload length
+    FIXME: should be u64?
+*** u8[L] payload: signed RPM
+    imported into koji by bridge if import-signature
+    dropped by bridge if !return-package
+    Note that if status != 0, empty payload is still sent
+*** u8[64] payload auth
+    hmac-sha512 of payload, using
+    sha-512(|subreply-payload-auth-key || subrequest number) as key
+    Ignored if !return-package

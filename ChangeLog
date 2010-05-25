@@ -1,5 +1,56 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (_derivation_counter_1): New definition.
+	(derived_key): New function.
+	(SHA512HashAndHMACReader, WorkerThread): New classes.
+	(run_worker_threads, log_exception): New functions.
+	* src/double_tls.py (DoubleTLSClient.outer_shutdown)
+	(OuterBuffer.set_full_duplex): New methods.
+	* src/bridge.py (BridgeConfiguration._add_defaults): New option
+	max-rpms-payload-size.
+	(BridgeConfiguration._read_configuration): Handle max-rpms-payload-size.
+	(RequestType.__init__): Add support for subheaders.
+	(RequestType.post_request_phase): New method.
+	(SubrequestMap, SignRPMsReadRequestThread, SignRPMsKojiThread)
+	(SignRPMsSendRequestThread, SignRPMsReadReplyThread)
+	(SignRPMsSendReplyThread, SignRPMsRequestType): New classes.
+	(request_types): Add 'sign-rpms'.
+	(SF): Unset after last use.
+	(handle_connection): Call RequestType.post_request_phase().  New
+	parameter config.  All callers changed.
+	* src/client.py (MAX_SIGN_RPMS_PAYLOAD_SIZE): New definition.
+	(ClientsConnection.__send_payload_size)
+	(ClientsConnection.__send_payload_from_file): Document that these
+	methods are suitable both for the primary payload and subpayloads.
+	(ClientsConnection.send_subheader)
+	(ClientsConnection.send_empty_subpayload)
+	(ClientsConnection.read_subheader)
+	(ClientsConnection.read_empty_subpayload)
+	(ClientsConnection.write_subpayload_to_file)
+	(ClientsConnection.outer_shutdown_write): New methods.
+	(SignRPMsRequestThread, SignRPMsReplyThread): New classes.
+	(cmd_sign_rpms): New function.
+	(command_handlers): Add sign-rpms.
+	(main): Allow using ClientError to exit without printing an additional
+	message.
+	* src/server.py (ServerConfiguration._add_defaults): New option
+	max-rpms-payload-size.
+	(ServerConfiguration._read_configuration): Handle max-rpms-payload-size.
+	(ServersConnection.__send_payload_size)
+	(ServersConnection.__send_payload_from_file): Document that these
+	methods are suitable both for the primary payload and subpayloads.
+	(ServersConnection.read_subheader)
+	(ServersConnection.read_subpayload_to_file)
+	(ServersConnection.send_subheader)
+	(ServersConnection.send_empty_subpayload)
+	(ServersConnection.send_subpayload_from_file): New methods.
+	(SignRPMsRequestThread, SignRPMsSignerThread)
+	(SignRPMsReplyThread): New classes.
+	(cmd_sign_rpms): New function.
+	* doc/protocol-design.txt: Document op="sign-rpms".
+	* config/bridge.conf (max-rpms-payload-size)
+	* config/server.conf (max-rpms-payload-size): Document new option.
+
 	* src/client.py (SignRPMArgumentExaminer): Split from cmd_sign_rpm.
 
 	* src/server.py (RPMFileError, RPMFile, SigningContext): Split from

@@ -1,4 +1,4 @@
-# Copyright (C) 2008, 2009 Red Hat, Inc.  All rights reserved.
+# Copyright (C) 2008, 2009, 2010 Red Hat, Inc.  All rights reserved.
 #
 # This copyrighted material is made available to anyone wishing to use, modify,
 # copy, or redistribute it subject to the terms and conditions of the GNU
@@ -15,11 +15,13 @@
 #
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 
+import Queue
 import binascii
 import cStringIO
 import crypt
 import logging
 import os
+import shutil
 import signal
 import socket
 import string
@@ -66,6 +68,7 @@ class ServerConfiguration(server_common.GPGConfiguration,
                          'gnupg-key-usage': 'encrypt, sign',
                          'max-file-payload-size': 1024 * 1024 * 1024,
                          'max-memory-payload-size': 1024 * 1024,
+                         'max-rpms-payloads-size': 10 * 1024 * 1024 * 1024,
                          'passphrase-length': 64,
                          'server-cert-nickname': 'sigul-server-cert'})
 
@@ -88,6 +91,8 @@ class ServerConfiguration(server_common.GPGConfiguration,
                                                    'max-file-payload-size')
         self.max_memory_payload_size = parser.getint('server',
                                                      'max-memory-payload-size')
+        self.max_rpms_payloads_size = parser.getint('server',
+                                                    'max-rpms-payloads-size')
         self.server_cert_nickname = parser.get('server', 'server-cert-nickname')
 
 class RequestHandled(Exception):
@@ -321,11 +326,19 @@ class ServersConnection(object):
         self.__reply_header_writer.write_64B_hmac()
 
     def __send_payload_size(self, payload_size):
-        '''Prepare for sending payload of payload_size to the client.'''
+        '''Prepare for sending payload of payload_size to the client.
+
+        Valid both for the primary payload and for subreply payloads.
+
+        '''
         self.__client.outer_write(utils.u32_pack(payload_size))
 
     def __send_payload_from_file(self, writer, fd):
-        '''Send contents of fd to the client as payload, using writer.'''
+        '''Send contents of fd to the client as payload, using writer.
+
+        Valid both for the primary payload and for subreply payloads.
+
+        '''
         fd.seek(0)
         file_size = os.fstat(fd.fileno()).st_size
         self.__send_payload_size(file_size)
@@ -374,6 +387,66 @@ class ServersConnection(object):
         self.send_reply_header(error_code, f)
         self.send_reply_payload('')
         raise RequestHandled()
+
+    def read_subheader(self, nss_key):
+        '''Read fields in a subrequest header authenticated using nss_key.
+
+        Return the header.
+
+        '''
+        reader = utils.SHA512HMACReader(self.__client.outer_read, nss_key)
+        try:
+            fields = utils.read_fields(reader.read)
+        except utils.InvalidFieldsError, e:
+            raise InvalidRequestError('Invalid response format: %s' % str(e))
+        if not reader.verify_64B_hmac_authenticator():
+            raise InvalidRequestError('Subrequest header authentication failed')
+        return fields
+
+    def read_subpayload_to_file(self, nss_key, max_size, tmp_dir):
+        '''Read a subpayload authenticated using nss_key.
+
+        Return (path, file, payload digest, payload authenticated).  Limit file
+        size to max_size.  Create the temporary file in tmp_dir.
+
+        '''
+        buf = self.__client.outer_read(utils.u32_size)
+        payload_size = utils.u32_unpack(buf)
+        if payload_size > self.config.max_file_payload_size:
+            raise InvalidRequestError('Payload too large')
+        if payload_size > max_size:
+            raise InvalidRequestError('Total payload size too large')
+
+        reader = utils.SHA512HashAndHMACReader(self.__client.outer_read,
+                                               nss_key)
+        (fd, payload_path) = tempfile.mkstemp(text=False, dir=tmp_dir)
+        f = os.fdopen(fd, 'w+b')
+        try:
+            utils.copy_data(f.write, reader.read, payload_size)
+        finally:
+            f.close()
+        payload_file = open(payload_path, 'rb')
+        payload_sha512_digest = reader.sha512()
+        auth = self.__client.outer_read(64)
+        return (payload_path, payload_file, payload_sha512_digest,
+                auth == reader.hmac())
+
+    def send_subheader(self, fields, nss_key):
+        '''Send fields in a subreply header authenticated using nss_key.'''
+        writer = utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
+        writer.write(utils.format_fields(fields))
+        writer.write_64B_hmac()
+
+    def send_empty_subpayload(self, nss_key):
+        '''Send an empty subreply payload authenticated using nss_key.'''
+        self.__send_payload_size(0)
+        writer = utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
+        writer.write_64B_hmac()
+
+    def send_subpayload_from_file(self, fd, nss_key):
+        '''Send a subreply payload from fd authenticated using nss_key.'''
+        writer = utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
+        self.__send_payload_from_file(writer, fd)
 
     def close(self):
         '''Destroy non-garbage-collected state.
@@ -1105,6 +1178,246 @@ def cmd_sign_rpm(db, conn):
         conn.send_reply_payload_from_file(f)
     finally:
         f.close()
+
+class SignRPMsRequestThread(utils.WorkerThread):
+    '''A thread that handles sign-rpm requests.
+
+    The requests are put into dest_queue as RPMFile objects, with None marking
+    end of the requests.
+
+    '''
+
+    def __init__(self, conn, dest_queue, header_nss_key, payload_nss_key,
+                 tmp_dir):
+        super(SignRPMsRequestThread, self). \
+            __init__('sign-rpms:requests', 'request thread',
+                     output_queues=((dest_queue, None),))
+        self.__conn = conn
+        self.__dest = dest_queue
+        self.__header_nss_key = header_nss_key
+        self.__payload_nss_key = payload_nss_key
+        self.__tmp_dir = tmp_dir
+
+    def _real_run(self):
+        logging.debug(0)
+        total_size = 0
+        server_idx = 0
+        while True:
+            (rpm, size) = self.__read_one_request \
+                (server_idx,
+                 self.__conn.config.max_rpms_payloads_size - total_size)
+            if rpm is None:
+                break
+            server_idx += 1
+            total_size += size
+            self.__dest.put(rpm)
+        logging.debug(5)
+
+    def __read_one_request(self, server_idx, remaining_size):
+        '''Read one request from self.__conn.
+
+        Return (RPMFile, file size), (None, None) on EOF.  Raise
+        InvalidRequestError, others.  Only allow remaining_size bytes for the
+        payload.
+
+        '''
+        try:
+            nss_key = utils.derived_key(self.__header_nss_key, server_idx)
+            fields = self.__conn.read_subheader(nss_key)
+        except EOFError:
+            return (None, None)
+        logging.debug(1)
+        s = utils.readable_fields(fields)
+        logging.debug('%s: Started handling %s', self.name, s)
+        logging.info('Subrequest: %s', s)
+        if 'id' not in fields:
+            raise InvalidRequestError('Required subheader field id missing.')
+
+        nss_key = utils.derived_key(self.__payload_nss_key, server_idx)
+        (path, payload_file, sha512_digest, authenticated) \
+            = self.__conn.read_subpayload_to_file(nss_key, remaining_size,
+                                                  self.__tmp_dir)
+        try:
+            logging.debug(2)
+            # Count whole blocks to avoid millions of 1-byte files filling the
+            # hard drive due to internal fragmentation.
+            size = utils.file_size_in_blocks(payload_file)
+
+            rpm = RPMFile(path, sha512_digest, request_id=fields['id'])
+            try:
+                rpm.verify()
+                logging.debug(3)
+                rpm.read_header(payload_file)
+            except RPMFileError:
+                return (rpm, size)
+        finally:
+            payload_file.close()
+
+        try:
+            rpm.authenticate(fields.get, authenticated)
+        except RPMFileError:
+            return (rpm, size)
+
+        return (rpm, size)
+
+class SignRPMsSignerThread(utils.WorkerThread):
+    '''A thread that actually performs the signing.
+
+    The requests in dst_queue and src_queue are RPMFile objects, with None
+    marking end of the requests.
+
+    '''
+
+    def __init__(self, dst_queue, src_queue, ctx):
+        super(SignRPMsSignerThread, self).__init__ \
+            ('sign-rpms:signing', 'signer thread',
+             input_queues=((src_queue, None),),
+             output_queues=((dst_queue, None),))
+        self.__dst = dst_queue
+        self.__src = src_queue
+        self.__ctx = ctx
+
+    def _real_run(self):
+        while True:
+            logging.debug(6)
+            rpm = self.__src.get()
+            if rpm is None:
+                break
+            try:
+                try:
+                    # FIXME: sign more at a time
+                    self.__handle_one_rpm(rpm)
+                except:
+                    if rpm.status is None:
+                        rpm.status = errors.UNKNOWN_ERROR
+                    raise
+            finally:
+                self.__dst.put(rpm)
+
+    def __handle_one_rpm(self, rpm):
+        '''Handle an incoming request.'''
+        logging.debug('%s: Started handling %s', self.name, rpm.rpm_id)
+        if rpm.status is not None:
+            return
+
+        logging.debug(8)
+        try:
+            self.__ctx.sign_rpm(rpm)
+        except RPMFileError, e:
+            logging.error(str(e))
+
+class SignRPMsReplyThread(utils.WorkerThread):
+    '''A thread that sends subrequest replies.
+
+    The requests in src_queue are RPMFile objects, with None marking end of the
+    requests.
+
+    '''
+
+    def __init__(self, conn, src_queue, header_nss_key, payload_nss_key):
+        super(SignRPMsReplyThread, self). \
+            __init__('sign-rpms:replies', 'reply thread',
+                     input_queues=((src_queue, None),))
+        self.__conn = conn
+        self.__src = src_queue
+        self.__header_nss_key = header_nss_key
+        self.__payload_nss_key = payload_nss_key
+
+    def _real_run(self):
+        '''Read all results and send subreplies.'''
+        server_idx = 0
+        while True:
+            logging.debug(9)
+            rpm = self.__src.get()
+            if rpm is None:
+                break
+            self.__handle_one_rpm(rpm, server_idx)
+            server_idx += 1
+
+    def __handle_one_rpm(self, rpm, server_idx):
+        '''Send information based on rpm.'''
+        logging.debug('%s: Started handling %s', self.name, rpm.rpm_id)
+        f = {'id': rpm.request_id}
+        if rpm.status is not None:
+            f['status'] = rpm.status
+            logging.info('Subrequest %d error: %s', server_idx,
+                         errors.message(rpm.status))
+        else:
+            f['status'] = errors.OK
+        logging.debug(10)
+        nss_key = utils.derived_key(self.__header_nss_key, server_idx)
+        self.__conn.send_subheader(f, nss_key)
+
+        nss_key = utils.derived_key(self.__payload_nss_key, server_idx)
+        logging.debug(11)
+        if rpm.status is None:
+            f = open(rpm.path, 'rb')
+            try:
+                self.__conn.send_subpayload_from_file(f, nss_key)
+            finally:
+                f.close()
+        else:
+            self.__conn.send_empty_subpayload(nss_key)
+        logging.debug(12)
+
+
+@request_handler()
+def cmd_sign_rpms(db, conn):
+    (access, key_passphrase) = conn.authenticate_user(db)
+    mech = nss.nss.CKM_GENERIC_SECRET_KEY_GEN
+    slot = nss.nss.get_best_slot(mech)
+    buf = conn.inner_field('subrequest-header-auth-key', required=True)
+    if len(buf) < 64:
+        raise InvalidRequestError('Subrequest header authentication key too '
+                                  'small')
+    # "Unwrap" because the key was encrypted for transmission using TLS
+    subrequest_header_nss_key = nss.nss.import_sym_key \
+        (slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
+         nss.nss.SecItem(buf))
+    buf = conn.inner_field('subrequest-payload-auth-key', required=True)
+    if len(buf) < 64:
+        raise InvalidRequestError('Subrequest payload authentication key too '
+                                  'small')
+    subrequest_payload_nss_key = nss.nss.import_sym_key \
+        (slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
+         nss.nss.SecItem(buf))
+    buf = conn.inner_field('subreply-header-auth-key', required=True)
+    if len(buf) < 64:
+        raise InvalidRequestError('Subreply header authentication key too '
+                                  'small')
+    subreply_header_nss_key = nss.nss.import_sym_key \
+        (slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
+         nss.nss.SecItem(buf))
+    buf = conn.inner_field('subreply-payload-auth-key', required=True)
+    if len(buf) < 64:
+        raise InvalidRequestError('Subreply payload authentication key too '
+                                  'small')
+    subreply_payload_nss_key = nss.nss.import_sym_key \
+        (slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
+         nss.nss.SecItem(buf))
+    signing_ctx = SigningContext(conn, access.key, key_passphrase)
+    conn.send_reply_ok_only()
+
+    tmp_dir = tempfile.mkdtemp()
+    exception = None
+    try:
+        q1 = Queue.Queue(100)
+        q2 = Queue.Queue(100)
+        threads = []
+        threads.append(SignRPMsRequestThread(conn, q1,
+                                             subrequest_header_nss_key,
+                                             subrequest_payload_nss_key,
+                                             tmp_dir))
+        threads.append(SignRPMsSignerThread(q2, q1, signing_ctx))
+        threads.append(SignRPMsReplyThread(conn, q2, subreply_header_nss_key,
+                                           subreply_payload_nss_key))
+
+        (_, exception) = utils.run_worker_threads(threads,
+                                                  (InvalidRequestError,))
+    finally:
+        shutil.rmtree(tmp_dir)
+    if exception is not None:
+        raise exception[0], exception[1], exception[2]
 
 def unknown_request_handler(unused_db, conn):
     conn.send_reply_header(errors.UNKNOWN_OP, {})

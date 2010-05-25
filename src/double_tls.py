@@ -560,6 +560,10 @@ class DoubleTLSClient(object):
         '''
         self.__outer_pipe.sendall(data)
 
+    def outer_shutdown(self, flags):
+        '''Shut down the outer TLS session.'''
+        self.__outer_pipe.shutdown(flags)
+
     def inner_read(self, buf_size):
         '''Read up to buf_size bytes from the inner TLS session.
 
@@ -831,6 +835,10 @@ class OuterBuffer(object):
         _debug('o%s: sending %d bytes', _id(self), len(data))
         self.__socket.send(utils.u32_pack(len(data)))
         self.__socket.send(data)
+
+    def set_full_duplex(self, value):
+        '''Set full duplex status of the socket to value.'''
+        self.__socket.set_ssl_option(nss.ssl.SSL_ENABLE_FDX, value)
 
     def send_outer_eof(self):
         '''Send an EOF on the outer stream.'''
