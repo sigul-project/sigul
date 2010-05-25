@@ -1,5 +1,9 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (urlgrabber_open): Split from
+	SignRpmRequestType.forward_request_payload.
+	(SignRpmRequestType.forward_request_payload): Use urlgrabber_open.
+
 	* src/double_tls.py (OuterBuffer.send_outer_eof): New method.
 	* src/bridge.py (handle_connection): Make sure we don't send a RST to
 	the client before it can handle all reply data.

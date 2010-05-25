@@ -108,6 +108,27 @@ def copy_file_data(dest, src, size):
     '''Copy size bytes from file-like src to file-like dst.'''
     utils.copy_data(dest.write, src.read, size)
 
+def urlgrabber_open(url):
+    '''Open url.
+
+    Return (file, file size).  Raise ForwardingError.
+
+    '''
+    fd = urlgrabber.grabber.urlopen(url)
+    try:
+        try:
+            size = fd.size # urlgrabber using pycurl
+        except AttributeError:
+            try:
+                size = int(fd.hdr['Content-Length']) # Older urlgrabber
+            except KeyError:
+                raise ForwardingError('Content-Length not returned for %s' %
+                                      url)
+    except:
+        fd.close()
+        raise
+    return (fd, size)
+
  # Request verification
 
 class Field(object):
@@ -222,17 +243,8 @@ class SignRpmRequestType(RequestType):
                         build['version'], build['release'],
                         koji.pathinfo.rpm(rpm)))
 
-        src = urlgrabber.grabber.urlopen(url)
+        (src, payload_size) = urlgrabber_open(url)
         try:
-            try:
-                payload_size = src.size # urlgrabber using pycurl
-            except AttributeError:
-                try:
-                    # Older urlgrabber
-                    payload_size = int(src.hdr['Content-Length'])
-                except KeyError:
-                    raise ForwardingError('Content-Length not returned for %s' %
-                                          url)
             server_buf.write(utils.u32_pack(payload_size))
             copy_file_data(server_buf, src, payload_size)
         finally:
