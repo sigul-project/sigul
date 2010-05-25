@@ -31,7 +31,6 @@ import sys
 import tempfile
 import xmlrpclib
 
-import M2Crypto.EVP
 import nss.error
 import nss.nss
 import nss.ssl
@@ -246,10 +245,97 @@ def nss_init(config):
     nss.ssl.set_domestic_policy()
     nss.ssl.config_server_session_id_cache()
 
+class _DigestsReader(object):
+    '''A wrapper with a .read method, computing digests of the data.'''
 
-def sha512_digest(data):
-    '''Return a sha512 digest of data.'''
-    return str(nss.nss.sha512_digest(buffer(data)))
+    def __init__(self, read_fn, *digests):
+        self._read_fn = read_fn
+        self.__digests = digests
+        for d in self.__digests:
+            d.digest_begin()
+
+    def read(self, size):
+        '''Return up to size bytes of data, adding it to digests as well.'''
+        data = self._read_fn(size)
+        for d in self.__digests:
+            d.digest_op(data)
+        return data
+
+class SHA512Reader(_DigestsReader):
+    '''A wrapper with a .read method, computing a SHA-512 hash of the data.'''
+
+    def __init__(self, read_fn):
+        self.__digest = nss.nss.create_digest_context(nss.nss.SEC_OID_SHA512)
+        super(SHA512Reader, self).__init__(read_fn, self.__digest)
+
+    def sha512(self):
+        '''Return a SHA-512 hash of the data sent so far.'''
+        digest = self.__digest.digest_final()
+        self.__digest = None # Just to be sure nothing unexpected happens
+        return digest
+
+class SHA512HMACReader(_DigestsReader):
+    '''A wrapper with a .read method, computing a SHA-512 HMAC of the data.'''
+
+    def __init__(self, read_fn, nss_key):
+        self.__hmac = nss.nss.create_context_by_sym_key \
+            (nss.nss.CKM_SHA512_HMAC, nss.nss.CKA_SIGN, nss_key, None)
+        super(SHA512HMACReader, self).__init__(read_fn, self.__hmac)
+
+    def verify_64B_hmac_authenticator(self):
+        '''Compute and read HMAC of the data sent so far.
+
+        Return True if the computed HMAC matches the input value.
+
+        '''
+        digest = self.__hmac.digest_final()
+        self.__hmac = None # Just to be sure nothing unexpected happens
+        assert len(digest) == 64
+        auth = self._read_fn(64)
+        return auth == digest
+
+class _DigestsWriter(object):
+    '''A wrapper with a .write method, computing digests of the data.'''
+
+    def __init__(self, write_fn, *digests):
+        self._write_fn = write_fn
+        self.__digests = digests
+        for d in self.__digests:
+            d.digest_begin()
+
+    def write(self, data):
+        '''Write data, adding it to digests as well.'''
+        self._write_fn(data)
+        for d in self.__digests:
+            d.digest_op(data)
+
+class SHA512Writer(_DigestsWriter):
+    '''A wrapper with a .write method, computing a SHA-512 hash of the data.'''
+
+    def __init__(self, write_fn):
+        self.__digest = nss.nss.create_digest_context(nss.nss.SEC_OID_SHA512)
+        super(SHA512Writer, self).__init__(write_fn, self.__digest)
+
+    def sha512(self):
+        '''Return a SHA-512 hash of the data sent so far.'''
+        digest = self.__digest.digest_final()
+        self.__digest = None # Just to be sure nothing unexpected happens
+        return digest
+
+class SHA512HMACWriter(_DigestsWriter):
+    '''A wrapper with a .write method, computing a SHA-512 HMAC of the data.'''
+
+    def __init__(self, write_fn, nss_key):
+        self.__hmac = nss.nss.create_context_by_sym_key \
+            (nss.nss.CKM_SHA512_HMAC, nss.nss.CKA_SIGN, nss_key, None)
+        super(SHA512HMACWriter, self).__init__(write_fn, self.__hmac)
+
+    def write_64B_hmac(self):
+        '''Compute and write HMAC of the data sent so far.'''
+        auth = self.__hmac.digest_final()
+        self.__hmac = None # Just to be sure nothing unexpected happens
+        assert len(auth) == 64
+        self._write_fn(auth)
 
  # Protocol utilities
 

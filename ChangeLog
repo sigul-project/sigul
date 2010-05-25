@@ -1,5 +1,33 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (sha512_digest): Remove no longer necessary conversions
+	between str and buffer.  Fold into callers.
+	(_DigestsReader, SHA512Reader, SHA512HMACReader, _DigestsWriter)
+	(SHA512Writer, SHA512HMACWriter): New classes.
+	* src/client.py (ClientsConnection.connect): Set up
+	self.__request_header_writer instead of self.__request_header_digest,
+	self.__request_payload_writer instead of self.__request_payload_digest.
+	All users updated.
+	(ClientsConnection.send_inner): Generate auth keys directly as NSS keys.
+	Set up self.__reply_header_reader instead of self.__reply_header_hmac,
+	self.__reply_payload_header instead of self.__reply_payload_hmac.  All
+	users updated.
+	(ClientsConnection.__send_payload_part): Replace by
+	self.__request_payload_writer.write(), fold into callers.
+	(ClientsConnection.__send_header): Replace by
+	self.__request_header_writer.write(), fold into callers.
+	(ClientsConnection.__read_header): Replace by
+	self.__reply_header_reader.read(), fold into callers.
+	* src/server.py (ServersConnection.read_request): Use a single reader
+	for computing SHA-512 in all three payload types.  Use utils.copy_data.
+	(ServersConnection.read_request): Set up self.__reply_header_writer
+	instead of self.__reply_header_hmac, self.__reply_payload_writer instead
+	of self.__reply_payload_hmac.  All users updated.
+	(ServersConnection.__send_payload): Replace by
+	self.__reply_payload_writer.write(), fold into callers.
+	(ServersConnection.__send_reply_payload_auth): Replace by
+	self.__reply_payload_writer.write_64B_hmac(), fold into callers.
+
 	* src/double_tls.py (OuterBuffer.__recv_exact): Add a parameter to the
 	EOFError exception.
 	(OuterBuffer.read): Update docstring.

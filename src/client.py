@@ -24,7 +24,6 @@ import socket
 import struct
 import sys
 
-import M2Crypto.EVP
 import nss.nss
 
 import double_tls
@@ -86,10 +85,12 @@ class ClientsConnection(object):
             utils.nss_init(self.config)
         except utils.NSSInitError, e:
             raise ClientError(str(e))
-        # FIXME: python-nss does not support incremental hash computation
-        self.__request_header_digest = M2Crypto.EVP.MessageDigest('sha512')
-        self.__request_payload_digest = M2Crypto.EVP.MessageDigest('sha512')
-        self.__send_header(utils.u32_pack(utils.protocol_version))
+        self.__request_header_writer = \
+            utils.SHA512Writer(self.__client.outer_write)
+        self.__request_payload_writer = \
+            utils.SHA512Writer(self.__client.outer_write)
+        buf = utils.u32_pack(utils.protocol_version)
+        self.__request_header_writer.write(buf)
         if op is not None and outer_fields is not None:
             self.send_outer_fields(op, outer_fields)
 
@@ -98,16 +99,11 @@ class ClientsConnection(object):
         fields = dict(outer_fields) # Shallow copy
         fields['op'] = safe_string(op)
         fields['user'] = safe_string(self.config.user_name)
-        self.__send_header(utils.format_fields(fields))
+        self.__request_header_writer.write(utils.format_fields(fields))
 
     def __start_payload(self, payload_size):
         '''Prepare for sending payload of payload_size bytes.'''
         self.__client.outer_write(utils.u32_pack(payload_size))
-
-    def __send_payload_part(self, data):
-        '''Send a part of request payload.'''
-        self.__client.outer_write(data)
-        self.__request_payload_digest.update(data)
 
     def empty_payload(self):
         '''Send an empty payload.'''
@@ -116,19 +112,20 @@ class ClientsConnection(object):
     def send_payload(self, data):
         '''Send data as payload.'''
         self.__start_payload(len(data))
-        self.__send_payload_part(data)
+        self.__request_payload_writer.write(data)
 
     def send_payload_from_file(self, file):
         '''Send contents of file as payload.'''
         file.seek(0)
         file_size = os.fstat(file.fileno()).st_size
         self.__start_payload(file_size)
+
         sent = 0
         while True:
             data = file.read(4096)
             if len(data) == 0:
                 break
-            self.__send_payload_part(data)
+            self.__request_payload_writer.write(data)
             sent += len(data)
         if sent != file_size:
             raise IOError('File size did not match size returned by fstat()')
@@ -138,17 +135,22 @@ class ClientsConnection(object):
         # FIXME: handle errors.UNKNOWN_VERSION - there is no inner session and
         # outer session data is not all read
         fields = dict(inner_fields) # Shallow copy
-        fields['header-auth-sha512'] = self.__request_header_digest.final()
+        fields['header-auth-sha512'] = self.__request_header_writer.sha512()
         if not omit_payload_auth:
             fields['payload-auth-sha512'] = \
-                self.__request_payload_digest.final()
-        key = nss.nss.generate_random(64)
-        fields['header-auth-key'] = key
-        # FIXME: python-nss does not support HMAC
-        self.__reply_header_hmac = M2Crypto.EVP.HMAC(key, algo='sha512')
-        key = nss.nss.generate_random(64)
-        fields['payload-auth-key'] = key
-        self.__reply_payload_hmac = M2Crypto.EVP.HMAC(key, algo='sha512')
+                self.__request_payload_writer.sha512()
+
+        mech = nss.nss.CKM_SHA512_HMAC
+        slot = nss.nss.get_best_slot(mech)
+        nss_key = slot.key_gen(mech, None, 64)
+        fields['header-auth-key'] = nss_key.key_data
+        self.__reply_header_reader = \
+            utils.SHA512HMACReader(self.__client.outer_read, nss_key)
+        nss_key = slot.key_gen(mech, None, 64)
+        fields['payload-auth-key'] = nss_key.key_data
+        self.__reply_payload_reader = \
+            utils.SHA512HMACReader(self.__client.outer_read, nss_key)
+
         try:
             self.__client.inner_open_client(self.config.server_hostname,
                                             self.config.client_cert_nickname)
@@ -167,14 +169,14 @@ class ClientsConnection(object):
         SystemExit on other reported error.
 
         '''
-        buf = self.__read_header(utils.u32_size)
+        buf = self.__reply_header_reader.read(utils.u32_size)
         error_code = utils.u32_unpack(buf)
         try:
-            self.__response_fields = utils.read_fields(self.__read_header)
+            self.__response_fields = \
+                utils.read_fields(self.__reply_header_reader.read)
         except utils.InvalidFieldsError, e:
             raise InvalidResponseError('Invalid response format: %s' % str(e))
-        auth = self.__client.outer_read(64)
-        if auth != self.__reply_header_hmac.digest():
+        if not self.__reply_header_reader.verify_64B_hmac_authenticator():
             raise InvalidResponseError('Header authentication failed')
         if error_code != errors.OK and error_code not in expected_errors:
             message = self.response_field('message')
@@ -193,24 +195,19 @@ class ClientsConnection(object):
 
     def __authenticate_reply_payload(self):
         '''Read and verify reply payload authenticator.'''
-        auth = self.__client.outer_read(64)
-        if auth != self.__reply_payload_hmac.digest():
+        if not self.__reply_payload_reader.verify_64B_hmac_authenticator():
             raise InvalidResponseError('Payload authentication failed')
 
     def read_payload(self):
         '''Return and authenticate server's payload.'''
-        data = self.__client.outer_read(self.__payload_size)
-        self.__reply_payload_hmac.update(str(data))
+        data = self.__reply_payload_reader.read(self.__payload_size)
         self.__authenticate_reply_payload()
         return data
 
     def write_payload_to_file(self, f):
         '''Write server's payload to f.'''
-        while self.__payload_size > 0:
-            run = self.__client.outer_read(min(self.__payload_size, 4096))
-            f.write(run)
-            self.__reply_payload_hmac.update(str(run))
-            self.__payload_size -= len(run)
+        utils.copy_data(f.write, self.__reply_payload_reader.read,
+                        self.__payload_size)
         self.__authenticate_reply_payload()
 
     def read_empty_unauthenticated_payload(self):
@@ -256,16 +253,6 @@ class ClientsConnection(object):
                 raise InvalidResponseError('Boolean field has invalid value')
         return v
 
-    def __send_header(self, data):
-        '''Send data as a part of the authenticated request header.'''
-        self.__client.outer_write(data)
-        self.__request_header_digest.update(data)
-
-    def __read_header(self, bytes):
-        '''Read bytes bytes as a part of the authenticated reply header.'''
-        data = self.__client.outer_read(bytes)
-        self.__reply_header_hmac.update(str(data))
-        return data
 
     def close(self):
         '''Close the connection.

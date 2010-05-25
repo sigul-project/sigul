@@ -16,6 +16,7 @@
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 
 import binascii
+import cStringIO
 import crypt
 import logging
 import os
@@ -28,7 +29,6 @@ import sys
 import tempfile
 import time
 
-import M2Crypto.EVP
 import gpgme
 import nss.error
 import nss.nss
@@ -248,36 +248,28 @@ class ServersConnection(object):
             request_op = None
         handler = request_handlers[request_op]
 
+        reader = utils.SHA512Reader(self.__client.outer_read)
         if handler.payload_storage == RequestHandler.PAYLOAD_NONE:
             if payload_size != 0:
                 raise InvalidRequestError('Unexpected payload')
-            self.payload_sha512_digest = utils.sha512_digest('')
         elif handler.payload_storage == RequestHandler.PAYLOAD_MEMORY:
             if payload_size > self.config.max_memory_payload_size:
                 raise InvalidRequestError('Payload too large')
-            self.__payload = ''
-            while payload_size > 0:
-                run = self.__client.outer_read(min(payload_size, 4096))
-                self.__payload += run
-                payload_size -= len(run)
-            self.payload_sha512_digest = utils.sha512_digest(self.__payload)
+            f = cStringIO.StringIO()
+            utils.copy_data(f.write, reader.read, payload_size)
+            self.__payload = f.getvalue()
         else:
             assert handler.payload_storage == RequestHandler.PAYLOAD_FILE
             if payload_size > self.config.max_file_payload_size:
                 raise InvalidRequestError('Payload too large')
-            # FIXME? python-nss does not support incremental hash computation
-            digest = M2Crypto.EVP.MessageDigest('sha512')
-
             (fd, self.payload_path) = tempfile.mkstemp(text=False)
-            self.payload_file = os.fdopen(fd, 'w+b')
-            while payload_size > 0:
-                run = self.__client.outer_read(min(payload_size, 4096))
-                self.payload_file.write(run)
-                digest.update(run)
-                payload_size -= len(run)
-            self.payload_file.close()
+            f = os.fdopen(fd, 'w+b')
+            try:
+                utils.copy_data(f.write, reader.read, payload_size)
+            finally:
+                f.close()
             self.payload_file = open(self.payload_path, 'rb')
-            self.payload_sha512_digest = digest.final()
+        self.payload_sha512_digest = reader.sha512()
 
         # FIXME? authenticate using the client's certificate as well?
         # May raise double_tls.InnerCertificateNotFound.
@@ -292,7 +284,7 @@ class ServersConnection(object):
             self.__client.inner_close()
         # print repr(self.__inner_fields)
         if (self.inner_field('header-auth-sha512', required=True) !=
-            utils.sha512_digest(header_data)):
+            nss.nss.sha512_digest(header_data)):
             raise InvalidRequestError('Header authentication failed')
         payload_auth = self.inner_field('payload-auth-sha512')
         if payload_auth is None:
@@ -303,50 +295,40 @@ class ServersConnection(object):
                 raise InvalidRequestError('Payload authentication failed')
         self.payload_authenticated = payload_auth is not None
 
-        # FIXME? python-nss does not support HMAC
-        key = self.inner_field('header-auth-key', required=True)
-        if len(key) < 64:
+        mech = nss.nss.CKM_SHA512_HMAC
+        slot = nss.nss.get_best_slot(mech)
+        buf = self.inner_field('header-auth-key', required=True)
+        if len(buf) < 64:
             raise InvalidRequestError('Header authentication key too small')
-        self.__reply_header_hmac = M2Crypto.EVP.HMAC(key, algo='sha512')
-        key = self.inner_field('payload-auth-key', required=True)
-        if len(key) < 64:
+        # "Unwrap" because the key was encrypted for transmission using TLS
+        nss_key = nss.nss.import_sym_key(slot, mech, nss.nss.PK11_OriginUnwrap,
+                                         nss.nss.CKA_SIGN, nss.nss.SecItem(buf))
+        self.__reply_header_writer = \
+            utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
+        buf = self.inner_field('payload-auth-key', required=True)
+        if len(buf) < 64:
             raise InvalidRequestError('Payload authentication key too small')
-        self.__reply_payload_hmac = M2Crypto.EVP.HMAC(key, algo='sha512')
-
+        nss_key = nss.nss.import_sym_key(slot, mech, nss.nss.PK11_OriginUnwrap,
+                                         nss.nss.CKA_SIGN, nss.nss.SecItem(buf))
+        self.__reply_payload_writer = \
+            utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
         return handler
-
-    def __send_payload(self, data):
-        '''Send data on outer stream as a part of the authenticated payload.'''
-        self.__client.outer_write(data)
-        self.__reply_payload_hmac.update(str(data))
 
     def send_reply_header(self, error_code, fields):
         '''Send a reply header to the client.'''
-        data = utils.u32_pack(error_code)
-        self.__client.outer_write(data)
-        self.__reply_header_hmac.update(str(data))
-        data = utils.format_fields(fields)
-        self.__client.outer_write(data)
-        self.__reply_header_hmac.update(str(data))
-        auth = self.__reply_header_hmac.digest()
-        assert len(auth) == 64
-        self.__client.outer_write(auth)
+        self.__reply_header_writer.write(utils.u32_pack(error_code))
+        self.__reply_header_writer.write(utils.format_fields(fields))
+        self.__reply_header_writer.write_64B_hmac()
 
     def __start_reply_payload(self, payload_len):
         '''Prepare for sending payload of payload_len to the client.'''
         self.__client.outer_write(utils.u32_pack(payload_len))
 
-    def __send_reply_payload_auth(self):
-        '''Send payload authenticator.'''
-        auth = self.__reply_payload_hmac.digest()
-        assert len(auth) == 64
-        self.__client.outer_write(auth)
-
     def send_reply_payload(self, payload):
         '''Send payload to the client.'''
         self.__start_reply_payload(len(payload))
-        self.__send_payload(payload)
-        self.__send_reply_payload_auth()
+        self.__reply_payload_writer.write(payload)
+        self.__reply_payload_writer.write_64B_hmac()
 
     def send_reply_payload_from_file(self, file):
         '''Send contents of file to the client as payload.'''
@@ -358,11 +340,11 @@ class ServersConnection(object):
             data = file.read(4096)
             if len(data) == 0:
                 break
-            self.__send_payload(data)
+            self.__reply_payload_writer.write(data)
             sent += len(data)
         if sent != file_size:
             raise IOError('File size did not match size returned by fstat()')
-        self.__send_reply_payload_auth()
+        self.__reply_payload_writer.write_64B_hmac()
 
     def send_reply_ok_only(self):
         '''Send an erorrs.OK reply with no fields or payload.'''
