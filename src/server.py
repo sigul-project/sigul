@@ -324,14 +324,8 @@ class ServersConnection(object):
         '''Prepare for sending payload of payload_size to the client.'''
         self.__client.outer_write(utils.u32_pack(payload_size))
 
-    def send_reply_payload(self, payload):
-        '''Send payload to the client.'''
-        self.__send_payload_size(len(payload))
-        self.__reply_payload_writer.write(payload)
-        self.__reply_payload_writer.write_64B_hmac()
-
-    def send_reply_payload_from_file(self, fd):
-        '''Send contents of fd to the client as payload.'''
+    def __send_payload_from_file(self, writer, fd):
+        '''Send contents of fd to the client as payload, using writer.'''
         fd.seek(0)
         file_size = os.fstat(fd.fileno()).st_size
         self.__send_payload_size(file_size)
@@ -341,11 +335,21 @@ class ServersConnection(object):
             data = fd.read(4096)
             if len(data) == 0:
                 break
-            self.__reply_payload_writer.write(data)
+            writer.write(data)
             sent += len(data)
         if sent != file_size:
             raise IOError('File size did not match size returned by fstat()')
+        writer.write_64B_hmac()
+
+    def send_reply_payload(self, payload):
+        '''Send payload to the client.'''
+        self.__send_payload_size(len(payload))
+        self.__reply_payload_writer.write(payload)
         self.__reply_payload_writer.write_64B_hmac()
+
+    def send_reply_payload_from_file(self, fd):
+        '''Send contents of fd to the client as payload.'''
+        self.__send_payload_from_file(self.__reply_payload_writer, fd)
 
     def send_reply_ok_only(self):
         '''Send an erorrs.OK reply with no fields or payload.'''

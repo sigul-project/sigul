@@ -1,5 +1,8 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server.py (ServersConnection.__send_payload_from_file): Split from
+	ServersConnection.send_payload_from_file().
+
 	* src/server.py (ServersConnection.send_payload_from_file): Rename
 	parameter.
 
