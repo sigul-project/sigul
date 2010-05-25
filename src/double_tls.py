@@ -832,6 +832,11 @@ class OuterBuffer(object):
         self.__socket.send(utils.u32_pack(len(data)))
         self.__socket.send(data)
 
+    def send_outer_eof(self):
+        '''Send an EOF on the outer stream.'''
+        _debug('o%s: sending EOF', _id(self))
+        self.__socket.send(utils.u32_pack(0))
+
     def pending_inner_packets(self):
         '''Return inner stream packets that need handling.
 

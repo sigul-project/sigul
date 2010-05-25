@@ -484,11 +484,35 @@ def handle_connection(client_buf, server_buf):
         buf = server_buf.read(utils.u32_size)
         payload_size = utils.u32_unpack(buf)
         rt.forward_reply_payload(client_buf, server_buf, payload_size)
+        buf = server_buf.read(64)
+        client_buf.write(buf)
+
+        # Closing the socket should technically be enough, but make sure the
+        # client is not waiting for more input...
+        client_buf.send_outer_eof()
+        # ... because we need to wait until client closes the connection.  The
+        # client might have already shut down the write end of the connection,
+        # sending a TLS close_notify alert.  If we don't read this alert and
+        # close() the client connection, the kernel may send a RST, and the
+        # client would discard data sent by the bridge even if the client
+        # wanted to read them.  See
+        # http://blog.netherlabs.nl/articles/2009/01/18/ \
+        # the-ultimate-so_linger-page-or-why-is-my-tcp-not-reliable for
+        # detailed discussion.
+        #
+        # Therefore: read from the client, expecting an EOF.  If the client has
+        # already shut the connection down, this will read the close_notify
+        # alert, preventing the kernel form sending a RST immediately.  If the
+        # client has not shut the conection, this will wait until the client
+        # processes the data we sent and exits, closing the connection.
+        try:
+            client_buf.read(1)
+        except EOFError:
+            pass
+
     finally:
         rt.close()
 
-    buf = server_buf.read(64)
-    client_buf.write(buf)
 
 _fas_connection = None
 def fas_user_is_in_group(config, user_name, group_name):
