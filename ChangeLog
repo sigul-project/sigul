@@ -1,5 +1,8 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server.py (ServersConnection.__send_payload_size): Rename from
+	ServersConnection.__start_reply_payload().  All users changed.
+
 	* src/client.py (ClientsConnection.__send_payload_from_file): Split
 	from ClientsConnection.send_payload_from_file.
 

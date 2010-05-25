@@ -320,13 +320,13 @@ class ServersConnection(object):
         self.__reply_header_writer.write(utils.format_fields(fields))
         self.__reply_header_writer.write_64B_hmac()
 
-    def __start_reply_payload(self, payload_len):
-        '''Prepare for sending payload of payload_len to the client.'''
-        self.__client.outer_write(utils.u32_pack(payload_len))
+    def __send_payload_size(self, payload_size):
+        '''Prepare for sending payload of payload_size to the client.'''
+        self.__client.outer_write(utils.u32_pack(payload_size))
 
     def send_reply_payload(self, payload):
         '''Send payload to the client.'''
-        self.__start_reply_payload(len(payload))
+        self.__send_payload_size(len(payload))
         self.__reply_payload_writer.write(payload)
         self.__reply_payload_writer.write_64B_hmac()
 
@@ -334,7 +334,7 @@ class ServersConnection(object):
         '''Send contents of file to the client as payload.'''
         file.seek(0)
         file_size = os.fstat(file.fileno()).st_size
-        self.__start_reply_payload(file_size)
+        self.__send_payload_size(file_size)
         sent = 0
         while True:
             data = file.read(4096)
