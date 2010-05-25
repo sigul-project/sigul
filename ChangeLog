@@ -1,5 +1,14 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (md5_digest): Remove no longer necessary conversions
+	between str and buffer.  Fold into the only caller.
+	* src/bridge.py (RPMObject, KojiClient): Split from SignRpmRequestType.
+	(SignRpmRequestType): Use KojiClient.
+	(SignRpmRequestType.forward_reply_payload): Don't keep tmp_file open
+	while adding signature to Koji.
+	(SignRpmRequestType.close): Call superclass close() method.  Clear
+	self.__request_fields for added safety.
+
 	* src/bridge.py (urlgrabber_open): Split from
 	SignRpmRequestType.forward_request_payload.
 	(SignRpmRequestType.forward_request_payload): Use urlgrabber_open.

@@ -129,6 +129,45 @@ def urlgrabber_open(url):
         raise
     return (fd, size)
 
+class RPMObject(object):
+    '''Data about a single 'sign-rpms' subrequest.'''
+
+    def __init__(self, request_fields, request_header_data,
+                 request_payload_size):
+        self.request_fields = request_fields
+        self.request_header_data = request_header_data
+        self.request_payload_size = request_payload_size
+        self.request_payload_url = None
+        self.request_payload_digest = None
+        self.reply_fields = None
+        self.reply_header_data = None
+        self.reply_payload_size = None
+        self.reply_payload_digest = None
+        self.tmp_path = None
+        self.__koji_rpm_info = None
+
+    def remove_tmp_path(self):
+        '''If self.tmp_path is not None, delete it and set to None.'''
+        if self.tmp_path is not None:
+            os.remove(self.tmp_path)
+            self.tmp_path = None
+
+    def get_rpm_info(self, koji_client):
+        '''Return information from koji, perhaps using koji_client.'''
+        if self.__koji_rpm_info is None:
+            self.__koji_rpm_info = koji_client.get_rpm_info(self.request_fields)
+        return self.__koji_rpm_info
+
+    def compute_payload_url(self, koji_client):
+        '''Compute self.request_payload_url using koji_client.'''
+        rpm_info = self.get_rpm_info(koji_client)
+        self.request_payload_url = koji_client.get_rpm_url(rpm_info)
+
+    def add_signature_to_koji(self, koji_client):
+        '''Add signature from self.tmp_path to koji_client.'''
+        rpm_info = self.get_rpm_info(koji_client)
+        koji_client.add_signature(rpm_info, self.tmp_path)
+
  # Request verification
 
 class Field(object):
@@ -208,115 +247,22 @@ class RequestType(object):
         '''Deinitialize any costly state.'''
         pass
 
+class KojiClient(object):
+    '''Utilities for working with koji.
 
-class SignRpmRequestType(RequestType):
-    '''A specialized handler for the 'sign-rpm' request.'''
+    The client will create only one koji session, reusing it for all requests.
 
-    def __init__(self, *args, **kwargs):
-        super(SignRpmRequestType, self).__init__(*args, **kwargs)
+    '''
+    def __init__(self, request_fields):
+        '''Initialize, using request_fields for user identification.'''
         self.__koji_session = None
-        self.__koji_rpm_info = None
         self.__koji_config = None
+        self.__request_fields = request_fields
 
-    def forward_request_payload(self, server_buf, client_buf, payload_size,
-                                fields):
-        '''Forward (optionally modify) payload from client_buf to server_buf.'''
-        # Don't import koji before opening sockets!  The rpm Python module
-        # calls NSS_NoDB_Init() during its initialization, which breaks our
-        # attempts to initialize nss with our certificate database.
-        import koji
-
-        self.__request_fields = fields
-        if payload_size != 0:
-            return super(SignRpmRequestType, self). \
-                forward_request_payload(server_buf, client_buf, payload_size,
-                                        fields)
-        session = self.__koji_get_session()
-        rpm = self.__koji_get_rpm_info(session)
-        try:
-            build = session.getBuild(rpm['build_id'])
-            if build is None:
-                raise ForwardingError('RPM has no build')
-        except (utils.KojiError, koji.GenericError), e:
-            raise ForwardingError('Koji connection failed: %s' % str(e))
-        url = '/'.join((self.__koji_config['pkgurl'], build['package_name'],
-                        build['version'], build['release'],
-                        koji.pathinfo.rpm(rpm)))
-
-        (src, payload_size) = urlgrabber_open(url)
-        try:
-            server_buf.write(utils.u32_pack(payload_size))
-            copy_file_data(server_buf, src, payload_size)
-        finally:
-            src.close()
-
-    def forward_reply_payload(self, client_buf, server_buf, payload_size):
-        # Don't import koji or rpm before opening sockets!  The rpm Python
-        # module calls NSS_NoDB_Init() during its initialization, which breaks
-        # our attempts to initialize nss with our certificate database.
-        import koji
-        import rpm
-
-        # Zero-length response should happen only on error.
-        if (payload_size != 0 and
-            self.__request_fields.get('import-signature') == utils.u32_pack(1)):
-            (fd, tmp_path) = tempfile.mkstemp(text=False)
-            tmp_file = None
-            try:
-                tmp_file = os.fdopen(fd, 'w+')
-                copy_file_data(tmp_file, server_buf, payload_size)
-                tmp_file.close()
-                tmp_file = None
-                try:
-                    header_fields = koji.get_header_fields(tmp_path,
-                                                           ('siggpg', 'sigpgp'))
-                except rpm.error:
-                    raise ForwardingError('Corrupt RPM returned by server')
-                sigkey = header_fields['siggpg']
-                if sigkey is None:
-                    sigkey = header_fields['sigpgp']
-                    if sigkey is None:
-                        raise ForwardingError('Missing signature')
-                sigkey = koji.get_sigpacket_key_id(sigkey)
-                sighdr = koji.rip_rpm_sighdr(tmp_path)
-                sighdr_digest = binascii.b2a_hex(utils.md5_digest(sighdr))
-
-                session = self.__koji_get_session()
-                rpm = self.__koji_get_rpm_info(session)
-                try:
-                    sigs = session.queryRPMSigs(rpm_id=rpm['id'], sigkey=sigkey)
-                    assert len(sigs) <= 1
-                    if len(sigs) > 0 and sigs[0]['sighash'] != sighdr_digest:
-                        raise ForwardingError('A different signature was '
-                                              'already imported')
-                    if len(sigs) == 0:
-                        session.addRPMSig(rpm['id'],
-                                          base64.encodestring(sighdr))
-                except (utils.KojiError, koji.GenericError), e:
-                    raise ForwardingError('Koji connection failed: %s' % str(e))
-
-                if (self.__request_fields.get('return-data') ==
-                    utils.u32_pack(0)):
-                    client_buf.write(utils.u32_pack(0))
-                else:
-                    tmp_file = open(tmp_path, 'rb')
-                    client_buf.write(utils.u32_pack(payload_size))
-                    copy_file_data(client_buf, tmp_file, payload_size)
-            finally:
-                if tmp_file is not None:
-                    tmp_file.close()
-                os.remove(tmp_path)
-        elif self.__request_fields.get('return-data') != utils.u32_pack(0):
-            super(SignRpmRequestType, self).forward_reply_payload(client_buf,
-                                                                  server_buf,
-                                                                  payload_size)
-        else:
-            client_buf.write(utils.u32_pack(0))
-
-    def __koji_get_session(self):
+    def __get_session(self):
         '''Return a koji session, creating it if necessary.
 
-        Also make sure self.__koji_config is set up.
+        Also make sure self.__koji_config is set up.  Raise ForwardingError.
 
         '''
         # Don't import koji before opening sockets!  The rpm Python module
@@ -329,48 +275,182 @@ class SignRpmRequestType(RequestType):
         if self.__koji_session is None:
             try:
                 if settings.koji_do_proxy_auth:
-                    # self.__request_fields['user'] safety was verified by
-                    # self.validate
+                    user = self.__request_fields.get('user')
+                    StringField('user').validate(user)
                     self.__koji_session = utils.koji_connect \
-                        (self.__koji_config, authenticate=True,
-                         proxyuser=self.__request_fields['user'])
+                        (self.__koji_config, authenticate=True, proxyuser=user)
                 else:
-                    self.__koji_session = \
-                        utils.koji_connect(self.__koji_config,
-                                           authenticate=True)
+                    self.__koji_session = utils.koji_connect(self.__koji_config,
+                                                             authenticate=True)
             except (utils.KojiError, koji.GenericError), e:
                 raise ForwardingError('Koji connection failed: %s' % str(e))
         return self.__koji_session
 
-    def __koji_get_rpm_info(self, session):
-        '''Return information about a rpm specified by self.__request_fields.'''
+    __rpm_info_map = {'name': StringField('rpm-name'),
+                      'version': StringField('rpm-version'),
+                      'release': StringField('rpm-release'),
+                      'arch': StringField('rpm-arch')}
+    def get_rpm_info(self, fields):
+        '''Return information about a rpm specified by fields.
+
+        Raise ForwardingError.
+
+        '''
         # Don't import koji before opening sockets!  The rpm Python module
         # calls NSS_NoDB_Init() during its initialization, which breaks our
         # attempts to initialize nss with our certificate database.
         import koji
 
-        if self.__koji_rpm_info is None:
-            try:
-                d = {'name': self.__request_fields['rpm-name'],
-                     'version': self.__request_fields['rpm-version'],
-                     'release': self.__request_fields['rpm-release'],
-                     'arch': self.__request_fields['rpm-arch']}
-            except KeyError:
-                raise InvalidRequestError('Incomplete RPM identification')
-            # String safety in d was verified by self.validate
-            try:
-                self.__koji_rpm_info = session.getRPM(d)
-            except (utils.KojiError, koji.GenericError), e:
-                raise ForwardingError('Koji connection failed: %s' % str(e))
-            if self.__koji_rpm_info is None:
-                raise ForwardingError('RPM not found')
-        return self.__koji_rpm_info
+        session = self.__get_session()
+        d = {}
+        for (key, field) in self.__rpm_info_map.iteritems():
+            v = fields.get(field.name)
+            field.validate(v)
+            d[key] = v
+        try:
+            info = session.getRPM(d)
+        except (utils.KojiError, koji.GenericError), e:
+            raise ForwardingError('Koji connection failed: %s' % str(e))
+        if info is None:
+            raise ForwardingError('RPM not found')
+        return info
+
+    def get_rpm_url(self, rpm_info):
+        '''Return an URL for the specified rpm_info.
+
+        Raise ForwardingError.
+
+        '''
+        # Don't import koji before opening sockets!  The rpm Python module
+        # calls NSS_NoDB_Init() during its initialization, which breaks our
+        # attempts to initialize nss with our certificate database.
+        import koji
+
+        session = self.__get_session()
+        try:
+            build = session.getBuild(rpm_info['build_id'])
+            if build is None:
+                raise ForwardingError('RPM has no build')
+        except (utils.KojiError, koji.GenericError), e:
+            raise ForwardingError('Koji connection failed: %s' % str(e))
+        return '/'.join((self.__koji_config['pkgurl'], build['package_name'],
+                         build['version'], build['release'],
+                         koji.pathinfo.rpm(rpm_info)))
+
+    def add_signature(self, rpm_info, path):
+        '''Add signature for rpm_info from path using session.
+
+        Raise ForwardingError.
+
+        '''
+        # Don't import koji or rpm before opening sockets!  The rpm Python
+        # module calls NSS_NoDB_Init() during its initialization, which breaks
+        # our attempts to initialize nss with our certificate database.
+        import koji
+        import rpm
+
+        session = self.__get_session()
+        try:
+            header_fields = koji.get_header_fields(path, ('siggpg', 'sigpgp'))
+        except rpm.error:
+            raise ForwardingError('Corrupt RPM returned by server')
+
+        sigkey = header_fields['siggpg']
+        if sigkey is None:
+            sigkey = header_fields['sigpgp']
+            if sigkey is None:
+                raise ForwardingError('Missing signature')
+        sigkey = koji.get_sigpacket_key_id(sigkey)
+        sighdr = koji.rip_rpm_sighdr(path)
+        sighdr_digest = binascii.b2a_hex(nss.nss.md5_digest(sighdr))
+
+        try:
+            sigs = session.queryRPMSigs(rpm_id=rpm_info['id'], sigkey=sigkey)
+            assert len(sigs) <= 1
+            if len(sigs) > 0 and sigs[0]['sighash'] != sighdr_digest:
+                raise ForwardingError('A different signature was already '
+                                      'imported')
+            if len(sigs) == 0:
+                session.addRPMSig(rpm_info['id'], base64.encodestring(sighdr))
+        except (utils.KojiError, koji.GenericError), e:
+            # FIXME: restore
+            # raise ForwardingError('Koji connection failed: %s' % str(e))
+            logging.warning('Koji error: %s' % str(e))
 
     def close(self):
+        '''Disconnect from koji.'''
         if self.__koji_session is not None:
             utils.koji_disconnect(self.__koji_session)
             self.__koji_session = None
-        self.__koji_rpm_info = None
+
+class SignRpmRequestType(RequestType):
+    '''A specialized handler for the 'sign-rpm' request.'''
+
+    def __init__(self, *args, **kwargs):
+        super(SignRpmRequestType, self).__init__(*args, **kwargs)
+        self.__request_fields = None
+        self.__koji_client = None
+        self.__rpm = None
+
+    def forward_request_payload(self, server_buf, client_buf, payload_size,
+                                fields):
+        '''Forward (optionally modify) payload from client_buf to server_buf.'''
+        self.__request_fields = fields
+        self.__koji_client = KojiClient(fields)
+        self.__rpm = RPMObject(fields, None, payload_size)
+        if payload_size != 0:
+            return super(SignRpmRequestType, self). \
+                forward_request_payload(server_buf, client_buf, payload_size,
+                                        fields)
+
+        self.__rpm.compute_payload_url(self.__koji_client)
+        (src, payload_size) = urlgrabber_open(self.__rpm.request_payload_url)
+        try:
+            server_buf.write(utils.u32_pack(payload_size))
+            copy_file_data(server_buf, src, payload_size)
+        finally:
+            src.close()
+
+    def forward_reply_payload(self, client_buf, server_buf, payload_size):
+        # Zero-length response should happen only on error.
+        if (payload_size != 0 and
+            self.__request_fields.get('import-signature') == utils.u32_pack(1)):
+            (fd, self.__rpm.tmp_path) = tempfile.mkstemp(text=False)
+            try:
+                tmp_file = os.fdopen(fd, 'w+')
+                try:
+                    copy_file_data(tmp_file, server_buf, payload_size)
+                finally:
+                    tmp_file.close()
+
+                self.__rpm.add_signature_to_koji(self.__koji_client)
+
+                if (self.__request_fields.get('return-data') ==
+                    utils.u32_pack(0)):
+                    client_buf.write(utils.u32_pack(0))
+                else:
+                    client_buf.write(utils.u32_pack(payload_size))
+                    tmp_file = open(self.__rpm.tmp_path, 'rb')
+                    try:
+                        copy_file_data(client_buf, tmp_file, payload_size)
+                    finally:
+                        tmp_file.close()
+            finally:
+                self.__rpm.remove_tmp_path()
+        elif self.__request_fields.get('return-data') != utils.u32_pack(0):
+            super(SignRpmRequestType, self).forward_reply_payload(client_buf,
+                                                                  server_buf,
+                                                                  payload_size)
+        else:
+            client_buf.write(utils.u32_pack(0))
+
+    def close(self):
+        super(SignRpmRequestType, self).close()
+        self.__request_fields = None
+        if self.__koji_client is not None:
+            self.__koji_client.close()
+            self.__koji_client = None
+        self.__rpm = None
 
 RT = RequestType
 SF = StringField

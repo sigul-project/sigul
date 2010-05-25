@@ -246,9 +246,6 @@ def nss_init(config):
     nss.ssl.set_domestic_policy()
     nss.ssl.config_server_session_id_cache()
 
-def md5_digest(data):
-    '''Return a md5 digest of data.'''
-    return str(nss.nss.md5_digest(buffer(data)))
 
 def sha512_digest(data):
     '''Return a sha512 digest of data.'''
