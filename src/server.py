@@ -600,6 +600,155 @@ def random_passphrase(conn):
     return ''.join(_passphrase_characters[ord(c) % len(_passphrase_characters)]
                    for c in random)
 
+class RPMFileError(Exception):
+    pass
+
+class RPMFile(object):
+    '''A single RPM, to be signed.'''
+
+    def __init__(self, path, sha512_digest, request_id=None):
+        '''Initialize.
+
+        sha512_digest is a SHA-512 digest of path, in binary form.
+        self.status is set to None, to be updated by other operations with this
+        RPM.
+
+        '''
+        self.path = path
+        self.__sha512_digest = sha512_digest
+        self.request_id = request_id
+        self.status = None
+
+    def verify(self):
+        '''Verify validity of the file.
+
+        Raise RPMFileError (setting self.status).
+
+        '''
+        # Use an external process to verify the file, to prevent the attacker
+        # from taking control of a process with an open network socket and
+        # key_passphrase if a security bug in librpm* is exploitable.
+        res = subprocess.call(('rpm', '--quiet', '--nosignature', '-K',
+                               self.path),
+                              # PIPE is used only to avoid inheriting our file
+                              # descriptors
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, close_fds=True)
+        if res != 0:
+            self.status = errors.CORRUPT_RPM
+            raise RPMFileError('Corrupt RPM')
+
+    def read_header(self, fd):
+        '''Read file header from fd, which corresponds to self.path.
+
+        Set self.rpm_id to a string identifying the RPM.  Raise RPMFileError
+        (setting self.status).
+
+        '''
+        # Don't import rpm at the top of the file!  The rpm Python module calls
+        # NSS_NoDB_Init() during its initialization, which breaks our attempts
+        # to initialize nss with our certificate database.
+        import rpm
+
+        ts = rpm.ts()
+        ts.setVSFlags(rpm._RPMVSF_NOSIGNATURES)
+        try:
+            self.__header = ts.hdrFromFdno(fd.fileno())
+        except rpm.error, e:
+            self.status = errors.CORRUPT_RPM
+            raise RPMFileError('Error reading RPM header: %s' % str(e))
+
+        rpm_id = (self.__header[rpm.RPMTAG_NAME],
+                  self.__header[rpm.RPMTAG_EPOCH],
+                  self.__header[rpm.RPMTAG_VERSION],
+                  self.__header[rpm.RPMTAG_RELEASE],
+                  self.__header[rpm.RPMTAG_ARCH],
+                  binascii.b2a_hex(self.__sha512_digest))
+        self.rpm_id = repr(rpm_id)
+
+    def authenticate(self, get_field, payload_authenticated):
+        '''Verify the file corresponds to the request fields.
+
+        Use get_field to read a request field (may return None if missing).
+        Raise RPMFileError on missing authentication (setting self.status),
+        InvalidRequestError on invalid authentication.
+
+        '''
+        # Don't import rpm at the top of the file!  The rpm Python module calls
+        # NSS_NoDB_Init() during its initialization, which breaks our attempts
+        # to initialize nss with our certificate database.
+        import rpm
+
+        for (field, tag) in (('rpm-name', rpm.RPMTAG_NAME),
+                             ('rpm-epoch', rpm.RPMTAG_EPOCH),
+                             ('rpm-version', rpm.RPMTAG_VERSION),
+                             ('rpm-release', rpm.RPMTAG_RELEASE),
+                             ('rpm-arch', rpm.RPMTAG_ARCH)):
+            field_value = get_field(field)
+            if field_value is None:
+                continue
+            if not utils.string_is_safe(field_value):
+                raise InvalidRequestError('Field %s has unsafe value' %
+                                          repr(field))
+            if (tag == rpm.RPMTAG_ARCH and
+                self.__header[rpm.RPMTAG_SOURCEPACKAGE] == 1):
+                rpm_value = 'src'
+            else:
+                rpm_value = self.__header[tag]
+                if rpm_value is None:
+                    rpm_value = ''
+            if field_value != str(rpm_value):
+                raise InvalidRequestError('RPM mismatch')
+
+        field_value = get_field('rpm-sigmd5')
+        if field_value is not None:
+            rpm_value = self.__header[rpm.RPMTAG_SIGMD5]
+            if rpm_value is None or field_value != rpm_value:
+                raise InvalidRequestError('RPM sigmd5 mismatch')
+        elif not payload_authenticated:
+            self.status = errors.UNAUTHENTICATED_RPM
+            raise RPMFileError('RPM not authenticated')
+
+class SigningContext(object):
+    '''A tool for running rpm --addsign.'''
+
+    def __init__(self, conn, key, key_passphrase):
+        self.__key = key
+        self.__key_passphrase = key_passphrase
+        self.__argv = ['--define', '_signature gpg',
+                       '--define', '_gpg_name %s' % key.fingerprint]
+        field_value = conn.outer_field_bool('v3-signature')
+        if field_value is not None and field_value:
+            # Add --force-v3-sigs to the value in redhat-rpm-config-9.0.3-3.fc10
+            self.__argv += ['--define',
+                            '__gpg_sign_cmd %{__gpg} gpg --force-v3-sigs '
+                            '--batch --no-verbose --no-armor --passphrase-fd 3 '
+                            '--no-secmem-warning -u "%{_gpg_name}" -sbo '
+                            '%{__signature_filename} %{__plaintext_filename}']
+        self.__env = dict(os.environ) # Shallow copy, uses our $GNUPGHOME
+        self.__env['LC_ALL'] = 'C'
+
+    def sign_rpm(self, rpm):
+        '''Sign rpm.
+
+        Raise RPMFileError on error.
+
+        '''
+        child = pexpect.spawn('rpm', self.__argv + ['--addsign', rpm.path],
+                              env=self.__env)
+        child.expect('Enter pass phrase: ')
+        child.sendline(self.__key_passphrase)
+        answer = child.expect(['Pass phrase is good\.',
+                               'Pass phrase check failed'])
+        child.expect(pexpect.EOF)
+        child.close()
+        if (not os.WIFEXITED(child.status) or
+            os.WEXITSTATUS(child.status) != 0 or answer != 0):
+            rpm.status = errors.UNKNOWN_ERROR
+            raise RPMFileError('Error signing %s: status %d, output %s'
+                               % (rpm.rpm_id, child.status, child.before))
+        logging.info('Signed RPM %s with key %s', rpm.rpm_id, self.__key.name)
+
  # Request handlers
 
 @request_handler()
@@ -932,89 +1081,25 @@ def cmd_sign_data(db, conn):
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE,
                  payload_auth_optional=True)
 def cmd_sign_rpm(db, conn):
-    # Don't import rpm at the top of the file!  The rpm Python module calls
-    # NSS_NoDB_Init() during its initialization, which breaks our attempts to
-    # initialize nss with our certificate database.
-    import rpm
-
     (access, key_passphrase) = conn.authenticate_user(db)
-    # Use an external process to verify the file first, to prevent the attacker
-    # from taking control of a process with an open network socket and
-    # key_passphrase if a security bug in librpm* is exploitable.
-    res = subprocess.call(('rpm', '--quiet', '--nosignature', '-K',
-                           conn.payload_path),
-                          # PIPE is used only to avoid inheriting our file
-                          # descriptors
-                          stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, close_fds=True)
-    if res != 0:
-        conn.send_error(errors.CORRUPT_RPM)
 
-    ts = rpm.ts()
-    ts.setVSFlags(rpm._RPMVSF_NOSIGNATURES)
+    rpm = RPMFile(conn.payload_path, conn.payload_sha512_digest)
     try:
-        hdr = ts.hdrFromFdno(conn.payload_file.fileno())
-    except rpm.error:
-        conn.send_error(errors.CORRUPT_RPM)
+        rpm.verify()
+        rpm.read_header(conn.payload_file)
+        rpm.authenticate(conn.outer_field, conn.payload_authenticated)
+    except RPMFileError:
+        conn.send_error(rpm.status)
 
-    rpm_id = (hdr[rpm.RPMTAG_NAME], hdr[rpm.RPMTAG_EPOCH],
-              hdr[rpm.RPMTAG_VERSION], hdr[rpm.RPMTAG_RELEASE],
-              hdr[rpm.RPMTAG_ARCH],
-              binascii.b2a_hex(conn.payload_sha512_digest))
-
-    for (field, tag) in (('rpm-name', rpm.RPMTAG_NAME),
-                         ('rpm-epoch', rpm.RPMTAG_EPOCH),
-                         ('rpm-version', rpm.RPMTAG_VERSION),
-                         ('rpm-release', rpm.RPMTAG_RELEASE),
-                         ('rpm-arch', rpm.RPMTAG_ARCH)):
-        field_value = conn.safe_outer_field(field)
-        if field_value is None:
-            continue
-        if tag == rpm.RPMTAG_ARCH and hdr[rpm.RPMTAG_SOURCEPACKAGE] == 1:
-            rpm_value = 'src'
-        else:
-            rpm_value = hdr[tag]
-            if rpm_value is None:
-                rpm_value = ''
-        if field_value != str(rpm_value):
-            raise InvalidRequestError('RPM mismatch')
-    field_value = conn.outer_field('rpm-sigmd5')
-    if field_value is not None:
-        rpm_value = hdr[rpm.RPMTAG_SIGMD5]
-        if rpm_value is None or field_value != rpm_value:
-            raise InvalidRequestError('RPM mismatch')
-    elif not conn.payload_authenticated:
-        conn.send_error(errors.UNAUTHENTICATED_RPM)
-
-    env = dict(os.environ) # Shallow copy, uses our $GNUPGHOME
-    env['LC_ALL'] = 'C'
-    argv = ['--define', '_signature gpg',
-            '--define', '_gpg_name %s' % access.key.fingerprint]
-    field_value = conn.outer_field_bool('v3-signature')
-    if field_value is not None and field_value:
-        # Add --force-v3-sigs to the value in redhat-rpm-config-9.0.3-3.fc10
-        argv += ['--define', '__gpg_sign_cmd %{__gpg} gpg --force-v3-sigs '
-                 '--batch --no-verbose --no-armor --passphrase-fd 3 '
-                 '--no-secmem-warning -u "%{_gpg_name}" -sbo '
-                 '%{__signature_filename} %{__plaintext_filename}']
-    child = pexpect.spawn('rpm', argv + ['--addsign', conn.payload_path],
-                          env=env)
-    child.expect('Enter pass phrase: ')
-    child.sendline(key_passphrase)
-    answer = child.expect(['Pass phrase is good\.',
-                           'Pass phrase check failed'])
-    child.expect(pexpect.EOF)
-    child.close()
-    if (not os.WIFEXITED(child.status) or
-        os.WEXITSTATUS(child.status) != 0 or answer != 0):
-        logging.error('Error signing %s: status %d, output %s',
-                      repr(rpm_id), child.status, child.before)
-    else:
-        logging.info('Signed RPM %s with key %s', repr(rpm_id),
-                     access.key.name)
+    ctx = SigningContext(conn, access.key, key_passphrase)
+    try:
+        ctx.sign_rpm(rpm)
+    except RPMFileError, e:
+        logging.error(str(e))
+        conn.send_error(rpm.status)
 
     # Reopen to get the new file even if rpm doesn't overwrite the file in place
-    f = open(conn.payload_path, 'rb')
+    f = open(rpm.path, 'rb')
     try:
         conn.send_reply_header(errors.OK, {})
         conn.send_reply_payload_from_file(f)

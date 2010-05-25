@@ -1,5 +1,8 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server.py (RPMFileError, RPMFile, SigningContext): Split from
+	cmd_sign_rpm.
+
 	* src/utils.py (file_size_in_blocks, path_size_in_blocks): New
 	functions.
 
