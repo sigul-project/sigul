@@ -101,24 +101,24 @@ class ClientsConnection(object):
         fields['user'] = safe_string(self.config.user_name)
         self.__request_header_writer.write(utils.format_fields(fields))
 
-    def __start_payload(self, payload_size):
-        '''Prepare for sending payload of payload_size bytes.'''
+    def __send_payload_size(self, payload_size):
+        '''Prepare for sending payload of payload_size.'''
         self.__client.outer_write(utils.u32_pack(payload_size))
 
     def empty_payload(self):
         '''Send an empty payload.'''
-        self.__start_payload(0)
+        self.__send_payload_size(0)
 
     def send_payload(self, data):
         '''Send data as payload.'''
-        self.__start_payload(len(data))
+        self.__send_payload_size(len(data))
         self.__request_payload_writer.write(data)
 
     def send_payload_from_file(self, file):
         '''Send contents of file as payload.'''
         file.seek(0)
         file_size = os.fstat(file.fileno()).st_size
-        self.__start_payload(file_size)
+        self.__send_payload_size(file_size)
 
         sent = 0
         while True:
