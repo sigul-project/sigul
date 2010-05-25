@@ -330,14 +330,15 @@ class ServersConnection(object):
         self.__reply_payload_writer.write(payload)
         self.__reply_payload_writer.write_64B_hmac()
 
-    def send_reply_payload_from_file(self, file):
-        '''Send contents of file to the client as payload.'''
-        file.seek(0)
-        file_size = os.fstat(file.fileno()).st_size
+    def send_reply_payload_from_file(self, fd):
+        '''Send contents of fd to the client as payload.'''
+        fd.seek(0)
+        file_size = os.fstat(fd.fileno()).st_size
         self.__send_payload_size(file_size)
+
         sent = 0
         while True:
-            data = file.read(4096)
+            data = fd.read(4096)
             if len(data) == 0:
                 break
             self.__reply_payload_writer.write(data)
