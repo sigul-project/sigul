@@ -339,6 +339,64 @@ def key_user_passphrase_or_password(config, o2):
     passphrase = read_key_passphrase(config)
     return {'passphrase': passphrase}
 
+class SignRPMArgumentExaminer(object):
+    '''An object that can be used to analyze sign-rpm{s,} operands.'''
+
+    def __init__(self):
+        self.__koji_session = None
+
+    def open_rpm(self, arg, fields):
+        '''Get information about RPM specified by "arg".
+
+        Return (open file or None, RPM file size on disk).  Update fields with
+        RPM information if arg refers to koji.
+
+        Raise ClientError, others.
+
+        '''
+        if os.path.exists(arg):
+            try:
+                rpm_file = open(arg, 'rb')
+            except IOError, e:
+                raise ClientError('Error opening %s: %s' % (arg, e.strerror))
+            # Count whole blocks, that's what the bridge and server do.
+            size = utils.file_size_in_blocks(rpm_file)
+        else:
+            # Don't import koji before initializing ClientsConnection!  The rpm
+            # Python module calls NSS_NoDB_Init() during its initialization,
+            # which breaks our attempts to initialize nss with our certificate
+            # database.
+            import koji
+
+            try:
+                if self.__koji_session is None:
+                    self.__koji_session = \
+                        utils.koji_connect(utils.koji_read_config(),
+                                           authenticate=False)
+                rpm = self.__koji_session.getRPM(arg)
+            except (utils.KojiError, koji.GenericError), e:
+                raise ClientError(str(e))
+            if rpm is None:
+                raise ClientError('%s does not exist in Koji' % arg)
+            fields['rpm-name'] = safe_string(rpm['name'])
+            epoch = rpm['epoch']
+            if epoch is None:
+                epoch = ''
+            fields['rpm-epoch'] = safe_string(str(epoch))
+            fields['rpm-version'] = safe_string(rpm['version'])
+            fields['rpm-release'] = safe_string(rpm['release'])
+            fields['rpm-arch'] = safe_string(rpm['arch'])
+            fields['rpm-sigmd5'] = binascii.a2b_hex(rpm['payloadhash'])
+            rpm_file = None
+            size = rpm['size']
+        return (rpm_file, size)
+
+    def close(self):
+        '''Close all permanent connections, if any.'''
+        if self.__koji_session is not None:
+            utils.koji_disconnect(self.__koji_session)
+            self.__koji_session = None
+
  # Command handlers
 
 def cmd_list_users(conn, args):
@@ -782,40 +840,11 @@ def cmd_sign_rpm(conn, args):
         f['return-data'] = False
     if o2.v3_signature:
         f['v3-signature'] = True
-    omit_payload_auth = False
-    if os.path.exists(args[1]):
-        try:
-            rpm_file = open(args[1], 'rb')
-        except IOError, e:
-            raise ClientError('Error opening %s: %s' % (args[1], e.strerror))
-    else:
-        # Don't import koji before initializing ClientsConnection!  The rpm
-        # Python module calls NSS_NoDB_Init() during its initialization, which
-        # breaks our attempts to initialize nss with our certificate database.
-        import koji
-
-        rpm_file = None
-        try:
-            session = utils.koji_connect(utils.koji_read_config(),
-                                         authenticate=False)
-            try:
-                rpm = session.getRPM(args[1])
-                if rpm is None:
-                    raise ClientError('%s does not exist in Koji' % args[1])
-            finally:
-                utils.koji_disconnect(session)
-        except (utils.KojiError, koji.GenericError), e:
-            raise ClientError(str(e))
-        f['rpm-name'] = safe_string(rpm['name'])
-        epoch = rpm['epoch']
-        if epoch is None:
-            epoch = ''
-        f['rpm-epoch'] = safe_string(str(epoch))
-        f['rpm-version'] = safe_string(rpm['version'])
-        f['rpm-release'] = safe_string(rpm['release'])
-        f['rpm-arch'] = safe_string(rpm['arch'])
-        f['rpm-sigmd5'] = binascii.a2b_hex(rpm['payloadhash'])
-        omit_payload_auth = True
+    examiner = SignRPMArgumentExaminer()
+    try:
+        (rpm_file, _) = examiner.open_rpm(args[1], f)
+    finally:
+        examiner.close()
     try:
         conn.send_outer_fields('sign-rpm', f)
         if rpm_file is not None:
@@ -826,7 +855,7 @@ def cmd_sign_rpm(conn, args):
         if rpm_file is not None:
             rpm_file.close()
     conn.send_inner({'passphrase': passphrase},
-                    omit_payload_auth=omit_payload_auth)
+                    omit_payload_auth=rpm_file is None)
     conn.read_response()
     if not o2.koji_only:
         if o2.output is None:

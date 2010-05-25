@@ -1,5 +1,7 @@
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/client.py (SignRPMArgumentExaminer): Split from cmd_sign_rpm.
+
 	* src/server.py (RPMFileError, RPMFile, SigningContext): Split from
 	cmd_sign_rpm.
 
