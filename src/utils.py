@@ -433,15 +433,15 @@ def sigterm_handler(*unused_args):
 
  # Miscellaneous utilities
 
-def write_new_file(path, writer_fn):
-    '''Atomically replace file at path with data written by writer_fn(fd).'''
+def write_new_file(path, write_fn):
+    '''Atomically replace file at path with data written by write_fn(fd).'''
     (dirname, basename) = os.path.split(path)
     (fd, tmp_path) = tempfile.mkstemp(prefix=basename, dir=dirname)
     remove_tmp_path = True
     f = None
     try:
         f = os.fdopen(fd, 'w')
-        writer_fn(f)
+        write_fn(f)
         try:
             st = os.stat(path)
         except OSError, e:

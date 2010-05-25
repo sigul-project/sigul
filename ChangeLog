@@ -1,3 +1,7 @@
+2010-05-25  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/utils.py (write_new_file): Rename parameter.
+
 2010-04-08  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/double_tls.py (OuterBuffer.read, OuterBuffer.write)
