@@ -1,5 +1,13 @@
 2010-05-27  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/double_tls.py (_CombiningBuffer.__init__)
+	(_InnerBridgingBuffer.__init__): New member __buffer_dropped.
+	(_SplittingBuffer.__init__): New members __inner_buffer_dropped and
+	__outer_buffer_dropped.
+	(_CombiningBuffer._handle_errors, _SplittingBuffer._handle_errors)
+	(_InnerBridgingBuffer._handle_errors): Don't flood the logs with "data
+	dropped" messages.
+
 	* src/double_tls.py (_id): Handle more than 26 objects (more than (255
 	- ord('A')) to be precise).
 
