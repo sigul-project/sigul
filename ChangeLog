@@ -1,3 +1,8 @@
+2010-05-27  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/double_tls.py (_id): Handle more than 26 objects (more than (255
+	- ord('A')) to be precise).
+
 2010-05-25  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/server.py (ServerConfiguration._add_defaults): New option

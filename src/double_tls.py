@@ -33,8 +33,14 @@ def _id(obj):
     try:
         return __ids[obj]
     except KeyError:
-        new_id = chr(ord('A') + __next_id)
+        counter = __next_id
         __next_id += 1
+        new_id = ''
+        while True:
+            new_id = chr(ord('A') + counter % 26) + new_id
+            counter /= 26
+            if counter == 0:
+                break
         __ids[obj] = new_id
         return new_id
 
