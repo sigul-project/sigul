@@ -1,5 +1,5 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT([sigul], [0.97], [mitr@redhat.com])
+AC_INIT([sigul], [0.97], [mitr@redhat.com], , [https://fedorahosted.org/sigul/])
 AC_COPYRIGHT(
 [Copyright (C) 2009 Red Hat, Inc.  All rights reserved.
 
@@ -16,7 +16,7 @@ code or documentation are not subject to the GNU General Public License and may
 only be used or replicated with the express permission of Red Hat, Inc.
 
 Red Hat Author: Miloslav Trmac <mitr@redhat.com>])
-AC_PREREQ(2.59)
+AC_PREREQ([2.63b])
 AC_CONFIG_SRCDIR([src/server.py])
 AC_CONFIG_AUX_DIR([admin])
 AM_INIT_AUTOMAKE([dist-bzip2 no-define -Wall])
