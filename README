@@ -38,19 +38,19 @@ The bridge gates access to the signing server, and transfers RPM data from and
 to koji.  To set up the bridge:
 
 * Create a NSS database for the bridge:
-	bridge_dir=/var/lib/sigul
+(1)     bridge_dir=/var/lib/sigul
         certutil -d $bridge_dir -N
   (you'll be asked to choose a NSS database password)
 * Create a new CA certificate:
-        certutil -d $bridge_dir -S -n my-ca -s 'CN=My CA' -t CT,, -x -v 120
+(2a)    certutil -d $bridge_dir -S -n my-ca -s 'CN=My CA' -t CT,, -x -v 120
   Alternatively, import an external CA certificate:
-        certutil -d $bridge_dir -A -n fedora-ca -t CT,, -a \
+(2b)    certutil -d $bridge_dir -A -n fedora-ca -t CT,, -a \
 		-i ~/.fedora-server-ca.cert
 * Create a certificate for the bridge (replace at least BRIDGE_HOSTNAME)
-        certutil -d $bridge_dir -S -n sigul-bridge-cert \
+(3a)	certutil -d $bridge_dir -S -n sigul-bridge-cert \
 		 -s 'CN=BRIDGE_HOSTNAME' -c my-ca -t u,, -v 120
   Alternatively, import a certificate and a key from a .pem file:
-	openssl pkcs12 -export -out bridge.p12 -in openssl-cert.pem \
+(3b)	openssl pkcs12 -export -out bridge.p12 -in openssl-cert.pem \
 		-name sigul-bridge-cert
         pk12util -d $bridge_dir -i bridge.p12
 	rm bridge.p12
@@ -61,7 +61,7 @@ to koji.  To set up the bridge:
   "sigul" user and group; remove the [daemon] section if you want the bridge
   to run as the invoking user.
 * If you use a separate user and group:
-	chown sigul:sigul $server_dir/*.db
+(4)	chown sigul:sigul $server_dir/*.db
 
 * Run the bridge in a debug mode:
 	sigul_bridge -v -v
@@ -78,15 +78,15 @@ The server stores the keys and performs crypto operations.  To set up the
 server:
 
 * Create a NSS database for the server in $server_dir=/var/lib/sigul
-  (see above)
+  (see "(1)" above)
 * Import the CA certificate and private key used to generate the certificate for
   the bridge:
-        pk12util -d $bridge_dir -o ca.p12 -n my-ca
+(5)	pk12util -d $bridge_dir -o ca.p12 -n my-ca
 	pk12util -d $server_dir -i ca.p12
 	rm ca.p12
 	certutil -d $server_dir -M -n my-ca -t CT,,
 * Create a certificate for the server, or import it from a .pem file
-  (see above).  Use 'sigul-server-cert' as a nickname.
+  (see "(3a)", "(3b)" above).  Use 'sigul-server-cert' as a nickname.
 
 * Configure the server: edit /etc/sigul/server.conf:
   Note the default ports.  Edit at least bridge-hostname (must match host name
@@ -98,12 +98,12 @@ server:
   server.conf ("gnupg-home"), or, if that is not defined, in settings.py
   ("default_gnupg_home")
 * If you use a separate user and group:
-	chown sigul:sigul $server_dir/*.db
+(6)	chown sigul:sigul $server_dir/*.db
 
 * Create the server's database:
-	sigul_server_create_db
+(7)	sigul_server_create_db
 * Add the initial administrator:
-	sigul_server_add_admin
+(8)	sigul_server_add_admin
 * Run the server in a debug mode:
 	sigul_server -v -v
   You should see the first log message in /var/log/sigul_server.log:
@@ -117,11 +117,11 @@ server:
 Setting up the client
 ---------------------
 * Create a NSS database for the client in $client_dir=~/.sigul.
-  (see above)
+  (see "(1)" above)
 * Import the CA certificate used to generate the certificate for the bridge
-  (see above)
+  (see "(5)" above)
 * Create a certificate for the user, or import it from a .pem file
-  (see above).  Use 'sigul-client-cert' as a nickname,
+  (see "(3a)", "(3b)" above).  Use 'sigul-client-cert' as a nickname,
   CN=YOUR_FEDORA_ACCOUNT_NAME as the certificate's subject ('-s' option to
   certutil).  Use 'u,,' as a parameter to the '-t' (trust) option.
 

@@ -1,3 +1,8 @@
+2011-02-01  Miloslav Trmač  <mitr@redhat.com>
+
+	* README: Add numerical identifiers to command sequences to disambiguate
+	"see above" references.
+
 2010-06-12  Miloslav Trmač  <mitr@redhat.com>
 
 	* configure.ac: Define PACKAGE_URL.
