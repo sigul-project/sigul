@@ -1075,6 +1075,7 @@ class SignRPMsReplyThread(utils.WorkerThread):
             else:
                 self.__conn.read_empty_subpayload(nss_key, ignore_auth=True)
             self.results[arg_idx] = None # Mark arg_idx as succesful
+            logging.info('Signed %s', self.__args[arg_idx])
             server_idx += 1
 
 def cmd_sign_rpms(conn, args):

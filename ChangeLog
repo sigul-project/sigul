@@ -1,5 +1,8 @@
 2011-05-06  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/client.py (SignRPMsReplyThread._real_run): Immediately report
+	successful subrequests in verbose mode.
+
 	* src/bridge.py (bridge_one_request): Log more information on NSPRError.
 
 2011-02-01  Miloslav Trmač  <mitr@redhat.com>
