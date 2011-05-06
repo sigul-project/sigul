@@ -1141,7 +1141,7 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
     except EOFError, e:
         logging.info('Unexpected EOF: %s', repr(e))
     except nss.error.NSPRError, e:
-        logging.info('NSPR I/O error: %s', str(e))
+        logging.info('NSPR I/O error: %s', str(e), exc_info=True)
     except BridgeError, e:
         logging.warning(str(e))
     logging.debug('Request handling finished')
