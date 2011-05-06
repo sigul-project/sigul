@@ -1,5 +1,8 @@
 2011-05-06  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server.py (request_handling_child): Log errors when opening the
+	database instead of silently discarding them.
+
 	* src/client.py (SignRPMsReplyThread._real_run): Immediately report
 	successful subrequests in verbose mode.
 

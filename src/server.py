@@ -1457,9 +1457,9 @@ def request_handling_child(config):
         # The failing function has already logged the exception
         return _CHILD_BUG
 
-    db = server_common.db_open(config)
     child_exception = None
     try:
+        db = server_common.db_open(config)
         conn = ServersConnection(config)
         try:
             logging.debug('Waiting for a request')
