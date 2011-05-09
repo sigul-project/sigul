@@ -25,8 +25,7 @@ import utils
 class AddAdminConfiguration(server_common.ServerBaseConfiguration):
 
     def _read_configuration(self, parser):
-        super(server_common.ServerBaseConfiguration, self) \
-            ._read_configuration(parser)
+        super(AddAdminConfiguration, self)._read_configuration(parser)
         self.batch_mode = False
 
 def main():
