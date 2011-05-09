@@ -53,14 +53,13 @@ def main():
     except utils.NSSInitError, e:
         sys.exit(str(e))
     name = raw_input('Administrator user name: ')
-    password1 = utils.read_password(config, 'Administrator password: ')
+    password = utils.read_password(config, 'Administrator password: ')
     if not config.batch_mode:
-        password2 = utils.read_password(config,
-                                        'Administrator password (again): ')
-        if password1 != password2:
+        p2 = utils.read_password(config, 'Administrator password (again): ')
+        if password != p2:
             sys.exit('Passwords don\'t match.')
     db = server_common.db_open(config)
-    user = server_common.User(name, clear_password=password1, admin=True)
+    user = server_common.User(name, clear_password=password, admin=True)
     db.save(user)
     db.commit()
 

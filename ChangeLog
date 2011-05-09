@@ -1,5 +1,7 @@
 2011-05-09  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server_add_admin.py (main): Beautify.
+
 	* src/client.py (read_password): Move ...
 	* src/utils.py (read_password): ... here.  All users updated.
 	(optparse_add_batch_option): New function, extracted from
