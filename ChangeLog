@@ -1,5 +1,9 @@
 2011-05-09  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (get_daemon_options): Rename parameter daemonize to
+	daemon_options.  Only handle --internal-log-dir and --internal-pid-dir
+	if daemon_options is True.  All users updated.
+
 	* config/server.conf (database-path): Fix default value.
 
 	* src/utils.py (get_daemon_options): Add --internal-pid-dir.

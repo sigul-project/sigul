@@ -26,7 +26,7 @@ import utils
 def main():
     options = utils.get_daemon_options('Add an administrator to the signing '
                                        'server', '~/.sigul/server.conf',
-                                       daemonize=False)
+                                       daemon_options=False)
     logging.basicConfig(format='%(levelname)s: %(message)s',
                         level=utils.logging_level_from_options(options))
     try:

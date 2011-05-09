@@ -104,10 +104,10 @@ def logging_level_from_options(options):
     else: # options.verbose >= 2
         return logging.DEBUG
 
-def get_daemon_options(description, default_config_file, daemonize=True):
+def get_daemon_options(description, default_config_file, daemon_options=True):
     '''Handle command-line options for a daemon.
 
-    Return the options object.  Add '-d', '--daemonize' if daemonize.  Exit on
+    Return the options object.  Daemon options' if daemon_options.  Exit on
     error.
 
     '''
@@ -116,15 +116,15 @@ def get_daemon_options(description, default_config_file, daemonize=True):
                                    description=description)
     optparse_add_config_file_option(parser, default_config_file)
     optparse_add_verbosity_option(parser)
-    parser.add_option('--internal-log-dir', help=optparse.SUPPRESS_HELP,
-                      dest='log_dir')
-    parser.add_option('--internal-pid-dir', help=optparse.SUPPRESS_HELP,
-                      dest='pid_dir')
-    parser.set_defaults(log_dir=settings.log_dir, pid_dir=settings.pid_dir)
-    if daemonize:
+    if daemon_options:
+        parser.add_option('--internal-log-dir', help=optparse.SUPPRESS_HELP,
+                          dest='log_dir')
+        parser.add_option('--internal-pid-dir', help=optparse.SUPPRESS_HELP,
+                          dest='pid_dir')
         parser.add_option('-d', '--daemonize', action='store_true',
                           help='Run in the background')
-        parser.set_defaults(daemonize=False)
+        parser.set_defaults(log_dir=settings.log_dir, pid_dir=settings.pid_dir,
+                            daemonize=False)
     (options, args) = parser.parse_args()
     if len(args) != 0:
         parser.error('unexpected argument')
