@@ -22,9 +22,10 @@ import server_common
 import utils
 
 def main():
-    options = utils.get_daemon_options('Create a database for the signing '
-                                       'server', '~/.sigul/server.conf',
-                                       daemon_options=False)
+    parser = utils.create_basic_parser('Create a database for the signing '
+                                       'server', '~/.sigul/server.conf')
+    options = utils.optparse_parse_options_only(parser)
+
     logging.basicConfig(format='%(levelname)s: %(message)s',
                         level=utils.logging_level_from_options(options))
     try:

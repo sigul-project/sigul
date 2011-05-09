@@ -30,9 +30,11 @@ class AddAdminConfiguration(server_common.ServerBaseConfiguration):
         self.batch_mode = False
 
 def main():
-    options = utils.get_daemon_options('Add an administrator to the signing '
-                                       'server', '~/.sigul/server.conf',
-                                       batch=True, daemon_options=False)
+    parser = utils.create_basic_parser('Add an administrator to the signing '
+                                       'server', '~/.sigul/server.conf')
+    utils.optparse_add_batch_option(parser)
+    options = utils.optparse_parse_options_only(parser)
+
     logging.basicConfig(format='%(levelname)s: %(message)s',
                         level=utils.logging_level_from_options(options))
     try:

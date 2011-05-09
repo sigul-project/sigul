@@ -1,5 +1,13 @@
 2011-05-09  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (create_basic_parser)
+	(optparse_parse_options_only): Split from get_daemon_options().
+	(get_daemon_options): Drop parameters batch, daemon_options: let
+	original users of these parameters handle the parser directly.
+	* src/server_add_admin.py (main)
+	* src/server_create_db.py (main): Use utils.create_basic_parser and
+	handle the parser directly.
+
 	* src/server_add_admin.py (main): Beautify.
 
 	* src/client.py (read_password): Move ...
