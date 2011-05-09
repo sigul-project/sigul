@@ -32,6 +32,8 @@ def main():
     parser = utils.create_basic_parser('Add an administrator to the signing '
                                        'server', '~/.sigul/server.conf')
     utils.optparse_add_batch_option(parser)
+    parser.add_option('-n', '--name', metavar='USER',
+                      help='Administrator user name')
     options = utils.optparse_parse_options_only(parser)
 
     logging.basicConfig(format='%(levelname)s: %(message)s',
@@ -53,12 +55,18 @@ def main():
         utils.nss_init(config)
     except utils.NSSInitError, e:
         sys.exit(str(e))
-    name = raw_input('Administrator user name: ')
+
+    if options.name is not None:
+        name = options.name
+    else:
+        name = raw_input('Administrator user name: ')
+
     password = utils.read_password(config, 'Administrator password: ')
     if not config.batch_mode:
         p2 = utils.read_password(config, 'Administrator password (again): ')
         if password != p2:
             sys.exit('Passwords don\'t match.')
+
     db = server_common.db_open(config)
     user = server_common.User(name, clear_password=password, admin=True)
     db.save(user)
