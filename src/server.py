@@ -1506,8 +1506,8 @@ def main():
     options = utils.get_daemon_options('A signing server',
                                        '~/.sigul/server.conf')
     d = {}
-    if settings.log_dir is not None:
-        d['filename'] = os.path.join(settings.log_dir, 'sigul_server.log')
+    if options.log_dir is not None:
+        d['filename'] = os.path.join(options.log_dir, 'sigul_server.log')
     logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
                         level=utils.logging_level_from_options(options), **d)
     try:

@@ -116,6 +116,9 @@ def get_daemon_options(description, default_config_file, daemonize=True):
                                    description=description)
     optparse_add_config_file_option(parser, default_config_file)
     optparse_add_verbosity_option(parser)
+    parser.add_option('--internal-log-dir', help=optparse.SUPPRESS_HELP,
+                      dest='log_dir')
+    parser.set_defaults(log_dir=settings.log_dir)
     if daemonize:
         parser.add_option('-d', '--daemonize', action='store_true',
                           help='Run in the background')

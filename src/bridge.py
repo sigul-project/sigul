@@ -1150,8 +1150,8 @@ def main():
     options = utils.get_daemon_options('A signing server bridge',
                                        '~/.sigul/bridge.conf')
     d = {}
-    if settings.log_dir is not None:
-        d['filename'] = os.path.join(settings.log_dir, 'sigul_bridge.log')
+    if options.log_dir is not None:
+        d['filename'] = os.path.join(options.log_dir, 'sigul_bridge.log')
     logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
                         level=utils.logging_level_from_options(options), **d)
     try:
