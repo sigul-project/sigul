@@ -1,5 +1,8 @@
 2011-05-09  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server_add_admin.py (main): Only import readline when necessary,
+	to avoid sending escape sequences to stdout when not interactive.
+
 	* src/server_add_admin (main): New option --name.
 
 	* src/server_add_admin.py (AddAdminConfiguration._read_configuration):

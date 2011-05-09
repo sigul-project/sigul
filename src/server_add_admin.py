@@ -16,7 +16,6 @@
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 
 import logging
-import readline # for raw_input
 import sys
 
 import server_common
@@ -59,6 +58,9 @@ def main():
     if options.name is not None:
         name = options.name
     else:
+        # readline import makes raw_input more usable.  Import only here to
+        # avoid sending escape sequences to stdout when not interactive.
+        import readline
         name = raw_input('Administrator user name: ')
 
     password = utils.read_password(config, 'Administrator password: ')
