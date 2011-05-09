@@ -1,5 +1,7 @@
 2011-05-09  Miloslav Trmač  <mitr@redhat.com>
 
+	* config/server.conf (database-path): Fix default value.
+
 	* src/utils.py (get_daemon_options): Add --internal-pid-dir.
 	(create_pid_file, delete_pid_file): New parameter options.  All users
 	updated.
