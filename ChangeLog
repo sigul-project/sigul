@@ -1,5 +1,9 @@
 2011-05-09  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (main)
+	* src/server.py (main): Remove the unused possibility to disable logging
+	to a file, by editing settings.py.
+
 	* src/utils.py (get_daemon_options): Add --internal-log-dir.
 	* src/server.py (main)
 	* src/bridge.py (main): Reflect --internal-log-dir, overriding
