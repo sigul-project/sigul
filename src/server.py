@@ -1520,7 +1520,7 @@ def main():
         utils.daemonize()
 
     signal.signal(signal.SIGTERM, utils.sigterm_handler)
-    utils.create_pid_file('sigul_server')
+    utils.create_pid_file(options, 'sigul_server')
     try:
         try:
             fast_reconnections_done = 0
@@ -1553,7 +1553,7 @@ def main():
         except (KeyboardInterrupt, SystemExit):
             pass # Silence is golden
     finally:
-        utils.delete_pid_file('sigul_server')
+        utils.delete_pid_file(options, 'sigul_server')
 
 if __name__ == '__main__':
     main()

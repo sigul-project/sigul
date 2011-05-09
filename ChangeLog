@@ -1,5 +1,9 @@
 2011-05-09  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (get_daemon_options): Add --internal-pid-dir.
+	(create_pid_file, delete_pid_file): New parameter options.  All users
+	updated.
+
 	* src/bridge.py (main)
 	* src/server.py (main): Remove the unused possibility to disable logging
 	to a file, by editing settings.py.

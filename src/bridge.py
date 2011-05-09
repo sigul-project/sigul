@@ -1162,7 +1162,7 @@ def main():
         utils.daemonize()
 
     signal.signal(signal.SIGTERM, utils.sigterm_handler)
-    utils.create_pid_file('sigul_bridge')
+    utils.create_pid_file(options, 'sigul_bridge')
 
     utils.set_regid(config)
     if config.daemon_uid is not None:
@@ -1212,7 +1212,7 @@ def main():
     finally:
         if config.daemon_uid is not None:
             os.seteuid(os.getuid())
-        utils.delete_pid_file('sigul_bridge')
+        utils.delete_pid_file(options, 'sigul_bridge')
 
 if __name__ == '__main__':
     main()

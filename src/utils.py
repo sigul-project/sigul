@@ -118,7 +118,9 @@ def get_daemon_options(description, default_config_file, daemonize=True):
     optparse_add_verbosity_option(parser)
     parser.add_option('--internal-log-dir', help=optparse.SUPPRESS_HELP,
                       dest='log_dir')
-    parser.set_defaults(log_dir=settings.log_dir)
+    parser.add_option('--internal-pid-dir', help=optparse.SUPPRESS_HELP,
+                      dest='pid_dir')
+    parser.set_defaults(log_dir=settings.log_dir, pid_dir=settings.pid_dir)
     if daemonize:
         parser.add_option('-d', '--daemonize', action='store_true',
                           help='Run in the background')
@@ -626,17 +628,25 @@ def daemonize():
                 except OSError:
                     pass
 
-def create_pid_file(daemon_name):
-    '''Create a PID file with the specified name.'''
-    f = open(os.path.join(settings.pid_dir, daemon_name + '.pid'), 'w')
+def create_pid_file(options, daemon_name):
+    '''Create a PID file with the specified name.
+
+    The options argument should come from get_daemon_options().
+
+    '''
+    f = open(os.path.join(options.pid_dir, daemon_name + '.pid'), 'w')
     try:
         f.write('%s\n' % os.getpid())
     finally:
         f.close()
 
-def delete_pid_file(daemon_name):
-    '''Create a PID file with the specified name.'''
-    os.remove(os.path.join(settings.pid_dir, daemon_name + '.pid'))
+def delete_pid_file(options, daemon_name):
+    '''Delete a PID file with the specified name.
+
+    The options argument should come from get_daemon_options().
+
+    '''
+    os.remove(os.path.join(options.pid_dir, daemon_name + '.pid'))
 
 def sigterm_handler(*unused_args):
     sys.exit(0) # "raise SystemExit..."
