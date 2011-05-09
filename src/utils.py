@@ -85,6 +85,13 @@ class Configuration(object):
         '''
         pass
 
+def optparse_add_batch_option(parser):
+    '''Add --batch option to parser.'''
+    parser.add_option('--batch', action='store_true',
+                      help='Communicate in batch-friendly mode (omit prompts, '
+                      'expect NUL-terminated input)')
+    parser.set_defaults(batch=False)
+
 def optparse_add_config_file_option(parser, default):
     '''Add a --config-file option to parser with the specified default.'''
     parser.add_option('-c', '--config-file', help='Configuration file path')
@@ -104,11 +111,12 @@ def logging_level_from_options(options):
     else: # options.verbose >= 2
         return logging.DEBUG
 
-def get_daemon_options(description, default_config_file, daemon_options=True):
+def get_daemon_options(description, default_config_file, batch=False,
+                       daemon_options=True):
     '''Handle command-line options for a daemon.
 
-    Return the options object.  Daemon options' if daemon_options.  Exit on
-    error.
+    Return the options object.  Use daemon options if daemon_options.  Use
+    --batch if batch.  Exit on error.
 
     '''
     parser = optparse.OptionParser(usage='%prog [options]',
@@ -116,6 +124,8 @@ def get_daemon_options(description, default_config_file, daemon_options=True):
                                    description=description)
     optparse_add_config_file_option(parser, default_config_file)
     optparse_add_verbosity_option(parser)
+    if batch:
+        optparse_add_batch_option(parser)
     if daemon_options:
         parser.add_option('--internal-log-dir', help=optparse.SUPPRESS_HELP,
                           dest='log_dir')
@@ -686,6 +696,18 @@ def log_exception(exc_info, default_msg):
             logging.error('NSPR error', exc_info=exc_info)
     else:
         logging.error(default_msg, exc_info=exc_info)
+
+def read_password(config, prompt):
+    '''Return a password using prompt, based on config.batch_mode.'''
+    if not config.batch_mode:
+        return getpass.getpass(prompt)
+    password = ''
+    while True:
+        c = sys.stdin.read(1)
+        if c == '\x00':
+            break;
+        password += c
+    return password
 
 def write_new_file(path, write_fn):
     '''Atomically replace file at path with data written by write_fn(fd).'''

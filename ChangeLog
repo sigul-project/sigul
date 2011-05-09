@@ -1,5 +1,16 @@
 2011-05-09  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/client.py (read_password): Move ...
+	* src/utils.py (read_password): ... here.  All users updated.
+	(optparse_add_batch_option): New function, extracted from
+	client.py_handle_global_options.
+	(get_daemon_options): New parameter batch.
+	* src/client.py (handle_global_options): Use
+	utils.optparse_add_batch_option().
+	* src/server_add_admin.py (AddAdminConfiguration): New class.
+	(main): Add --batch.  Use utils.read_password.  Only ask for password
+	once in batch mode.
+
 	* src/utils.py (get_daemon_options): Rename parameter daemonize to
 	daemon_options.  Only handle --internal-log-dir and --internal-pid-dir
 	if daemon_options is True.  All users updated.

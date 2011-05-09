@@ -337,31 +337,19 @@ class ClientsConnection(object):
             finally:
                 self.__client = None
 
-def read_password(config, prompt):
-    '''Return a password.'''
-    if not config.batch_mode:
-        return getpass.getpass(prompt)
-    password = ''
-    while True:
-        c = sys.stdin.read(1)
-        if c == '\x00':
-            break;
-        password += c
-    return password
-
 def read_admin_password(config):
     '''Return an administrator's password.'''
-    return read_password(config, 'Administrator\'s password: ')
+    return utils.read_password(config, 'Administrator\'s password: ')
 
 def read_key_passphrase(config):
     '''Return a key passphrase.'''
-    return read_password(config, 'Key passphrase: ')
+    return utils.read_password(config, 'Key passphrase: ')
 
 def read_new_password(config, prompt1, prompt2):
     '''Return a new password (ask for it twice).'''
-    password = read_password(config, prompt1)
+    password = utils.read_password(config, prompt1)
     if not config.batch_mode:
-        p2 = read_password(config, prompt2)
+        p2 = utils.read_password(config, prompt2)
         if p2 != password:
             raise ClientError('Error: Input does not match')
     return password
@@ -400,7 +388,7 @@ def key_user_passphrase_or_password(config, o2):
 
     '''
     if o2.password:
-        password = read_password(config, 'User password: ')
+        password = utils.read_password(config, 'User password: ')
         return {'password': password}
     passphrase = read_key_passphrase(config)
     return {'passphrase': passphrase}
@@ -1205,12 +1193,10 @@ def handle_global_options():
                                    description='A signing server client')
     parser.add_option('--help-commands', action='store_true',
                       help='List supported commands')
-    parser.add_option('--batch', action='store_true',
-                      help='Communicate in batch-friendly mode (omit prompts, '
-                      'expect NUL-terminated input)')
+    utils.optparse_add_batch_option(parser)
     utils.optparse_add_config_file_option(parser, '~/.sigul/client.conf')
     utils.optparse_add_verbosity_option(parser)
-    parser.set_defaults(help_commands=False, batch=False)
+    parser.set_defaults(help_commands=False)
     parser.disable_interspersed_args()
     (options, args) = parser.parse_args()
 

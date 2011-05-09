@@ -15,7 +15,6 @@
 #
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 
-import getpass
 import logging
 import readline # for raw_input
 import sys
@@ -23,16 +22,24 @@ import sys
 import server_common
 import utils
 
+class AddAdminConfiguration(server_common.ServerBaseConfiguration):
+
+    def _read_configuration(self, parser):
+        super(server_common.ServerBaseConfiguration, self) \
+            ._read_configuration(parser)
+        self.batch_mode = False
+
 def main():
     options = utils.get_daemon_options('Add an administrator to the signing '
                                        'server', '~/.sigul/server.conf',
-                                       daemon_options=False)
+                                       batch=True, daemon_options=False)
     logging.basicConfig(format='%(levelname)s: %(message)s',
                         level=utils.logging_level_from_options(options))
     try:
-        config = server_common.ServerBaseConfiguration(options.config_file)
+        config = AddAdminConfiguration(options.config_file)
     except utils.ConfigurationError, e:
         sys.exit(str(e))
+    config.batch_mode = options.batch
     try:
         utils.set_regid(config)
         utils.set_reuid(config)
@@ -46,10 +53,12 @@ def main():
     except utils.NSSInitError, e:
         sys.exit(str(e))
     name = raw_input('Administrator user name: ')
-    password1 = getpass.getpass('Administrator password: ')
-    password2 = getpass.getpass('Administrator password (again): ')
-    if password1 != password2:
-        sys.exit('Passwords don\'t match.')
+    password1 = utils.read_password(config, 'Administrator password: ')
+    if not config.batch_mode:
+        password2 = utils.read_password(config,
+                                        'Administrator password (again): ')
+        if password1 != password2:
+            sys.exit('Passwords don\'t match.')
     db = server_common.db_open(config)
     user = server_common.User(name, clear_password=password1, admin=True)
     db.save(user)
