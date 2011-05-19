@@ -160,7 +160,7 @@ def _db_get_engine(config):
 def db_open(config):
     '''Open the database, return a session.'''
     return sqlalchemy.orm.sessionmaker(bind=_db_get_engine(config),
-                                       transactional=True)()
+                                       autocommit=False)()
 
 def db_create(config):
     '''Create database metadata.'''

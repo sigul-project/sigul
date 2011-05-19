@@ -1,5 +1,10 @@
 2011-05-19  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server_add_admin.py (main)
+	* src/server_common.py (db_open)
+	* src/server.py (cmd_new_user, cmd_new_key, cmd_import_key)
+	(cmd_grant_key_access): Port to sqlalchemy 0.5.
+
 	* tests/basic.at
 	* tests/imported-public-key.asc
 	* tests/imported-secret-key.asc

@@ -855,7 +855,7 @@ def cmd_new_user(db, conn):
     if admin is None:
         admin = False
     user = User(name, clear_password=new_password, admin=admin)
-    db.save(user)
+    db.add(user)
     db.commit()
     conn.send_reply_ok_only()
 
@@ -992,11 +992,11 @@ def cmd_new_key(db, conn):
 
     try:
         key = Key(key_name, fingerprint)
-        db.save(key)
+        db.add(key)
         access = KeyAccess(key, admin, key_admin=True)
         access.set_passphrase(conn.config, key_passphrase=key_passphrase,
                               user_passphrase=user_passphrase)
-        db.save(access)
+        db.add(access)
         db.commit()
     except:
         server_common.gpg_delete_key(conn.config, fingerprint)
@@ -1036,11 +1036,11 @@ def cmd_import_key(db, conn):
             conn.send_error(errors.IMPORT_PASSPHRASE_ERROR)
 
         key = Key(key_name, fingerprint)
-        db.save(key)
+        db.add(key)
         access = KeyAccess(key, admin, key_admin=True)
         access.set_passphrase(conn.config, key_passphrase=new_key_passphrase,
                               user_passphrase=user_passphrase)
-        db.save(access)
+        db.add(access)
         db.commit()
     except:
         server_common.gpg_delete_key(conn.config, fingerprint)
@@ -1094,7 +1094,7 @@ def cmd_grant_key_access(db, conn):
     a2 = KeyAccess(access.key, user, key_admin=False)
     a2.set_passphrase(conn.config, key_passphrase=key_passphrase,
                       user_passphrase=new_passphrase)
-    db.save(a2)
+    db.add(a2)
     db.commit()
     conn.send_reply_ok_only()
 

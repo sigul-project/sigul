@@ -71,7 +71,7 @@ def main():
 
     db = server_common.db_open(config)
     user = server_common.User(name, clear_password=password, admin=True)
-    db.save(user)
+    db.add(user)
     db.commit()
 
 if __name__ == '__main__':
