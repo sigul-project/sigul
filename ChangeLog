@@ -1,5 +1,21 @@
 2011-05-19  Miloslav Trmač  <mitr@redhat.com>
 
+	* tests/basic.at
+	* tests/imported-public-key.asc
+	* tests/imported-secret-key.asc
+	* tests/testrpm.spec
+	* tests/testsuite.at: New files.
+	* configure.ac: Initialize test suite.  Define AUTOM4TE.
+	* Makefile.am (TESTFILES): New variable.
+	(EXTRA_DIST): Distribute the test suite.
+	(src/sigul, src/sigul_bridge, src/sigul_server)
+	(src/sigul_server_add_admin, src/sigul_server_create_db): Make the
+	scripts executable even before installing, to allow running them from
+	the test suite.
+	(clean-local, check-local, installcheck-local)
+	($(top_srcdir)/tests/package.m4, $(top_srcdir)/tests/testsuite)
+	(atconfig): New rules.
+
 	* src/utils.py (read_password): Raise EOFError on unexpected EOF instead
 	of looping infinitely.
 

@@ -1,7 +1,5 @@
-dnl Process this file with autoconf to produce a configure script.
-AC_INIT([sigul], [0.97], [mitr@redhat.com], , [https://fedorahosted.org/sigul/])
-AC_COPYRIGHT(
-[Copyright (C) 2009 Red Hat, Inc.  All rights reserved.
+AT_COPYRIGHT(
+[Copyright (C) 2011 Red Hat, Inc.  All rights reserved.
 
 This copyrighted material is made available to anyone wishing to use, modify,
 copy, or redistribute it subject to the terms and conditions of the GNU General
@@ -15,20 +13,10 @@ Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 code or documentation are not subject to the GNU General Public License and may
 only be used or replicated with the express permission of Red Hat, Inc.
 
-Red Hat Author: Miloslav Trmac <mitr@redhat.com>])
-AC_PREREQ([2.63b])
-AC_CONFIG_SRCDIR([src/server.py])
-AC_CONFIG_AUX_DIR([admin])
-AC_CONFIG_TESTDIR([.], [src])
-AM_INIT_AUTOMAKE([dist-bzip2 no-define -Wall])
+Red Hat Author: Miloslav Trmač <mitr@redhat.com>])
 
-dnl Checks for programs.
-AM_PATH_PYTHON([2.4])
-dnl Not gpg2, it cannot receive passphrases from gpgme
-AC_PATH_PROG([GPG], [gpg])
-AC_ARG_VAR([GPG])
-# This interface seems to be undocumented, but bison uses it ;-)
-AM_MISSING_PROG([AUTOM4TE], [autom4te])
+AT_INIT
+AT_TESTED([sigul sigul_bridge sigul_server sigul_server_create_db] dnl
+	[sigul_server_add_admin])
 
-AC_CONFIG_FILES([Makefile])
-AC_OUTPUT
+m4_include([basic.at])

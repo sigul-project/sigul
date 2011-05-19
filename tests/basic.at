@@ -1,0 +1,464 @@
+# Copyright (C) 2011 Red Hat, Inc.  All rights reserved.
+#
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the GNU
+# General Public License v.2.  This program is distributed in the hope that it
+# will be useful, but WITHOUT ANY WARRANTY expressed or implied, including the
+# implied warranties of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.  You should have
+# received a copy of the GNU General Public License along with this program; if
+# not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth
+# Floor, Boston, MA 02110-1301, USA.  Any Red Hat trademarks that are
+# incorporated in the source code or documentation are not subject to the GNU
+# General Public License and may only be used or replicated with the express
+# permission of Red Hat, Inc.
+#
+# Red Hat Author: Miloslav Trmač <mitr@redhat.com>
+
+m4_define([S_NUM_RPMS], [100])
+
+# Can we split this into groups?
+AT_SETUP([Basic functionality])
+
+mkdir ca client bridge server gnupg rpm
+chmod 700 gnupg
+
+create_rpm()
+{
+	sed "s/@N@/$1"/g < "$abs_srcdir/tests/testrpm.spec" > "testrpm$1".spec
+	rpmbuild --quiet --define "_specdir $(pwd)" --define "_rpmdir $(pwd)" \
+		--define '_rpmfilename %{name}.rpm' --clean --rmspec \
+		-bb "testrpm$1.spec"
+}
+
+AT_DATA([nss_password_file], [[nss-pw
+]])
+AT_DATA([pkcs12_password_file], [[pk12-pw
+]])
+
+# Set up a CA and create all certificates
+AT_CHECK([certutil -d ca -N -f nss_password_file])
+# Specify serial number (-m) explicitly because it is time-based by default,
+# and creating certificates quickly can result in a collision.
+AT_CHECK([certutil -d ca -S -f nss_password_file -z /dev/null -n my-ca \
+		-s 'CN=My CA' -t CT,, -x -v 120 -m 1], , , [ignore])
+AT_CHECK([certutil -d ca -L -n my-ca -a > ca.pem])
+AT_CHECK([certutil -d ca -S -f nss_password_file -z /dev/null \
+		-n sigul-bridge-cert -s 'CN=localhost,OU=bridge' -c my-ca \
+		-t u,, -v 120 -m 2], , , [ignore])
+AT_CHECK([pk12util -d ca -o bridge.p12 -n sigul-bridge-cert \
+		-k nss_password_file -w pkcs12_password_file], , [ignore])
+AT_CHECK([certutil -d ca -S -f nss_password_file -z /dev/null \
+		-n sigul-server-cert -s 'CN=localhost,OU=server' -c my-ca \
+		-t u,, -v 120 -m 3], , , [ignore])
+AT_CHECK([pk12util -d ca -o server.p12 -n sigul-server-cert \
+		-k nss_password_file -w pkcs12_password_file], , [ignore])
+AT_CHECK([certutil -d ca -S -f nss_password_file -z /dev/null \
+		-n sigul-client-cert -s 'CN=root' -c my-ca -t u,, -v 120 -m 4],
+	 , , [ignore])
+AT_CHECK([pk12util -d ca -o client.p12 -n sigul-client-cert \
+		-k nss_password_file -w pkcs12_password_file], , [ignore])
+
+
+# Set up and start bridge:
+AT_CHECK([certutil -d bridge -N -f nss_password_file])
+AT_CHECK([certutil -d bridge -A -n my-ca -t CT,, -a -i ca.pem])
+AT_CHECK([pk12util -d bridge -i bridge.p12 -k nss_password_file \
+		-w pkcs12_password_file], , [ignore])
+rm bridge.p12
+
+[cat > bridge/bridge.conf <<EOF
+[bridge]
+required-fas-group:
+[nss]
+nss-dir: $(pwd)/bridge
+nss-password: nss-pw
+EOF]
+
+AT_CHECK([sigul_bridge -c bridge/bridge.conf -d -v -v \
+		--internal-log-dir="$(pwd)/bridge" \
+		--internal-pid-dir="$(pwd)/bridge"])
+
+
+# Set up and start server:
+AT_CHECK([certutil -d server -N -f nss_password_file])
+AT_CHECK([certutil -d server -A -n my-ca -t CT,, -a -i ca.pem])
+AT_CHECK([pk12util -d server -i server.p12 -k nss_password_file \
+		-w pkcs12_password_file], , [ignore])
+rm server.p12
+
+[cat > server/server.conf <<EOF
+[server]
+bridge-hostname: localhost
+[database]
+database-path: $(pwd)/server/server.sqlite
+[gnupg]
+gnupg-home: $(pwd)/server
+[nss]
+nss-dir: $(pwd)/server
+nss-password: nss-pw
+EOF]
+
+AT_CHECK([sigul_server_create_db -c server/server.conf -v -v])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul_server_add_admin -c server/server.conf --batch -v -v \
+		-n root])
+
+AT_CHECK([sigul_server -c server/server.conf -d -v -v \
+		--internal-log-dir="$(pwd)/server" \
+		--internal-pid-dir="$(pwd)/server"])
+
+
+# Set up client
+AT_CHECK([certutil -d client -N -f nss_password_file])
+AT_CHECK([certutil -d client -A -n my-ca -t CT,, -a -i ca.pem])
+AT_CHECK([pk12util -d client -i client.p12 -k nss_password_file \
+		-w pkcs12_password_file], , [ignore])
+rm client.p12
+
+[cat > client/client.conf <<EOF
+[client]
+bridge-hostname: localhost
+server-hostname: localhost
+user-name: root
+[nss]
+nss-dir: $(pwd)/client
+nss-password: nss-pw
+EOF]
+
+
+# list-users
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-users], ,
+[root
+])
+
+
+# new-user
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-user unprivileged])
+AT_CHECK([printf 'rootroot\0pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-user --with-password unprivileged2-pw])
+AT_CHECK([printf 'rootroot\0admin\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-user --admin admin])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch \
+		new-user unprivileged], 1, ,
+[Error: The specified object already exists
+])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-users], ,
+[admin
+root
+unprivileged
+unprivileged2-pw
+])
+
+
+# delete-user
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-user to-be-deleted])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		delete-user to-be-deleted])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch \
+		delete-user to-be-deleted], 1, ,
+[Error: The specified user was not found
+])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-users], ,
+[admin
+root
+unprivileged
+unprivileged2-pw
+])
+
+# user-info
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		user-info root], ,
+[Administrator: yes
+])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		user-info unprivileged], ,
+[Administrator: no
+])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch \
+		user-info this-doesnt-exist], 1, ,
+[Error: The specified user was not found
+])
+
+
+# modify-user
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		modify-user --admin yes --new-name unprivilegedX unprivileged])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		modify-user --admin no --new-name unprivileged unprivilegedX])
+AT_CHECK([printf 'rootroot\0pwX\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		modify-user --change-password unprivileged2-pw])
+AT_CHECK([printf 'rootroot\0pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		modify-user --change-password unprivileged2-pw])
+
+# list-keys
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-keys])
+
+# new-key
+AT_CHECK([printf 'rootroot\0root-key-pw\0keyroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-key --key-admin root --name-real 'Real Name' \
+		--name-comment Comment --name-email key@example.com \
+		--expire-date 2099-12-31 key > key-pubkey.asc])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-keys], ,
+[key
+])
+
+
+# key-user-info
+AT_CHECK([printf 'rootroot\0' | \
+ 		sigul -c client/client.conf --batch -v -v \
+		key-user-info root key], ,
+[Access defined, key administrator: yes
+])
+AT_CHECK([printf 'rootroot\0' | \
+ 		sigul -c client/client.conf --batch -v -v \
+		key-user-info admin key], ,
+[No access defined
+])
+
+
+# import-key
+AT_CHECK([printf 'rootroot\0imported\0imported-key-pw\0' | \
+ 		sigul -c client/client.conf --batch -v -v \
+		import-key imported-key \
+		"$abs_srcdir/tests/imported-secret-key.asc"])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-keys], ,
+[imported-key
+key
+])
+
+
+# modify-key
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		modify-key --new-name keyX key])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-keys], ,
+[imported-key
+keyX
+])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		modify-key --new-name key keyX])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-keys], ,
+[imported-key
+key
+])
+
+
+# list-key-users
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-key-users key], ,
+[root
+])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-key-users --password key], ,
+[root
+])
+
+
+# grant-key-access
+AT_CHECK([printf 'root-key-pw\0keypw2\0' | \
+		sigul -c client/client.conf --batch \
+		grant-key-access key root], 1, ,
+[Error: The specified object already exists
+])
+AT_CHECK([printf 'root-key-pw\0unprivileged-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		grant-key-access key unprivileged])
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-key-users key], ,
+[root
+unprivileged
+])
+
+
+# modify-key-user
+AT_CHECK([printf 'rootroot\0' | \
+ 		sigul -c client/client.conf --batch -v -v \
+		key-user-info unprivileged key], ,
+[Access defined, key administrator: no
+])
+AT_CHECK([printf 'rootroot\0unprivileged-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		modify-key-user --key-admin yes unprivileged key])
+AT_CHECK([printf 'rootroot\0' | \
+ 		sigul -c client/client.conf --batch -v -v \
+		key-user-info unprivileged key], ,
+[Access defined, key administrator: yes
+])
+AT_CHECK([printf 'rootroot\0unprivileged-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		modify-key-user --key-admin no unprivileged key])
+AT_CHECK([printf 'rootroot\0' | \
+ 		sigul -c client/client.conf --batch -v -v \
+		key-user-info unprivileged key], ,
+[Access defined, key administrator: no
+])
+
+
+# revoke-key-access
+AT_CHECK([printf 'root-key-pw\0unprivileged2-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		grant-key-access key unprivileged2-pw])
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-key-users key], ,
+[root
+unprivileged
+unprivileged2-pw
+])
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		revoke-key-access key unprivileged2-pw])
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-key-users key], ,
+[root
+unprivileged
+])
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		revoke-key-access key unprivileged2-pw], 1, ,
+[Error: The specified user can not access this key
+])
+AT_CHECK([printf 'imported-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		revoke-key-access imported-key root], 1, ,
+[Error: This is the only user with access to this key
+])
+
+
+# get-public-key
+AT_CHECK([printf 'imported-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		get-public-key imported-key > public.asc])
+AT_CHECK([cmp public.asc "$abs_srcdir/tests/imported-public-key.asc"])
+rm public.asc
+
+
+# delete-key
+AT_CHECK([printf 'imported-key-pw\0unprivileged-imported-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		grant-key-access imported-key unprivileged])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch \
+		delete-key imported-key])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-keys], ,
+[key
+])
+
+
+# change-passphrase
+AT_CHECK([printf 'root-key-pw\0pwY\0' | \
+		sigul -c client/client.conf --batch \
+		change-passphrase key])
+AT_CHECK([printf 'pwY\0root-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		change-passphrase key])
+
+
+# Set up users of the key
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		get-public-key key > public.asc])
+AT_CHECK([gpg -q --homedir gnupg --import public.asc])
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" --initdb])
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" --import public.asc])
+rm public.asc
+
+# sign-text
+AT_DATA([data], [[abracadabra
+]])
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		sign-text -o data.asc key data])
+AT_CHECK([gpg -q --homedir gnupg --verify data.asc], , , [ignore])
+rm data data.asc
+
+
+# sign-data
+AT_CHECK([printf '\0abc\1\n\2' > data])
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		sign-data -o data.sig key data])
+AT_CHECK([gpg -q --homedir gnupg --verify data.sig data], , , [ignore])
+rm data data.sig
+
+
+# sign-rpm
+AT_CHECK([create_rpm 0])
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		sign-rpm -o signed.rpm key testrpm0.rpm])
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed.rpm], ,
+[signed.rpm: rsa sha1 (md5) pgp md5 OK
+])
+rm signed.rpm
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		sign-rpm --v3-signature -o signed3.rpm key testrpm0.rpm])
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed3.rpm], ,
+[signed3.rpm: rsa sha1 (md5) pgp md5 OK
+])
+rm testrpm0.rpm signed3.rpm
+
+
+# sign-rpms
+mkdir unsigned signed
+AT_CHECK([cd unsigned; \
+	  for i in $(seq 1 ]S_NUM_RPMS[); do create_rpm "$i"; done; \
+	  cd ..])
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		sign-rpms -o signed key unsigned/*])
+for i in $(seq 1 S_NUM_RPMS); do
+    echo "signed/testrpm$i.rpm: rsa sha1 (md5) pgp md5 OK"
+done | LC_ALL=C sort > expected
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed/* | LC_ALL=C sort > output])
+AT_CHECK([diff -u expected output])
+rm -r expected output signed unsigned
+
+
+# Terminate daemons
+AT_CHECK([kill "$(cat server/sigul_server.pid)"])
+AT_CHECK([kill -QUIT "$(cat bridge/sigul_bridge.pid)"])
+
+AT_CLEANUP

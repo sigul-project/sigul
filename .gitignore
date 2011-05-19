@@ -3,5 +3,7 @@
 /autom4te.cache
 /build
 /configure
+/tests/package.m4
+/tests/testsuite
 Makefile.in
 *.pyc
