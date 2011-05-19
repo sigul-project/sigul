@@ -707,7 +707,11 @@ def log_exception(exc_info, default_msg):
         logging.error(default_msg, exc_info=exc_info)
 
 def read_password(config, prompt):
-    '''Return a password using prompt, based on config.batch_mode.'''
+    '''Return a password using prompt, based on config.batch_mode.
+
+    Raise EOFError.
+
+    '''
     if not config.batch_mode:
         return getpass.getpass(prompt)
     password = ''
@@ -715,6 +719,8 @@ def read_password(config, prompt):
         c = sys.stdin.read(1)
         if c == '\x00':
             break;
+        if c == '':
+            raise EOFError, 'Unexpected EOF when reading a batch mode password'
         password += c
     return password
 

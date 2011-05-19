@@ -1,3 +1,8 @@
+2011-05-19  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/utils.py (read_password): Raise EOFError on unexpected EOF instead
+	of looping infinitely.
+
 2011-05-09  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/server_add_admin.py (main): Only import readline when necessary,
