@@ -1,5 +1,10 @@
 2011-05-23  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/client.py (handle_global_options): New option --user-name.
+	* doc/sigul.1.in: Document --user-name.
+	* tests/basic.at (new-user, sign-text): Use --user-name to test user
+	authentication and key access granting behavior.
+
 	* tests/new-key-substitute.asc: New file.
 	* tests/basic.at (new-key): Allow skipping the new-key test if
 	$SIGUL_SUBSTITUTE_NEW_KEY is set.

@@ -1195,6 +1195,8 @@ def handle_global_options():
                       help='List supported commands')
     utils.optparse_add_batch_option(parser)
     utils.optparse_add_config_file_option(parser, '~/.sigul/client.conf')
+    parser.add_option('-u', '--user-name', metavar='USER',
+                      help='User name sent to the server')
     utils.optparse_add_verbosity_option(parser)
     parser.set_defaults(help_commands=False)
     parser.disable_interspersed_args()
@@ -1217,6 +1219,8 @@ def handle_global_options():
     except utils.ConfigurationError, e:
         raise ClientError(str(e))
     config.batch_mode = options.batch
+    if options.user_name:
+        config.user_name = options.user_name
 
     return (config, command_handlers[args[0]][0], args[1:])
 

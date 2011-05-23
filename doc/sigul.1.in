@@ -57,6 +57,13 @@ Use
 as the per-user configuration file instead of \fB~/.sigul/client.conf\fR.
 
 .TP
+\fB\-u\fP, \fB\-\-user\-name \fIUSER\fP
+Use
+.I USER
+as the user name sent to the server,
+overriding the value set in the configuration file.
+
+.TP
 \fB\-v\fP, \fB\-\-verbose\fP
 Be more verbose.
 Using this option twice enables debugging output.

@@ -158,6 +158,24 @@ root
 unprivileged
 unprivileged2-pw
 ])
+AT_CHECK([printf 'this_doesnt_matter\0' | \
+		sigul -c client/client.conf --batch \
+		-u unprivileged list-users], 1, ,
+[Error: Authentication failed
+])
+AT_CHECK([printf 'pw\0' | \
+		sigul -c client/client.conf --batch \
+		-u unprivileged2-pw list-users], 1, ,
+[Error: Authentication failed
+])
+AT_CHECK([printf 'admin\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		-u admin list-users], ,
+[admin
+root
+unprivileged
+unprivileged2-pw
+])
 
 
 # delete-user
@@ -419,6 +437,15 @@ AT_CHECK([printf 'root-key-pw\0' | \
 		sigul -c client/client.conf --batch \
 		sign-text -o data.asc key data])
 AT_CHECK([gpg -q --homedir gnupg --verify data.asc], , , [ignore])
+AT_CHECK([printf 'unprivileged-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		-u unprivileged sign-text -o data.asc key data])
+AT_CHECK([gpg -q --homedir gnupg --verify data.asc], , , [ignore])
+AT_CHECK([printf 'unprivileged2-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		-u unprivileged2-pw sign-text -o data.asc key data], 1, ,
+[Error: Authentication failed
+])
 rm data data.asc
 
 
