@@ -654,8 +654,8 @@ def cmd_new_key(conn, args):
     print pubkey,
 
 def cmd_import_key(conn, args):
-    p2 = optparse.OptionParser(usage='%prog import-key [options] key',
-                               description='Import a key')
+    p2 = optparse.OptionParser(usage='%prog import-key [options] key file',
+                               description='Import a secret key')
     p2.add_option('--key-admin', metavar='USER',
                   help='Initial key administrator')
     (o2, args) = p2.parse_args(args)

@@ -1,5 +1,8 @@
 2011-05-23  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/client.py (cmd_import_key): Fix help synopsis, improve command
+	description.
+
 	* tests/basic.at (new-key): Stop sending a superfluous password.
 
 	* doc/sign-many.py (sign_rpm): Split from main.
