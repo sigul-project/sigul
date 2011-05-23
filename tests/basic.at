@@ -392,7 +392,7 @@ AT_CHECK([printf 'imported-key-pw\0' | \
 
 # get-public-key
 AT_CHECK([printf 'imported-key-pw\0' | \
-		sigul -c client/client.conf --batch \
+		sigul -c client/client.conf --batch -v -v \
 		get-public-key imported-key > public.asc])
 AT_CHECK([cmp public.asc "$abs_srcdir/tests/imported-public-key.asc"])
 rm public.asc
@@ -403,7 +403,7 @@ AT_CHECK([printf 'imported-key-pw\0unprivileged-imported-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		grant-key-access imported-key unprivileged])
 AT_CHECK([printf 'rootroot\0' | \
-		sigul -c client/client.conf --batch \
+		sigul -c client/client.conf --batch -v -v \
 		delete-key imported-key])
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
@@ -414,16 +414,16 @@ AT_CHECK([printf 'rootroot\0' | \
 
 # change-passphrase
 AT_CHECK([printf 'root-key-pw\0pwY\0' | \
-		sigul -c client/client.conf --batch \
+		sigul -c client/client.conf --batch -v -v \
 		change-passphrase key])
 AT_CHECK([printf 'pwY\0root-key-pw\0' | \
-		sigul -c client/client.conf --batch \
+		sigul -c client/client.conf --batch -v -v \
 		change-passphrase key])
 
 
 # Set up users of the key
 AT_CHECK([printf 'root-key-pw\0' | \
-		sigul -c client/client.conf --batch \
+		sigul -c client/client.conf --batch -v -v \
 		get-public-key key > public.asc])
 AT_CHECK([gpg -q --homedir gnupg --import public.asc])
 AT_CHECK([rpm --dbpath "$(pwd)/rpm" --initdb])
@@ -434,7 +434,7 @@ rm public.asc
 AT_DATA([data], [[abracadabra
 ]])
 AT_CHECK([printf 'root-key-pw\0' | \
-		sigul -c client/client.conf --batch \
+		sigul -c client/client.conf --batch -v -v \
 		sign-text -o data.asc key data])
 AT_CHECK([gpg -q --homedir gnupg --verify data.asc], , , [ignore])
 AT_CHECK([printf 'unprivileged-key-pw\0' | \
@@ -452,7 +452,7 @@ rm data data.asc
 # sign-data
 AT_CHECK([printf '\0abc\1\n\2' > data])
 AT_CHECK([printf 'root-key-pw\0' | \
-		sigul -c client/client.conf --batch \
+		sigul -c client/client.conf --batch -v -v \
 		sign-data -o data.sig key data])
 AT_CHECK([gpg -q --homedir gnupg --verify data.sig data], , , [ignore])
 rm data data.sig
@@ -461,14 +461,14 @@ rm data data.sig
 # sign-rpm
 AT_CHECK([create_rpm 0])
 AT_CHECK([printf 'root-key-pw\0' | \
-		sigul -c client/client.conf --batch \
+		sigul -c client/client.conf --batch -v -v \
 		sign-rpm -o signed.rpm key testrpm0.rpm])
 AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed.rpm], ,
 [signed.rpm: rsa sha1 (md5) pgp md5 OK
 ])
 rm signed.rpm
 AT_CHECK([printf 'root-key-pw\0' | \
-		sigul -c client/client.conf --batch \
+		sigul -c client/client.conf --batch -v -v \
 		sign-rpm --v3-signature -o signed3.rpm key testrpm0.rpm])
 AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed3.rpm], ,
 [signed3.rpm: rsa sha1 (md5) pgp md5 OK
