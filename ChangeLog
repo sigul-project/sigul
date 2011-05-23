@@ -1,5 +1,7 @@
 2011-05-23  Miloslav Trmač  <mitr@redhat.com>
 
+	* tests/basic.at (new-key): Stop sending a superfluous password.
+
 	* doc/sign-many.py (sign_rpm): Split from main.
 	(sign_rpms): New function.
 	(main): Demonstrate using sign_rpm or sign_rpms.
