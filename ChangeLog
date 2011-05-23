@@ -1,5 +1,8 @@
 2011-05-23  Miloslav Trmač  <mitr@redhat.com>
 
+	* doc/sigul.1.in (sign-rpm): Document --v3-signature.
+	(sign-rpms): Document command.
+
 	* tests/basic.at (get-public-key, delete-key, change-passphrase)
 	(sign-text, sign-data, sign-rpm): Run the client in verbose mode when
 	possible.

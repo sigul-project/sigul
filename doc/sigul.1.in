@@ -1,4 +1,4 @@
-.\" Copyright (C) 2008, 2009 Red Hat, Inc.  All rights reserved.
+.\" Copyright (C) 2008, 2009, 2011 Red Hat, Inc.  All rights reserved.
 .\"
 .\" This copyrighted material is made available to anyone wishing to use,
 .\" modify, copy, or redistribute it subject to the terms and conditions of the
@@ -14,7 +14,7 @@
 .\" replicated with the express permission of Red Hat, Inc.
 .\"
 .\" Red Hat Author: Miloslav Trmac <mitr@redhat.com>
-.TH sigul 1 "Jan 2009" sigul
+.TH sigul 1 "Jan 2011" sigul
 
 .SH name
 sigul \- A client for accessing a signing server
@@ -253,7 +253,7 @@ write the signed text to standard output,
 which must not be a terminal.
 
 .TP
-\fBsign-rpm\fP [\fB\-\-output\fP \fIOUTPUT\fP] [\fB\-\-store\-in\-koji\fP] [\fB\-\-koji\-only\fP] \fIKEY\fP \fIRPM_ID\fP
+\fBsign-rpm\fP [\fB\-\-output\fP \fIOUTPUT\fP] [\fB\-\-store\-in\-koji\fP] [\fB\-\-koji\-only\fP] -\fB\-\-v3\-signature\fP] \fIKEY\fP \fIRPM_ID\fP
 Sign the rpm specified by \fIRPM_ID\fP.
 .I RPM_ID
 can either be a path to a RPM file, or a
@@ -273,6 +273,36 @@ and if
 .I OUTPUT
 is not defined,
 write it to standard output,
+
+Use a PGP version 3 format signatue if
+.B \-\-v3\-signature
+is specified.
+
+.TP
+\fBsign-rpms\fP [\fB\-\-output\fP \fIDIR\fP] [\fB\-\-store\-in\-koji\fP] [\fB\-\-koji\-only\fP] \fIKEY\fP \fIRPM_ID...\fP
+Sign one or more rpms specified by \fIRPM_ID\fP.
+Each
+.I RPM_ID
+can either be a path to a RPM file, or a
+\fIname\fP\fB-\fP\fIepoch\fP\fB:\fP\fIversion\fP\fB-\fP\fIrelease\fP\fB.\fP\fIarch\fP
+string
+that specifies a RPM stored in Koji.
+
+If
+.B \-\-store\-in\-koji
+is specified,
+store the generated signature to Koji.
+If
+.B \-\-koji\-only
+is not specified,
+the
+.B \-\-output
+option is mandatory,
+and each signed RPM will be stored as a file in the \fIDIR\fP directory.
+
+Use a PGP version 3 format signatue if
+.B \-\-v3\-signature
+is specified.
 
 .SH FILES
 .TP
