@@ -1,5 +1,9 @@
 2011-05-23  Miloslav Trmač  <mitr@redhat.com>
 
+	* tests/new-key-substitute.asc: New file.
+	* tests/basic.at (new-key): Allow skipping the new-key test if
+	$SIGUL_SUBSTITUTE_NEW_KEY is set.
+
 	* src/client.py (cmd_import_key): Fix help synopsis, improve command
 	description.
 

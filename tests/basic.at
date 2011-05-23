@@ -219,11 +219,19 @@ AT_CHECK([printf 'rootroot\0' | \
 		list-keys])
 
 # new-key
-AT_CHECK([printf 'rootroot\0root-key-pw\0' | \
+AT_CHECK([[
+if [ -n "$SIGUL_SUBSTITUTE_NEW_KEY" ]; then
+	printf 'rootroot\0keyroot\0root-key-pw\0' | \
+ 		sigul -c client/client.conf --batch -v -v \
+		import-key key \
+		"$abs_srcdir/tests/new-key-substitute.asc"
+else
+	printf 'rootroot\0root-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		new-key --key-admin root --name-real 'Real Name' \
 		--name-comment Comment --name-email key@example.com \
-		--expire-date 2099-12-31 key > key-pubkey.asc])
+		--expire-date 2099-12-31 key > key-pubkey.asc
+fi]])
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
