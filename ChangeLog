@@ -1,3 +1,9 @@
+2011-05-23  Miloslav Trmač  <mitr@redhat.com>
+
+	* doc/sign-many.py (sign_rpm): Split from main.
+	(sign_rpms): New function.
+	(main): Demonstrate using sign_rpm or sign_rpms.
+
 2011-05-19  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/server_add_admin.py (main)
