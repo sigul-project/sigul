@@ -417,12 +417,16 @@ class SignRPMRequestType(RequestType):
                                         fields)
 
         self.__rpm.compute_payload_url(self.__koji_client)
-        (src, payload_size) = urlgrabber_open(self.__rpm.request_payload_url)
+        url = self.__rpm.request_payload_url
         try:
-            server_buf.write(utils.u32_pack(payload_size))
-            copy_file_data(server_buf, src, payload_size)
-        finally:
-            src.close()
+            (src, payload_size) = urlgrabber_open(url)
+            try:
+                server_buf.write(utils.u32_pack(payload_size))
+                copy_file_data(server_buf, src, payload_size)
+            finally:
+                src.close()
+        except urlgrabber.grabber.URLGrabError, e:
+            raise ForwardingError('Error reading %s: %s' % (url, str(e)))
 
     def forward_reply_payload(self, client_buf, server_buf, payload_size):
         # Zero-length response should happen only on error.
@@ -708,17 +712,25 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
         logging.debug(10)
 
         payload_size = rpm.request_payload_size
-        if payload_size != 0:
-            src = open(rpm.tmp_path, 'rb')
-        else:
-            (src, payload_size) = urlgrabber_open(rpm.request_payload_url)
         try:
-            logging.debug(11)
-            self.__server_buf.write(utils.u32_pack(payload_size))
-            logging.debug(12)
-            copy_file_data(self.__server_buf, src, payload_size)
-        finally:
-            src.close()
+            if payload_size != 0:
+                src = open(rpm.tmp_path, 'rb')
+            else:
+                (src, payload_size) = urlgrabber_open(rpm.request_payload_url)
+            try:
+                logging.debug(11)
+                self.__server_buf.write(utils.u32_pack(payload_size))
+                logging.debug(12)
+                copy_file_data(self.__server_buf, src, payload_size)
+            finally:
+                src.close()
+        except urlgrabber.grabber.URLGrabError, e:
+            if payload_size != 0:
+                # This exception was not expected, let the default handling
+                # handle it
+                raise
+            raise ForwardingError('Error reading %s: %s' %
+                                  (rpm.request_payload_url, str(e)))
         logging.debug(13)
         self.__server_buf.write(rpm.request_payload_digest)
 
