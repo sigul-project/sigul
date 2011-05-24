@@ -1214,6 +1214,9 @@ def main():
                 sys.exit(1)
 
             while True:
+                # This loop can unfortunately not be interrupted using SIGINT,
+                # see https://bugzilla.redhat.com/show_bug.cgi?id=707382 for
+                # an explanation.
                 bridge_one_request(config, server_listen_sock,
                                    client_listen_sock)
         except (KeyboardInterrupt, SystemExit):

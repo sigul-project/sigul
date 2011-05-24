@@ -1,5 +1,7 @@
 2011-05-24  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (main): Add FIXME.
+
 	* src/bridge.py (SignRPMRequestType.forward_request_payload)
 	(SignRPMsSendRequestThread.__handle_one_rpm): Tell the user what has
 	happened on URLGrabError and what the failing URL was.

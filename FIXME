@@ -1,2 +1,1 @@
-- bridge ignores SIGINT (caused by "import rpm")
 - should be able to service requests within the server in parallel?
