@@ -58,7 +58,8 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.NSSConfiguration,
                          'client-listen-port': 44334,
                          'max-rpms-payloads-size': 10 * 1024 * 1024 * 1024,
                          'required-fas-group': '',
-                         'server-listen-port': 44333})
+                         'server-listen-port': 44333,
+                         'koji-config': '~/.koji/config'})
         # Override NSSConfiguration default
         defaults.update({'nss-dir': settings.default_server_nss_path})
 
@@ -78,6 +79,7 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.NSSConfiguration,
         self.max_rpms_payloads_size = parser.getint('bridge',
                                                     'max-rpms-payloads-size')
         self.server_listen_port = parser.getint('bridge', 'server-listen-port')
+        self.koji_config = parser.get('bridge', 'koji-config')
 
 def create_listen_sock(config, port):
     sock = nss.ssl.SSLSocket()
@@ -284,7 +286,7 @@ class KojiClient(object):
         import koji
 
         if self.__koji_config is None:
-            self.__koji_config = utils.koji_read_config()
+            self.__koji_config = utils.koji_read_config(config.koji_config)
         if self.__koji_session is None:
             try:
                 if settings.koji_do_proxy_auth:

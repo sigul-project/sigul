@@ -52,7 +52,8 @@ class ClientConfiguration(utils.NSSConfiguration, utils.Configuration):
         super(ClientConfiguration, self)._add_defaults(defaults)
         defaults.update({'bridge-port': 44334,
                          'client-cert-nickname': 'sigul-client-cert',
-                         'user-name': getpass.getuser()})
+                         'user-name': getpass.getuser(),
+                         'koji-config': '~/.koji/config'})
 
     def _read_configuration(self, parser):
         super(ClientConfiguration, self)._read_configuration(parser)
@@ -62,6 +63,7 @@ class ClientConfiguration(utils.NSSConfiguration, utils.Configuration):
         self.server_hostname = parser.get('client', 'server-hostname')
         self.user_name = parser.get('client', 'user-name')
         self.batch_mode = False
+        self.koji_config = parser.get('client', 'koji-config')
 
 def safe_string(s):
     '''Raise ClientError if s is not a safe string, otherwise return s.'''
@@ -425,7 +427,7 @@ class SignRPMArgumentExaminer(object):
             try:
                 if self.__koji_session is None:
                     self.__koji_session = \
-                        utils.koji_connect(utils.koji_read_config(),
+                        utils.koji_connect(utils.koji_read_config(config.koji_config),
                                            authenticate=False)
                 rpm = self.__koji_session.getRPM(arg)
             except (utils.KojiError, koji.GenericError), e:

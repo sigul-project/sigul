@@ -172,15 +172,14 @@ def u32_unpack(data):
 
 u32_size = struct.calcsize(_u32_format)
 
-def koji_read_config():
+def koji_read_config(koji_config):
     '''Read koji's configuration and verify it.
 
     Return a dictionary of options.
 
     '''
     parser = ConfigParser.ConfigParser()
-    # FIXME? make this configurable, handle user-specified config files
-    parser.read(('/etc/koji.conf', os.path.expanduser('~/.koji/config')))
+    parser.read(('/etc/koji.conf', os.path.expanduser(koji_config)))
     config = dict(parser.items('koji'))
     for opt in ('server', 'cert', 'ca', 'serverca', 'pkgurl'):
         if opt not in config:
