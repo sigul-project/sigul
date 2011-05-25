@@ -1,3 +1,14 @@
+2011-05-25  Dan Horák <dan@danny.cz>
+
+	* src/bridge.py (BridgeConfiguration._add_defaults)
+	(BridgeConfiguration._read_configuration)
+	* src/client.py (ClientConfiguration._add_defaults)
+	(ClientConfiguration._read_configuration): Handle koji-config.
+	* src/utils.py (koji_read_config): New parameter koji_config.  All users
+	updated.
+	* config/bridge.conf (koji-config)
+	* config/client.conf (koji-config): Add option examples.
+
 2011-05-24  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/bridge.py (main): Add FIXME.
