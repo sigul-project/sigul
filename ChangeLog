@@ -1,5 +1,9 @@
 2011-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server.py (ServerConfiguration._add_sections)
+	(ServerConfiguration._read_configuration): Don't duplicate handling of
+	database-path in ServerBaseConfiguration.
+
 	* src/utils.py (KojiConfiguration): New class.
 	(koji_read_config): Use a KojiConfiguration parameter instead of
 	handling the file path directly.

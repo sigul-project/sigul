@@ -75,11 +75,10 @@ class ServerConfiguration(server_common.GPGConfiguration,
 
     def _add_sections(self, sections):
         super(ServerConfiguration, self)._add_sections(sections)
-        sections.update(('database','gnupg','server'))
+        sections.update(('gnupg','server'))
 
     def _read_configuration(self, parser):
         super(ServerConfiguration, self)._read_configuration(parser)
-        self.database_path = parser.get('database', 'database-path')
         self.gnupg_key_type = parser.get('gnupg', 'gnupg-key-type')
         self.gnupg_key_length = parser.getint('gnupg', 'gnupg-key-length')
         self.gnupg_subkey_type = parser.get('gnupg', 'gnupg-subkey-type')
