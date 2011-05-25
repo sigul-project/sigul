@@ -73,6 +73,10 @@ class ServerConfiguration(server_common.GPGConfiguration,
                          'server-cert-nickname': 'sigul-server-cert',
                          'signing-timeout': 60})
 
+    def _add_sections(self, sections):
+        super(ServerConfiguration, self)._add_sections(sections)
+        sections.update(('database','gnupg','server'))
+
     def _read_configuration(self, parser):
         super(ServerConfiguration, self)._read_configuration(parser)
         self.database_path = parser.get('database', 'database-path')

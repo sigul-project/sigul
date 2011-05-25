@@ -59,6 +59,10 @@ class Configuration(object):
         defaults = {}
         self._add_defaults(defaults)
         parser = ConfigParser.RawConfigParser(defaults)
+        sections = set()
+        self._add_sections(sections)
+        for s in sections:
+            parser.add_section(s)
         config_paths = (os.path.join(settings.config_dir,
                                      self.default_config_file),
                         os.path.expanduser(config_file))
@@ -75,6 +79,10 @@ class Configuration(object):
 
     def _add_defaults(self, defaults):
         '''Add more default values to defaults.'''
+        pass
+
+    def _add_sections(self, sections):
+        '''Add more section names to sections.'''
         pass
 
     def _read_configuration(self, parser):
@@ -225,6 +233,10 @@ class NSSConfiguration(Configuration):
     def _add_defaults(self, defaults):
         super(NSSConfiguration, self)._add_defaults(defaults)
         defaults.update({'nss-dir': '~/.sigul', 'nss-password': None})
+
+    def _add_sections(self, sections):
+        super(NSSConfiguration, self)._add_sections(sections)
+        sections.add('nss')
 
     def _read_configuration(self, parser):
         super(NSSConfiguration, self)._read_configuration(parser)
@@ -571,6 +583,10 @@ def run_worker_threads(threads, exception_types=()):
 
 class DaemonIDConfiguration(Configuration):
     '''UID/GID configuration for a daemon.'''
+
+    def _add_sections(self, sections):
+        super(DaemonIDConfiguration, self)._add_sections(sections)
+        sections.add('daemon')
 
     def _read_configuration(self, parser):
         super(DaemonIDConfiguration, self)._read_configuration(parser)

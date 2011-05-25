@@ -49,6 +49,10 @@ class ServerBaseConfiguration(utils.DaemonIDConfiguration,
         # Override NSSConfiguration default
         defaults.update({'nss-dir': settings.default_server_nss_path})
 
+    def _add_sections(self, sections):
+        super(ServerBaseConfiguration, self)._add_sections(sections)
+        sections.add('database')
+
     def _read_configuration(self, parser):
         super(ServerBaseConfiguration, self)._read_configuration(parser)
         self.database_path = parser.get('database', 'database-path')
@@ -177,6 +181,10 @@ class GPGConfiguration(utils.Configuration):
     def _add_defaults(self, defaults):
         super(GPGConfiguration, self)._add_defaults(defaults)
         defaults.update({'gnupg-home': settings.default_gnupg_home})
+
+    def _add_sections(self, sections):
+        super(GPGConfiguration, self)._add_sections(sections)
+        sections.add('gnupg')
 
     def _read_configuration(self, parser):
         super(GPGConfiguration, self)._read_configuration(parser)

@@ -55,6 +55,10 @@ class ClientConfiguration(utils.NSSConfiguration, utils.Configuration):
                          'user-name': getpass.getuser(),
                          'koji-config': '~/.koji/config'})
 
+    def _add_sections(self, sections):
+        super(ClientConfiguration, self)._add_sections(sections)
+        sections.add('client')
+
     def _read_configuration(self, parser):
         super(ClientConfiguration, self)._read_configuration(parser)
         self.bridge_hostname = parser.get('client', 'bridge-hostname')

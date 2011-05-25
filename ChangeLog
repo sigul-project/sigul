@@ -1,3 +1,10 @@
+2011-05-25  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/utils.py (Configuration._add_sections): New method.  All
+	subclasses updated.
+	(Configuration.__init__): Add all sections to the parser explicitly
+	to avoid errors when a section is not present in the config file.
+
 2011-05-25  Dan Horák <dan@danny.cz>
 
 	* src/bridge.py (BridgeConfiguration._add_defaults)

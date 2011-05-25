@@ -63,6 +63,10 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.NSSConfiguration,
         # Override NSSConfiguration default
         defaults.update({'nss-dir': settings.default_server_nss_path})
 
+    def _add_sections(self, sections):
+        super(BridgeConfiguration, self)._add_sections(sections)
+        sections.add('bridge')
+
     def _read_configuration(self, parser):
         super(BridgeConfiguration, self)._read_configuration(parser)
         self.bridge_cert_nickname = parser.get('bridge', 'bridge-cert-nickname')
