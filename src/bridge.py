@@ -47,8 +47,8 @@ import utils
 class BridgeError(Exception):
     pass
 
-class BridgeConfiguration(utils.DaemonIDConfiguration, utils.NSSConfiguration,
-                          utils.Configuration):
+class BridgeConfiguration(utils.DaemonIDConfiguration, utils.KojiConfiguration,
+                          utils.NSSConfiguration, utils.Configuration):
 
     default_config_file = 'bridge.conf'
 
@@ -58,8 +58,7 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.NSSConfiguration,
                          'client-listen-port': 44334,
                          'max-rpms-payloads-size': 10 * 1024 * 1024 * 1024,
                          'required-fas-group': '',
-                         'server-listen-port': 44333,
-                         'koji-config': '~/.koji/config'})
+                         'server-listen-port': 44333})
         # Override NSSConfiguration default
         defaults.update({'nss-dir': settings.default_server_nss_path})
 
@@ -83,7 +82,6 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.NSSConfiguration,
         self.max_rpms_payloads_size = parser.getint('bridge',
                                                     'max-rpms-payloads-size')
         self.server_listen_port = parser.getint('bridge', 'server-listen-port')
-        self.koji_config = parser.get('bridge', 'koji-config')
 
 def create_listen_sock(config, port):
     sock = nss.ssl.SSLSocket()
@@ -247,8 +245,8 @@ class RequestType(object):
         if payload_size > self.__max_payload:
             raise InvalidRequestError('Payload too large')
 
-    def forward_request_payload(self, server_buf, client_buf, payload_size,
-                                unused_fields):
+    def forward_request_payload(self, unused_config, server_buf, client_buf,
+                                payload_size, unused_fields):
         '''Forward (optionally modify) payload from client_buf to server_buf.'''
         server_buf.write(utils.u32_pack(payload_size))
         copy_file_data(server_buf, client_buf, payload_size)
@@ -272,8 +270,9 @@ class KojiClient(object):
     The client will create only one koji session, reusing it for all requests.
 
     '''
-    def __init__(self, request_fields):
+    def __init__(self, config, request_fields):
         '''Initialize, using request_fields for user identification.'''
+        self.__config = config
         self.__koji_session = None
         self.__koji_config = None
         self.__request_fields = request_fields
@@ -290,7 +289,7 @@ class KojiClient(object):
         import koji
 
         if self.__koji_config is None:
-            self.__koji_config = utils.koji_read_config(config.koji_config)
+            self.__koji_config = utils.koji_read_config(self.__config)
         if self.__koji_session is None:
             try:
                 if settings.koji_do_proxy_auth:
@@ -411,16 +410,16 @@ class SignRPMRequestType(RequestType):
         self.__koji_client = None
         self.__rpm = None
 
-    def forward_request_payload(self, server_buf, client_buf, payload_size,
-                                fields):
+    def forward_request_payload(self, config, server_buf, client_buf,
+                                payload_size, fields):
         '''Forward (optionally modify) payload from client_buf to server_buf.'''
         self.__request_fields = fields
-        self.__koji_client = KojiClient(fields)
+        self.__koji_client = KojiClient(config, fields)
         self.__rpm = RPMObject(fields, None, payload_size)
         if payload_size != 0:
             return super(SignRPMRequestType, self). \
-                forward_request_payload(server_buf, client_buf, payload_size,
-                                        fields)
+                forward_request_payload(config, server_buf, client_buf,
+                                        payload_size, fields)
 
         self.__rpm.compute_payload_url(self.__koji_client)
         url = self.__rpm.request_payload_url
@@ -620,7 +619,7 @@ class SignRPMsKojiThread(utils.WorkerThread):
     def _real_run(self):
         '''Read and handle all koji subrequests.'''
         logging.debug(101)
-        koji_client = KojiClient(self.__request_fields)
+        koji_client = KojiClient(self.__config, self.__request_fields)
         try:
             total_size = 0
             got_request_eof = False
@@ -886,10 +885,10 @@ class SignRPMsSendReplyThread(utils.WorkerThread):
 class SignRPMsRequestType(RequestType):
     '''A specialized handler for the 'sign-rpms' request.'''
 
-    def forward_request_payload(self, server_buf, client_buf, payload_size,
-                                fields):
+    def forward_request_payload(self, config, server_buf, client_buf,
+                                payload_size, fields):
         super(SignRPMsRequestType, self).forward_request_payload \
-            (server_buf, client_buf, payload_size, fields)
+            (config, server_buf, client_buf, payload_size, fields)
         self.__request_fields = fields
 
     def post_request_phase(self, config, client_buf, server_buf):
@@ -1037,7 +1036,8 @@ def handle_connection(config, client_buf, server_buf):
     try:
         rt.validate(fields, payload_size)
         server_buf.write(client_proxy.stored_data())
-        rt.forward_request_payload(server_buf, client_buf, payload_size, fields)
+        rt.forward_request_payload(config, server_buf, client_buf, payload_size,
+                                   fields)
 
         double_tls.bridge_inner_stream(client_buf, server_buf)
 

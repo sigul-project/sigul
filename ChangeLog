@@ -1,5 +1,26 @@
 2011-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (KojiConfiguration): New class.
+	(koji_read_config): Use a KojiConfiguration parameter instead of
+	handling the file path directly.
+	* src/bridge.py (BridgeConfiguration): Use utils.KojiConfiguration.
+	(BridgeConfiguration._add_defaults)
+	(BridgeConfiguration._read_configuration): Don't handle koji-config.
+	explicitly.
+	(RequestType.forward_request_payload): New parameter config.  All
+	subclasses and users updated.
+	(KojiClient.__init__): New parameter config.  All users updated.
+	(KojiClient.__get_session): Don't use an undefined variable.
+	* src/client.py (ClientConfiguration): Use utils.KojiConfiguration.
+	(ClientConfiguration._add_defaults)
+	(ClientConfiguration._read_configuration): Don't handle koji-config.
+	(SignRPMArgumentExaminer.__init__): New parameter config.  All users
+	updated.
+	(SignRPMArgumentExaminer.open_rpm): Don't use an undefined variable.
+	* config/bridge.conf (koji-config)
+	* config/client.conf (koji-config): Move example to a separate koji
+	section.
+
 	* src/utils.py (Configuration._add_sections): New method.  All
 	subclasses updated.
 	(Configuration.__init__): Add all sections to the parser explicitly

@@ -159,6 +159,20 @@ def get_daemon_options(description, default_config_file):
 
  # Koji utilities
 
+class KojiConfiguration(Configuration):
+
+    def _add_defaults(self, defaults):
+        super(KojiConfiguration, self)._add_defaults(defaults)
+        defaults.update({'koji-config': '~/.koji/config'})
+
+    def _add_sections(self, sections):
+        super(KojiConfiguration, self)._add_sections(sections)
+        sections.add('koji')
+
+    def _read_configuration(self, parser):
+        super(KojiConfiguration, self)._read_configuration(parser)
+        self.koji_config = parser.get('koji', 'koji-config')
+
 class KojiError(Exception):
     pass
 
@@ -180,14 +194,15 @@ def u32_unpack(data):
 
 u32_size = struct.calcsize(_u32_format)
 
-def koji_read_config(koji_config):
-    '''Read koji's configuration and verify it.
+def koji_read_config(global_config):
+    '''Read koji's configuration and verify it, using global_config.
 
     Return a dictionary of options.
 
     '''
     parser = ConfigParser.ConfigParser()
-    parser.read(('/etc/koji.conf', os.path.expanduser(koji_config)))
+    parser.read(('/etc/koji.conf',
+                 os.path.expanduser(global_config.koji_config)))
     config = dict(parser.items('koji'))
     for opt in ('server', 'cert', 'ca', 'serverca', 'pkgurl'):
         if opt not in config:

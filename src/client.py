@@ -44,7 +44,8 @@ class InvalidResponseError(ClientError):
 
  # Infrastructure
 
-class ClientConfiguration(utils.NSSConfiguration, utils.Configuration):
+class ClientConfiguration(utils.KojiConfiguration, utils.NSSConfiguration,
+                          utils.Configuration):
 
     default_config_file = 'client.conf'
 
@@ -52,8 +53,7 @@ class ClientConfiguration(utils.NSSConfiguration, utils.Configuration):
         super(ClientConfiguration, self)._add_defaults(defaults)
         defaults.update({'bridge-port': 44334,
                          'client-cert-nickname': 'sigul-client-cert',
-                         'user-name': getpass.getuser(),
-                         'koji-config': '~/.koji/config'})
+                         'user-name': getpass.getuser()})
 
     def _add_sections(self, sections):
         super(ClientConfiguration, self)._add_sections(sections)
@@ -67,7 +67,6 @@ class ClientConfiguration(utils.NSSConfiguration, utils.Configuration):
         self.server_hostname = parser.get('client', 'server-hostname')
         self.user_name = parser.get('client', 'user-name')
         self.batch_mode = False
-        self.koji_config = parser.get('client', 'koji-config')
 
 def safe_string(s):
     '''Raise ClientError if s is not a safe string, otherwise return s.'''
@@ -402,7 +401,8 @@ def key_user_passphrase_or_password(config, o2):
 class SignRPMArgumentExaminer(object):
     '''An object that can be used to analyze sign-rpm{s,} operands.'''
 
-    def __init__(self):
+    def __init__(self, config):
+        self.__config = config
         self.__koji_session = None
 
     def open_rpm(self, arg, fields):
@@ -430,9 +430,9 @@ class SignRPMArgumentExaminer(object):
 
             try:
                 if self.__koji_session is None:
-                    self.__koji_session = \
-                        utils.koji_connect(utils.koji_read_config(config.koji_config),
-                                           authenticate=False)
+                    kc = utils.koji_read_config(self.__config)
+                    self.__koji_session = utils.koji_connect(kc,
+                                                             authenticate=False)
                 rpm = self.__koji_session.getRPM(arg)
             except (utils.KojiError, koji.GenericError), e:
                 raise ClientError(str(e))
@@ -900,7 +900,7 @@ def cmd_sign_rpm(conn, args):
         f['return-data'] = False
     if o2.v3_signature:
         f['v3-signature'] = True
-    examiner = SignRPMArgumentExaminer()
+    examiner = SignRPMArgumentExaminer(conn.config)
     try:
         (rpm_file, _) = examiner.open_rpm(args[1], f)
     finally:
@@ -941,7 +941,7 @@ class SignRPMsRequestThread(utils.WorkerThread):
         self.__payload_nss_key = payload_nss_key
 
     def _real_run(self):
-        examiner = SignRPMArgumentExaminer()
+        examiner = SignRPMArgumentExaminer(self.__conn.config)
         try:
             self.__run_with_examiner(examiner)
         finally:
