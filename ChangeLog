@@ -1,5 +1,7 @@
 2011-05-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* README: Clarify how koji accounts are used.
+
 	* src/server.py (ServerConfiguration._add_sections)
 	(ServerConfiguration._read_configuration): Don't duplicate handling of
 	database-path in ServerBaseConfiguration.

@@ -37,6 +37,12 @@ Setting up the bridge
 The bridge gates access to the signing server, and transfers RPM data from and
 to koji.  To set up the bridge:
 
+* Set up koji: You'll need a koji account used by the bridge, with proxy_auth
+  enabled.  It's recommended that this koji account is not used for any other
+  purpose.  This account will be used by the bridge to access the database
+  on behalf of each client's koji account.  Create a koji configuration file
+  that references this account.
+
 * Create a NSS database for the bridge:
 (1)     bridge_dir=/var/lib/sigul
         certutil -d $bridge_dir -N
@@ -173,9 +179,9 @@ related to any key.
 	sigul sign-rpm -o signed.rpm key_name unsigned.rpm
 * Download a RPM from koji, sign it and store it locally
 	sigul sign-rpm -o signed.rpm key_name basesystem-8.1-1.noarch
-  This requires a koji configuration (in /etc/koji.conf or ~/.koji/config) that
-  allows authentication, submitting signatures, and proxy authentication using
-  the client's certificate.
+  This requires a koji configuration on the bridge, as described above.  The
+  koji access is performed by the bridge on behalf of the user specified in
+  client.conf.
 * Download a RPM from koji, sign it and store the signature into koji:
 	sigul sign-rpm -o signed.rpm --store-in-koji --koji-only key_name \
 		unsigned.rpm
