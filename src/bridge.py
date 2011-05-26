@@ -1159,7 +1159,11 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
     except EOFError, e:
         logging.info('Unexpected EOF: %s', repr(e))
     except nss.error.NSPRError, e:
-        logging.info('NSPR I/O error: %s', str(e), exc_info=True)
+        if e.errno == nss.error.SEC_ERROR_EXPIRED_CERTIFICATE:
+            logging.warning("Peer's certificate has expired, rejecting "
+                            "connection")
+        else:
+            logging.info('NSPR I/O error: %s', str(e), exc_info=True)
     except BridgeError, e:
         logging.warning(str(e))
     logging.debug('Request handling finished')

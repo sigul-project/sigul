@@ -764,6 +764,10 @@ class DoubleTLSClient(object):
         except nss.error.NSPRError, e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
                 logging.debug('NSPR error: Connection reset')
+            elif e.errno == nss.error.SSL_ERROR_EXPIRED_CERT_ALERT:
+                logging.error('Our certificate has been rejected as expired')
+                logging.shutdown()
+                os._exit(self.__unrecoverable_error_exit_code)
             else:
                 logging.warning('Exception in child', exc_info=True)
             logging.shutdown()
