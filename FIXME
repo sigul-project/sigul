@@ -1,1 +1,2 @@
 - should be able to service requests within the server in parallel?
+- koji proxy auth should be based on cert CN, not on sigul user name
