@@ -766,6 +766,7 @@ class DoubleTLSClient(object):
                 logging.debug('NSPR error: Connection reset')
             else:
                 logging.warning('Exception in child', exc_info=True)
+            logging.shutdown()
             os._exit(1) # Nothing that extraordinary
         except utils.NSSInitError, e:
             logging.error(str(e))
