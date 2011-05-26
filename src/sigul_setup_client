@@ -1,5 +1,5 @@
 #! /bin/bash
-# Copyright (C) 2008, 2009 Red Hat, Inc.  All rights reserved.
+# Copyright (C) 2008, 2009, 2011 Red Hat, Inc.  All rights reserved.
 #
 # This copyrighted material is made available to anyone wishing to use, modify,
 # copy, or redistribute it subject to the terms and conditions of the GNU
@@ -25,7 +25,19 @@ if [ ! -f cert8.db ]; then
     echo ' sigul client.'
     echo ----------------------------------------
     certutil -d . -N
+elif certutil -d . -L -n sigul-client-cert &> /dev/null; then
+    echo ----------------------------------------
+    echo 'You already have a sigul-client-cert certificate configured.'
+    echo
+    echo 'This script will not automatically replace it.  If you want to do so,'
+    echo 'run the following command manually to remove the existing'
+    echo 'certificate:'
+    echo '    certutil -d ~/.sigul -D -n sigul-client-cert'
+    echo 'Then rerun sigul_setup_client to import a new certificate.'
+    echo ----------------------------------------
+    exit 1
 fi
+
 nss_password_file=''
 if [ -f client.conf ]; then
     sed -n 's/^[ \t]*nss-password:[ \t]*\(.*\)$/\1/p' client.conf > nss-password

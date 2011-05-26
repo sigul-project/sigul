@@ -1,5 +1,8 @@
 2011-05-26  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/sigul_setup_client: Stop when a client certificate already exists
+	and tell the user what to do.
+
 	* src/sigul_setup_client: Read NSS database password from
 	~/.sigul/client.conf if it already exists.
 
