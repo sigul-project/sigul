@@ -39,6 +39,13 @@ echo ' this script finishes.'
 echo ----------------------------------------
 openssl pkcs12 -export -out client.pem -in ~/.fedora.cert \
     -name sigul-client-cert
+echo ----------------------------------------
+echo ' When prompted for '\''Password or Pin for "NSS Certificate DB", enter'
+echo ' the NSS database password.'
+echo
+echo ' When prompted for "password for PKCS12 file", enter the "export'
+echo ' password".'
+echo ----------------------------------------
 pk12util -d . -i client.pem
 shred -u client.pem
 

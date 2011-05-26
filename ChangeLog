@@ -1,5 +1,8 @@
 2011-05-26  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/sigul_setup_client: Explain the changing password terminology
+	when doing a PKCS#12 export/import.
+
 	* src/bridge.py (bridge_one_request)
 	* src/double_tls.py (DoubleTLSClient.__child): Make reporting of
 	expired certificate errors more user-friendly.
