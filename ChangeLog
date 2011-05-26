@@ -1,5 +1,8 @@
 2011-05-26  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/sigul_setup_client: Read NSS database password from
+	~/.sigul/client.conf if it already exists.
+
 	* src/sigul_setup_client: Explain the changing password terminology
 	when doing a PKCS#12 export/import.
 

@@ -26,11 +26,25 @@ if [ ! -f cert8.db ]; then
     echo ----------------------------------------
     certutil -d . -N
 fi
+nss_password_file=''
+if [ -f client.conf ]; then
+    sed -n 's/^[ \t]*nss-password:[ \t]*\(.*\)$/\1/p' client.conf > nss-password
+    if [ -s nss-password ]; then
+	trap 'shred -u nss-password' 0
+	nss_password_file=nss-password
+	echo ----------------------------------------
+	echo 'Using NSS database password from ~/.sigul/client.conf'
+	echo ----------------------------------------
+    else
+	rm nss-password
+    fi
+fi
 
 echo ----------------------------------------
 echo 'Importing CA certificate'
 echo ----------------------------------------
-certutil -d . -A -n fedora-ca -t TC,, -a < ~/.fedora-server-ca.cert
+certutil ${nss_password_file:+-f} $nss_password_file -d . \
+    -A -n fedora-ca -t TC,, -a < ~/.fedora-server-ca.cert
 
 echo ----------------------------------------
 echo 'Importing user certificate.'
@@ -40,19 +54,23 @@ echo ----------------------------------------
 openssl pkcs12 -export -out client.pem -in ~/.fedora.cert \
     -name sigul-client-cert
 echo ----------------------------------------
-echo ' When prompted for '\''Password or Pin for "NSS Certificate DB", enter'
-echo ' the NSS database password.'
-echo
+if [ -z "$nss_password_file" ]; then
+    echo ' When prompted for '\''Password or Pin for "NSS Certificate DB",'
+    echo ' enter the NSS database password.'
+    echo
+fi
 echo ' When prompted for "password for PKCS12 file", enter the "export'
 echo ' password".'
 echo ----------------------------------------
-pk12util -d . -i client.pem
+pk12util ${nss_password_file:+-k} $nss_password_file -d . -i client.pem
 shred -u client.pem
 
 if [ -f client.conf ]; then
     echo ----------------------------------------
     echo '~/.sigul/client.conf exists, not replacing it.'
-    echo 'Edit [nss] nss-password if necessary.'
+    if [ -z "$nss_password_file" ]; then
+	echo 'Edit [nss] nss-password if necessary.'
+    fi
     echo ----------------------------------------
 else
     echo ----------------------------------------
