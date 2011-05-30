@@ -1,16 +1,20 @@
 Changes in version 0.98:
 - Now uses sqlalchemy 0.5 (e.g. RHEL6)
-- New operation 'sign-rpms', up to 50% faster
+- New operation 'sign-rpms', up to 50% faster.
   New bridge and server options max-rpms-payload-size.
+- Server option gnupg-key-usage has changed default to "sign" (removing
+  "encrypt"), to work with DSA keys.  sigul does not provide decryption, so
+  signing is all that is necessary anyway.
 - New client parameter --user-name
 - New brige option koji-config, patch by Dan Horák.
 - New server option signing-timeout
 - New sigul_server_add_admin parameters --batch , --name
-- In sigul_setup_client, don't ask for a known password and recognize attempts
+- In sigul_setup_client, no longer ask for a known password, recognize attempts
   to overwrite an existing certificate.
-- Fix closing streams, in particular avoid random "connection reset" errors
+- Fixed closing of sockets, in particular to avoid random "connection reset"
+  errors
 - Other minor bug fixes
-- Added basic test suite (not testing FAS/koji integration)
+- Added a basic test suite (not testing FAS/koji integration)
 - Work with post-RHEL5 URLGrabber
 
 Changes in version 0.97:

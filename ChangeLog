@@ -1,5 +1,7 @@
 2011-05-30  Miloslav Trmač  <mitr@redhat.com>
 
+	* NEWS: Update.
+
 	* Makefile.am (DISTCLEANFILES, EXTRA_DIST): Fix (make distcheck).
 
 	* Makefile.am (installcheck-local): Fix AUTOTEST_PATH.
