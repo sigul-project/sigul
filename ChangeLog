@@ -1,5 +1,12 @@
 2011-05-30  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (create_listen_sock)
+	* src/double_tls.py (DoubleTLSClient.__child): Explicitly specify socket
+	family to avoid a DeprecationWarning.
+	* src/double_tls.py (DoubleTLSClient.__child): Use nss.io.AddrInfo
+	to avoid a DeprecationWarning.
+	* README: Update required python-nss version.
+
 	* NEWS: Update.
 
 	* Makefile.am (DISTCLEANFILES, EXTRA_DIST): Fix (make distcheck).

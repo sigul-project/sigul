@@ -84,7 +84,7 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.KojiConfiguration,
         self.server_listen_port = parser.getint('bridge', 'server-listen-port')
 
 def create_listen_sock(config, port):
-    sock = nss.ssl.SSLSocket()
+    sock = nss.ssl.SSLSocket(nss.io.PR_AF_INET)
     # FIXME? does this belong in a finished product?
     sock.set_socket_option(nss.io.PR_SockOpt_Reuseaddr, True)
     sock.set_ssl_option(nss.ssl.SSL_REQUEST_CERTIFICATE, True)

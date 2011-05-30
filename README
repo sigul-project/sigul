@@ -8,7 +8,7 @@ python-fedora
 python-urlgrabber
 python-sqlalchemy >= 0.5
 
-python-nss >= 0.9
+python-nss >= 0.11
 pygpgme
 
 Overall design

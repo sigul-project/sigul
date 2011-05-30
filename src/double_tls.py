@@ -723,7 +723,7 @@ class DoubleTLSClient(object):
             outer_pipe_fd = nss.io.Socket.import_tcp_socket(child_outer_pipe.
                                                             fileno())
             utils.nss_init(self.__config) # May raise utils.NSSInitError
-            socket_fd = nss.ssl.SSLSocket()
+            socket_fd = nss.ssl.SSLSocket(nss.io.PR_AF_INET)
             socket_fd.set_ssl_option(nss.ssl.SSL_REQUEST_CERTIFICATE, True)
             socket_fd.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
             try:
@@ -736,13 +736,21 @@ class DoubleTLSClient(object):
             socket_fd.set_client_auth_data_callback \
                 (utils.nss_client_auth_callback_single, cert)
             socket_fd.set_hostname(self.__hostname)
-            try:
-                socket_fd.connect(nss.io.NetworkAddress(self.__hostname,
-                                                        self.__port))
-            except nss.error.NSPRError, e:
-                if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
+            addr_info = nss.io.AddrInfo(self.__hostname, nss.io.PR_AF_INET,
+                                        nss.io.PR_AI_ADDRCONFIG)
+            first_error = None
+            for net_addr in addr_info:
+                net_addr.port = self.__port
+                try:
+                    socket_fd.connect(net_addr)
+                except Exception, e:
+                    if first_error == None:
+                        first_error = e
+            if first_error is not None:
+                if (isinstance(first_error, nss.error.NSPRError) and
+                    first_error.errno == nss.error.PR_CONNECT_RESET_ERROR):
                     raise ChildConnectionRefusedError()
-                raise
+                raise first_error
             socket_fd.force_handshake()
 
             inner_pipe_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, True)
