@@ -70,6 +70,9 @@ rm bridge.p12
 [cat > bridge/bridge.conf <<EOF
 [bridge]
 required-fas-group:
+[daemon]
+unix-user:
+unix-group:
 [nss]
 nss-dir: $(pwd)/bridge
 nss-password: nss-pw
@@ -94,6 +97,9 @@ bridge-hostname: localhost
 database-path: $(pwd)/server/server.sqlite
 [gnupg]
 gnupg-home: $(pwd)/server
+[daemon]
+unix-user:
+unix-group:
 [nss]
 nss-dir: $(pwd)/server
 nss-password: nss-pw

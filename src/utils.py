@@ -606,6 +606,8 @@ class DaemonIDConfiguration(Configuration):
     def _read_configuration(self, parser):
         super(DaemonIDConfiguration, self)._read_configuration(parser)
         user = parser.get('daemon', 'unix-user')
+        if user == '':
+            user = None
         if user is not None:
             try:
                 user = pwd.getpwnam(user).pw_uid
@@ -618,6 +620,8 @@ class DaemonIDConfiguration(Configuration):
                                         user)
         self.daemon_uid = user
         group = parser.get('daemon', 'unix-group')
+        if group == '':
+            group = None
         if group is not None:
             try:
                 group = grp.getgrnam(group).gr_gid

@@ -1,5 +1,10 @@
 2011-05-30  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (DaemonIDConfiguration._read_configuration): Treat empty
+	user and group names same as undefined values.
+	* tests/basic.at (Basic functionality): Don't try to change users,
+	regardless of system-wide configuration.
+
 	* src/bridge.py (SignRPMsReadRequestThread._real_run)
 	(SignRPMsReadRequestThread.__read_one_request)
 	(SignRPMsKojiThread._real_run)
