@@ -1,5 +1,7 @@
 2011-05-30  Miloslav Trmač  <mitr@redhat.com>
 
+	* Makefile.am (installcheck-local): Fix AUTOTEST_PATH.
+
 	* Makefile.am (check-local): Remove, the test suite requires installed
 	files.
 

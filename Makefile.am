@@ -133,7 +133,7 @@ clean-local:
 
 installcheck-local:
 	$(SHELL) $(top_srcdir)/tests/testsuite \
-		AUTOTEST_PATH=$(exec_prefix)/bin:$(exec_prefix)/libexec
+		AUTOTEST_PATH=$(bindir):$(sbindir)
 
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(logdir) $(DESTDIR)$(piddir) \
