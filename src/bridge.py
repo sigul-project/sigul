@@ -531,7 +531,6 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
         self.__tmp_dir = tmp_dir
 
     def _real_run(self):
-        logging.debug(100)
         total_size = 0
         while True:
             (rpm, size) = self.__read_one_request \
@@ -541,7 +540,6 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
             total_size += size
             self.__subrequest_map.add(rpm)
             self.__dest.put(rpm)
-        logging.debug(200)
 
     def __read_one_request(self, remaining_size):
         '''Read one request from self.__client_buf.
@@ -551,7 +549,6 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
         payload.
 
         '''
-        logging.debug(1)
         client_proxy = StoringProxy(self.__client_buf)
         try:
             fields = utils.read_fields(client_proxy.stored_read)
@@ -563,7 +560,6 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
         logging.debug('%s: Started handling %s', self.name, s)
         logging.info('Subrequest: %s', s)
         client_proxy.stored_read(64) # Ignore value
-        logging.debug(3)
 
         buf = self.__client_buf.read(utils.u32_size)
         payload_size = utils.u32_unpack(buf)
@@ -580,16 +576,13 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
                                                   dir=self.__tmp_dir)
             dst = os.fdopen(fd, 'w+')
             try:
-                logging.debug(4)
                 copy_file_data(dst, self.__client_buf, payload_size)
                 # Count whole blocks to avoid millions of 1-byte files filling
                 # the hard drive due to internal fragmentation.
                 size = utils.file_size_in_blocks(dst)
             finally:
                 dst.close()
-            logging.debug(5)
         rpm.request_payload_digest = self.__client_buf.read(64)
-        logging.debug(6)
         return (rpm, size)
 
 class SignRPMsKojiThread(utils.WorkerThread):
@@ -618,21 +611,17 @@ class SignRPMsKojiThread(utils.WorkerThread):
 
     def _real_run(self):
         '''Read and handle all koji subrequests.'''
-        logging.debug(101)
         koji_client = KojiClient(self.__config, self.__request_fields)
         try:
             total_size = 0
             got_request_eof = False
             got_reply_eof = False
             while not (got_request_eof and got_reply_eof):
-                logging.debug(7)
                 rpm = self.__src.get()
                 if rpm is SignRPMsReadRequestThread.eof:
-                    logging.debug(70)
                     self.__request_dst.put(None)
                     got_request_eof = True
                 elif rpm is SignRPMsReadReplyThread.eof:
-                    logging.debug(71)
                     self.__reply_dst.put(None)
                     got_reply_eof = True
                 elif rpm.reply_fields is None:
@@ -647,7 +636,6 @@ class SignRPMsKojiThread(utils.WorkerThread):
                     self.__reply_dst.put(rpm)
         finally:
             koji_client.close()
-        logging.debug(201)
 
     def __handle_one_request_rpm(self, rpm, koji_client):
         '''Handle an incoming request using koji_client.
@@ -658,7 +646,6 @@ class SignRPMsKojiThread(utils.WorkerThread):
         logging.debug('%s: Started handling request %s', self.name,
                       utils.readable_fields(rpm.request_fields))
         if rpm.request_payload_size == 0:
-            logging.debug(8)
             rpm.compute_payload_url(koji_client)
             rpm_info = rpm.get_rpm_info(koji_client)
             size = rpm_info['size']
@@ -697,7 +684,6 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
         self.__server_buf = server_buf
 
     def _real_run(self):
-        logging.debug(102)
         try:
             while True:
                 rpm = self.__src.get()
@@ -706,7 +692,6 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
                 self.__handle_one_rpm(rpm)
         finally:
             self.__server_buf.send_outer_eof()
-        logging.debug(202)
 
     def __handle_one_rpm(self, rpm):
         '''Send an incoming request.'''
@@ -714,7 +699,6 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
                       utils.readable_fields(rpm.request_fields))
 
         self.__server_buf.write(rpm.request_header_data)
-        logging.debug(10)
 
         payload_size = rpm.request_payload_size
         try:
@@ -723,9 +707,7 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
             else:
                 (src, payload_size) = urlgrabber_open(rpm.request_payload_url)
             try:
-                logging.debug(11)
                 self.__server_buf.write(utils.u32_pack(payload_size))
-                logging.debug(12)
                 copy_file_data(self.__server_buf, src, payload_size)
             finally:
                 src.close()
@@ -736,7 +718,6 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
                 raise
             raise ForwardingError('Error reading %s: %s' %
                                   (rpm.request_payload_url, str(e)))
-        logging.debug(13)
         self.__server_buf.write(rpm.request_payload_digest)
 
         rpm.remove_tmp_path()
@@ -760,13 +741,11 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
         self.__tmp_dir = tmp_dir
 
     def _real_run(self):
-        logging.debug(103)
         while True:
             rpm = self.__read_one_reply()
             if rpm is None:
                 break
             self.__dest.put(rpm)
-        logging.debug(203)
 
     def __read_one_reply(self):
         '''Read one reply from self.__server_buf.
@@ -816,7 +795,6 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
         server_proxy.stored_read(64) # Ignore value
         rpm.reply_header_data = server_proxy.stored_data()
 
-        logging.debug(16)
         buf = self.__server_buf.read(utils.u32_size)
         rpm.reply_payload_size = utils.u32_unpack(buf)
         assert rpm.tmp_path is None
@@ -826,7 +804,6 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
             copy_file_data(dst, self.__server_buf, rpm.reply_payload_size)
         finally:
             dst.close()
-        logging.debug(17)
         rpm.reply_payload_digest = self.__server_buf.read(64)
         return rpm
 
@@ -847,20 +824,17 @@ class SignRPMsSendReplyThread(utils.WorkerThread):
         self.__request_fields = request_fields
 
     def _real_run(self):
-        logging.debug(104)
         while True:
             rpm = self.__src.get()
             if rpm is None:
                 break
             self.__handle_one_rpm(rpm)
-        logging.debug(204)
 
     def __handle_one_rpm(self, rpm):
         '''Send an incoming request.'''
         logging.debug('%s: Started handling %s', self.name,
                       utils.readable_fields(rpm.reply_fields))
         self.__client_buf.write(rpm.reply_header_data)
-        logging.debug(20)
 
         if self.__request_fields.get('return-data') != utils.u32_pack(0):
             payload_size = rpm.reply_payload_size
@@ -870,15 +844,12 @@ class SignRPMsSendReplyThread(utils.WorkerThread):
             src = None
         try:
             self.__client_buf.write(utils.u32_pack(payload_size))
-            logging.debug(21)
             if src is not None:
                 copy_file_data(self.__client_buf, src, payload_size)
         finally:
             if src is not None:
                 src.close()
-        logging.debug(22)
         self.__client_buf.write(rpm.reply_payload_digest)
-        logging.debug(23)
 
         rpm.remove_tmp_path()
 

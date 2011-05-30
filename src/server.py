@@ -1210,7 +1210,6 @@ class SignRPMsRequestThread(utils.WorkerThread):
         self.__tmp_dir = tmp_dir
 
     def _real_run(self):
-        logging.debug(0)
         total_size = 0
         server_idx = 0
         while True:
@@ -1222,7 +1221,6 @@ class SignRPMsRequestThread(utils.WorkerThread):
             server_idx += 1
             total_size += size
             self.__dest.put(rpm)
-        logging.debug(5)
 
     def __read_one_request(self, server_idx, remaining_size):
         '''Read one request from self.__conn.
@@ -1237,7 +1235,6 @@ class SignRPMsRequestThread(utils.WorkerThread):
             fields = self.__conn.read_subheader(nss_key)
         except EOFError:
             return (None, None)
-        logging.debug(1)
         s = utils.readable_fields(fields)
         logging.debug('%s: Started handling %s', self.name, s)
         logging.info('Subrequest: %s', s)
@@ -1249,7 +1246,6 @@ class SignRPMsRequestThread(utils.WorkerThread):
             = self.__conn.read_subpayload_to_file(nss_key, remaining_size,
                                                   self.__tmp_dir)
         try:
-            logging.debug(2)
             # Count whole blocks to avoid millions of 1-byte files filling the
             # hard drive due to internal fragmentation.
             size = utils.file_size_in_blocks(payload_file)
@@ -1257,7 +1253,6 @@ class SignRPMsRequestThread(utils.WorkerThread):
             rpm = RPMFile(path, sha512_digest, request_id=fields['id'])
             try:
                 rpm.verify()
-                logging.debug(3)
                 rpm.read_header(payload_file)
             except RPMFileError:
                 return (rpm, size)
@@ -1291,7 +1286,6 @@ class SignRPMsSignerThread(utils.WorkerThread):
 
     def _real_run(self):
         while True:
-            logging.debug(6)
             rpm = self.__src.get()
             if rpm is None:
                 break
@@ -1312,7 +1306,6 @@ class SignRPMsSignerThread(utils.WorkerThread):
         if rpm.status is not None:
             return
 
-        logging.debug(8)
         try:
             self.__ctx.sign_rpm(self.__config, rpm)
         except RPMFileError, e:
@@ -1339,7 +1332,6 @@ class SignRPMsReplyThread(utils.WorkerThread):
         '''Read all results and send subreplies.'''
         server_idx = 0
         while True:
-            logging.debug(9)
             rpm = self.__src.get()
             if rpm is None:
                 break
@@ -1356,12 +1348,10 @@ class SignRPMsReplyThread(utils.WorkerThread):
                          errors.message(rpm.status))
         else:
             f['status'] = errors.OK
-        logging.debug(10)
         nss_key = utils.derived_key(self.__header_nss_key, server_idx)
         self.__conn.send_subheader(f, nss_key)
 
         nss_key = utils.derived_key(self.__payload_nss_key, server_idx)
-        logging.debug(11)
         if rpm.status is None:
             f = open(rpm.path, 'rb')
             try:
@@ -1370,7 +1360,6 @@ class SignRPMsReplyThread(utils.WorkerThread):
                 f.close()
         else:
             self.__conn.send_empty_subpayload(nss_key)
-        logging.debug(12)
 
 
 @request_handler()

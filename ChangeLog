@@ -1,5 +1,23 @@
 2011-05-30  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (SignRPMsReadRequestThread._real_run)
+	(SignRPMsReadRequestThread.__read_one_request)
+	(SignRPMsKojiThread._real_run)
+	(SignRPMsKojiThread.__handle_one_request_rpm)
+	(SignRPMsSendRequestThread._real_run)
+	(SignRPMsSendRequestThread.__handle_one_rpm)
+	(SignRPMsReadReplyThread._real_run)
+	(SignRPMsReadReplyThread.__read_one_reply)
+	(SignRPMsSendReplyThread._real_run)
+	(SignRPMsSendReplyThread.__handle_one_rpm)
+	* src/server.py (SignRPMsRequestThread._real_run)
+	(SignRPMsRequestThread.__read_one_request)
+	(SignRPMsSignerThread._real_run)
+	(SignRPMsSignerThread.__handle_one_rpm)
+	(SignRPMsReplyThread._real_run)
+	(SignRPMsReplyThread.__handle_one_rpm): Remove detailed debugging log
+	output.
+
 	* NEWS
 	* README: Update.
 
