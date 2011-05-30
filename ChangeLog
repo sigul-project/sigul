@@ -1,5 +1,9 @@
 2011-05-30  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server.py (ServerConfiguration._add_defaults): Removee "encrypt"
+	from default key usage, recent gnupg versions reject it with DSA.
+	* config/server.conf (gnupg-key-usage): Update example.
+
 	* src/utils.py (DaemonIDConfiguration._read_configuration): Treat empty
 	user and group names same as undefined values.
 	* tests/basic.at (Basic functionality): Don't try to change users,
