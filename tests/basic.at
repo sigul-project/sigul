@@ -97,6 +97,8 @@ bridge-hostname: localhost
 database-path: $(pwd)/server/server.sqlite
 [gnupg]
 gnupg-home: $(pwd)/server
+gnupg-key-type: RSA
+gnupg-key-usage: sign
 [daemon]
 unix-user:
 unix-group:

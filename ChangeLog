@@ -1,5 +1,8 @@
 2011-05-30  Miloslav Trmač  <mitr@redhat.com>
 
+	* tests/basic.at: Always use RSA keys, to make the (rpm -K) output
+	predictable.
+
 	* src/server.py (ServerConfiguration._add_defaults): Removee "encrypt"
 	from default key usage, recent gnupg versions reject it with DSA.
 	* config/server.conf (gnupg-key-usage): Update example.
