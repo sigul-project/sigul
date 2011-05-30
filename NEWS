@@ -1,3 +1,18 @@
+Changes in version 0.98:
+- Now uses sqlalchemy 0.5 (e.g. RHEL6)
+- New operation 'sign-rpms', up to 50% faster
+  New bridge and server options max-rpms-payload-size.
+- New client parameter --user-name
+- New brige option koji-config, patch by Dan Horák.
+- New server option signing-timeout
+- New sigul_server_add_admin parameters --batch , --name
+- In sigul_setup_client, don't ask for a known password and recognize attempts
+  to overwrite an existing certificate.
+- Fix closing streams, in particular avoid random "connection reset" errors
+- Other minor bug fixes
+- Added basic test suite (not testing FAS/koji integration)
+- Work with post-RHEL5 URLGrabber
+
 Changes in version 0.97:
 - Proxy authenticate clients in the bridge.
 - Log the client's identity in the server as well.

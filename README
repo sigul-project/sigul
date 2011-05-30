@@ -6,10 +6,10 @@ Required packages
 pexpect
 python-fedora
 python-urlgrabber
-python-sqlalchemy
+python-sqlalchemy >= 0.5
 
-python-nss >= 0.4
-pygpgme (modified)
+python-nss >= 0.9
+pygpgme
 
 Overall design
 --------------
@@ -185,6 +185,10 @@ related to any key.
 * Download a RPM from koji, sign it and store the signature into koji:
 	sigul sign-rpm -o signed.rpm --store-in-koji --koji-only key_name \
 		unsigned.rpm
+* Sign multiple RPMs in one command:
+	sigul sign-rpms -o directory_for_signed_rpms key_name unsigned1.rpm \
+		unsigned2.rpm ...
+  The sign-rpm options apply to sign-rpms as well.
 * Provide passphrases noninteractively, to sign data from scripts:
   Use --batch, supply NUL-terminated pass-phrases on stdin (if the interactive
   mode asks for a particular passphrase twice, supply it only once).  E.g.:

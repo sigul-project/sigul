@@ -1,3 +1,8 @@
+2011-05-30  Miloslav Trmač  <mitr@redhat.com>
+
+	* NEWS
+	* README: Update.
+
 2011-05-26  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/sigul_setup_client: Stop when a client certificate already exists
