@@ -131,9 +131,6 @@ src/sigul_server_create_db: src/script.in Makefile
 clean-local:
 	$(SHELL) $(top_srcdir)/tests/testsuite --clean
 
-check-local: atconfig src/settings.py $(top_srcdir)/tests/testsuite
-	$(SHELL) $(top_srcdir)/tests/testsuite
-
 installcheck-local:
 	$(SHELL) $(top_srcdir)/tests/testsuite \
 		AUTOTEST_PATH=$(exec_prefix)/bin:$(exec_prefix)/libexec

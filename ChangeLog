@@ -1,5 +1,8 @@
 2011-05-30  Miloslav Trmač  <mitr@redhat.com>
 
+	* Makefile.am (check-local): Remove, the test suite requires installed
+	files.
+
 	* tests/basic.at: Always use RSA keys, to make the (rpm -K) output
 	predictable.
 
