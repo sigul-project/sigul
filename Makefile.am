@@ -43,12 +43,15 @@ nodist_pkgdata_PYTHON = src/settings.py
 
 ## Rules
 CLEANFILES = $(bin_SCRIPTS) $(sbin_SCRIPTS) $(man_MANS) $(nodist_pkgdata_PYTHON)
+DISTCLEANFILES = atconfig
 EXTRA_DIST = doc/data-design.txt doc/protocol-design.txt \
 	doc/sigul.1.in doc/sigul_bridge.8.in doc/sigul_server.8.in \
 	doc/sigul_server_add_admin.8.in doc/sigul_server_create_db.8.in \
 	doc/sign-many.py \
 	src/script.in src/settings.py.in \
-	tests/testsuite tests/package.m4 tests/testsuite.at $(TESTFILES)
+	tests/testsuite tests/package.m4 tests/testsuite.at $(TESTFILES) \
+	tests/imported-public-key.asc tests/imported-secret-key.asc \
+	tests/new-key-substitute.asc tests/testrpm.spec
 TESTFILES = tests/basic.at
 
 doc/sigul.1: doc/sigul.1.in Makefile
