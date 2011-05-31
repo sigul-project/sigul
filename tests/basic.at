@@ -256,7 +256,7 @@ else
 		sigul -c client/client.conf --batch -v -v \
 		new-key --key-admin root --name-real 'Real Name' \
 		--name-comment Comment --name-email key@example.com \
-		--expire-date 2099-12-31 key > key-pubkey.asc
+		--expire-date 2030-12-31 key > key-pubkey.asc
 fi]])
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \

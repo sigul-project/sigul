@@ -1,3 +1,8 @@
+2011-05-31  Miloslav Trmač  <mitr@redhat.com>
+
+	* tests/basic.at (new-key): Use an expiration date that doesn't overflow
+	32-bit time_t.
+
 2011-05-30  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/bridge.py (create_listen_sock)
