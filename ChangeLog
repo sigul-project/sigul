@@ -1,3 +1,7 @@
+2011-06-01  Miloslav Trmač  <mitr@redhat.com>
+
+	* configure.ac: Release 0.98.
+
 2011-05-31  Miloslav Trmač  <mitr@redhat.com>
 
 	* tests/basic.at (new-key): Use an expiration date that doesn't overflow

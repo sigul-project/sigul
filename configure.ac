@@ -1,5 +1,5 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT([sigul], [0.97], [mitr@redhat.com], , [https://fedorahosted.org/sigul/])
+AC_INIT([sigul], [0.98], [mitr@redhat.com], , [https://fedorahosted.org/sigul/])
 AC_COPYRIGHT(
 [Copyright (C) 2009 Red Hat, Inc.  All rights reserved.
 
