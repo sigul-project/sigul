@@ -230,6 +230,8 @@ modified by bridge to supply complete payload
    default: false
 ** [return-data: bool]
    default: true
+** [koji-instance: string]
+   default: default instance (not the same as an empty string)
 ** [v3-signature: bool]
    default: false
 ** _payload_: complete RPM, added by bridge if empty
@@ -247,6 +249,8 @@ modified by bridge to supply complete payloads
    default: false
 ** [return-data: bool]
    default: true
+** [koji-instance: string]
+   default: default instance (not the same as an empty string)
 All of the fields above are only used by the bridge
 ** [v3-signature: bool]
    default: false

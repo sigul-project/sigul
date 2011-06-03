@@ -163,7 +163,8 @@ class KojiConfiguration(Configuration):
 
     def _add_defaults(self, defaults):
         super(KojiConfiguration, self)._add_defaults(defaults)
-        defaults.update({'koji-config': '~/.koji/config'})
+        defaults.update({'koji-config': '~/.koji/config',
+                         'koji-instances': ''})
 
     def _add_sections(self, sections):
         super(KojiConfiguration, self)._add_sections(sections)
@@ -172,6 +173,9 @@ class KojiConfiguration(Configuration):
     def _read_configuration(self, parser):
         super(KojiConfiguration, self)._read_configuration(parser)
         self.koji_config = parser.get('koji', 'koji-config')
+        self.koji_instances = {}
+        for v in parser.get('koji', 'koji-instances').split():
+            self.koji_instances[v] = parser.get('koji', 'koji-config-' + v)
 
 class KojiError(Exception):
     pass
@@ -194,15 +198,23 @@ def u32_unpack(data):
 
 u32_size = struct.calcsize(_u32_format)
 
-def koji_read_config(global_config):
+def koji_read_config(global_config, instance):
     '''Read koji's configuration and verify it, using global_config.
 
-    Return a dictionary of options.
+    Use the selected Koji instance if it is not None.  Return a dictionary of
+    options.
 
     '''
+    if instance is not None:
+        try:
+            config_path = global_config.koji_instances[instance]
+        except KeyError:
+            raise KojiError('Koji configuration instance %s not defined' %
+                            instance)
+    else:
+        config_path = global_config.koji_config
     parser = ConfigParser.ConfigParser()
-    parser.read(('/etc/koji.conf',
-                 os.path.expanduser(global_config.koji_config)))
+    parser.read(('/etc/koji.conf', os.path.expanduser(config_path)))
     config = dict(parser.items('koji'))
     for opt in ('server', 'cert', 'ca', 'serverca', 'pkgurl'):
         if opt not in config:

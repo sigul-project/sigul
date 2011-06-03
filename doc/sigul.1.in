@@ -253,7 +253,7 @@ write the signed text to standard output,
 which must not be a terminal.
 
 .TP
-\fBsign-rpm\fP [\fB\-\-output\fP \fIOUTPUT\fP] [\fB\-\-store\-in\-koji\fP] [\fB\-\-koji\-only\fP] [\fB\-\-v3\-signature\fP] \fIKEY\fP \fIRPM_ID\fP
+\fBsign-rpm\fP [\fB\-\-output\fP \fIOUTPUT\fP] [\fB\-\-store\-in\-koji\fP] [\fB\-\-koji\-only\fP] [\fB\-\-koji\-instance\fP \fIINSTANCE\fP] [\fB\-\-v3\-signature\fP] \fIKEY\fP \fIRPM_ID\fP
 Sign the rpm specified by \fIRPM_ID\fP.
 .I RPM_ID
 can either be a path to a RPM file, or a
@@ -274,12 +274,17 @@ and if
 is not defined,
 write it to standard output,
 
+The
+.I \-\-koji\-instance
+option can be used to perform the operation using a different Koji instance,
+if it was set up in the configuration files of both the client and the bridge.
+
 Use a PGP version 3 format signatue if
 .B \-\-v3\-signature
 is specified.
 
 .TP
-\fBsign-rpms\fP [\fB\-\-output\fP \fIDIR\fP] [\fB\-\-store\-in\-koji\fP] [\fB\-\-koji\-only\fP] [\fB\-\-v3\-signature\fP] \fIKEY\fP \fIRPM_ID...\fP
+\fBsign-rpms\fP [\fB\-\-output\fP \fIDIR\fP] [\fB\-\-store\-in\-koji\fP] [\fB\-\-koji\-only\fP] [\fB\-\-koji\-instance\fP \fIINSTANCE\fP] [\fB\-\-v3\-signature\fP] \fIKEY\fP \fIRPM_ID...\fP
 Sign one or more rpms specified by \fIRPM_ID\fP.
 Each
 .I RPM_ID
@@ -299,6 +304,11 @@ the
 .B \-\-output
 option is mandatory,
 and each signed RPM will be stored as a file in the \fIDIR\fP directory.
+
+The
+.I \-\-koji\-instance
+option can be used to perform the operation using a different Koji instance,
+if it was set up in the configuration files of both the client and the bridge.
 
 Use a PGP version 3 format signatue if
 .B \-\-v3\-signature

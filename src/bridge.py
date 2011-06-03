@@ -289,7 +289,14 @@ class KojiClient(object):
         import koji
 
         if self.__koji_config is None:
-            self.__koji_config = utils.koji_read_config(self.__config)
+            instance = self.__request_fields.get('koji-instance')
+            StringField('koji-instance', optional=True).validate(instance)
+            try:
+                self.__koji_config = utils.koji_read_config(self.__config,
+                                                            instance)
+            except utils.KojiError, e:
+                raise ForwardingError('Error preparing Koji configuration: %s' %
+                                      str(e))
         if self.__koji_session is None:
             try:
                 if settings.koji_do_proxy_auth:
@@ -941,11 +948,13 @@ request_types = {
                                     BoolField('import-signature',
                                               optional=True),
                                     BoolField('return-data', optional=True),
+                                    SF('koji-instance', optional=True),
                                     BoolField('v3-signature', optional=True)),
                                    max_payload=1024*1024*1024),
     'sign-rpms': SignRPMsRequestType((SF('key'), BoolField('import-signature',
                                                            optional=True),
                                       BoolField('return-data', optional=True),
+                                      SF('koji-instance', optional=True),
                                       BoolField('v3-signature', optional=True)))
     }
 del RT

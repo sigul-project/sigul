@@ -401,8 +401,9 @@ def key_user_passphrase_or_password(config, o2):
 class SignRPMArgumentExaminer(object):
     '''An object that can be used to analyze sign-rpm{s,} operands.'''
 
-    def __init__(self, config):
+    def __init__(self, config, koji_instance):
         self.__config = config
+        self.__koji_instance = koji_instance
         self.__koji_session = None
 
     def open_rpm(self, arg, fields):
@@ -430,7 +431,8 @@ class SignRPMArgumentExaminer(object):
 
             try:
                 if self.__koji_session is None:
-                    kc = utils.koji_read_config(self.__config)
+                    kc = utils.koji_read_config(self.__config,
+                                                self.__koji_instance)
                     self.__koji_session = utils.koji_connect(kc,
                                                              authenticate=False)
                 rpm = self.__koji_session.getRPM(arg)
@@ -878,6 +880,8 @@ def cmd_sign_rpm(conn, args):
     p2.add_option('--koji-only', action='store_true',
                   help='Do not save the signed RPM locally, store it only to '
                   'Koji')
+    p2.add_option('-k', '--koji-instance', metavar='INSTANCE',
+                  help='Use the specified Koji instance')
     p2.add_option('--v3-signature', action='store_true',
                   help='Create a v3 signature (currently necessary for RSA'
                   'keys)')
@@ -898,9 +902,11 @@ def cmd_sign_rpm(conn, args):
         f['import-signature'] = True
     if o2.koji_only:
         f['return-data'] = False
+    if o2.koji_instance is not None:
+        f['koji-instance'] = safe_string(o2.koji_instance)
     if o2.v3_signature:
         f['v3-signature'] = True
-    examiner = SignRPMArgumentExaminer(conn.config)
+    examiner = SignRPMArgumentExaminer(conn.config, o2.koji_instance)
     try:
         (rpm_file, _) = examiner.open_rpm(args[1], f)
     finally:
@@ -931,17 +937,20 @@ def cmd_sign_rpm(conn, args):
 class SignRPMsRequestThread(utils.WorkerThread):
     '''A thread that sends sign-rpm subrequests.'''
 
-    def __init__(self, conn, args, header_nss_key, payload_nss_key):
+    def __init__(self, conn, args, koji_instance, header_nss_key,
+                 payload_nss_key):
         super(SignRPMsRequestThread, self).__init__('sign-rpms:requests',
                                                     'request thread')
         self.results = {}
         self.__conn = conn
         self.__args = args
+        self.__koji_instance = koji_instance
         self.__header_nss_key = header_nss_key
         self.__payload_nss_key = payload_nss_key
 
     def _real_run(self):
-        examiner = SignRPMArgumentExaminer(self.__conn.config)
+        examiner = SignRPMArgumentExaminer(self.__conn.config,
+                                           self.__koji_instance)
         try:
             self.__run_with_examiner(examiner)
         finally:
@@ -1083,6 +1092,8 @@ def cmd_sign_rpms(conn, args):
     p2.add_option('--koji-only', action='store_true',
                   help='Do not save the signed RPMs locally, store them only '
                   'to Koji')
+    p2.add_option('-k', '--koji-instance', metavar='INSTANCE',
+                  help='Use the specified Koji instance')
     p2.add_option('--v3-signature', action='store_true',
                   help='Create v3 signatures (currently necessary for RSA'
                   'keys)')
@@ -1109,6 +1120,8 @@ def cmd_sign_rpms(conn, args):
         f['import-signature'] = True
     if o2.koji_only:
         f['return-data'] = False
+    if o2.koji_instance is not None:
+        f['koji-instance'] = safe_string(o2.koji_instance)
     if o2.v3_signature:
         f['v3-signature'] = True
     conn.connect('sign-rpms', f)
@@ -1129,8 +1142,9 @@ def cmd_sign_rpms(conn, args):
     conn.read_response(no_payload=True)
 
     args = args[1:]
-    request_thread = SignRPMsRequestThread \
-        (conn, args, subrequest_header_nss_key, subrequest_payload_nss_key)
+    request_thread = SignRPMsRequestThread(conn, args, o2.koji_instance,
+                                           subrequest_header_nss_key,
+                                           subrequest_payload_nss_key)
     reply_thread = SignRPMsReplyThread(conn, args, o2, subreply_header_nss_key,
                                        subreply_payload_nss_key)
 

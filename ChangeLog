@@ -1,3 +1,25 @@
+2011-06-04  Miloslav Trmač  <mitr@redhat.com>
+
+	* doc/protocol-design.txt (sign-rpm, sign-rpms): New field
+	koji-instance.
+	* src/utils.py (KojiConfiguration._add_defaults): Add default for
+	koji-instances.
+	(KojiConfiguration._read_configuration): Handle koji-instances, and the
+	per-instance configuration files.
+	(koji_read_config): New parameter instance.
+	* src/client.py (SignRPMArgumentExaminer.__init__): New parameter
+	koji_instance.
+	(SignRPMArgumentExaminer.open_rpm): Use the specified Koji instance.
+	(SignRPMsRequestThread.__init__): New parameter koji_instance.
+	(SignRPMsRequestThread._real_run): Use the specified Koji instance.
+	(cmd_sign_rpm, cmd_sign_rpms): New option --koji-instance.
+	* src/bridge.py (KojiClient.__get_session): Use the koji-instance
+	field.
+	(request-types): Allow field 'koji-instance' in sign-rpm and sign-rpms.
+	* config/bridge.conf (koji)
+	* config/client.conf (koji): Add alternative Koji instance examples.
+	* doc/sigul.1.in (sign-rpm, sign-rpms): Document --koji-instance.
+
 2011-06-03  Miloslav Trmač  <mitr@redhat.com>
 
 	* doc/sigul.1.in (sign-rpm): Fix typo in synopsis.
