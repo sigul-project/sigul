@@ -1,3 +1,8 @@
+2011-06-06  Miloslav Trmač  <mitr@redhat.com>
+
+	* configure.ac: Release 0.99.
+	* NEWS: Update.
+
 2011-06-04  Miloslav Trmač  <mitr@redhat.com>
 
 	* doc/protocol-design.txt (sign-rpm, sign-rpms): New field

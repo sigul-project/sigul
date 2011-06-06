@@ -1,3 +1,7 @@
+Changes in version 0.99:
+- Support for multiple koji instances in the client and bridge: new client
+  parameter --koji-instance, client and bridge option koji-instances.
+
 Changes in version 0.98:
 - Now uses sqlalchemy 0.5 (e.g. RHEL6)
 - New operation 'sign-rpms', up to 50% faster.
