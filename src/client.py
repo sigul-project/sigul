@@ -889,8 +889,11 @@ def cmd_sign_rpm(conn, args):
     (o2, args) = p2.parse_args(args)
     if len(args) != 2:
         p2.error('key name and RPM path or identification expected')
-    if o2.koji_only and not o2.store_in_koji:
-        p2.error('--koji-only is valid only with --store-in-koji')
+    if o2.koji_only:
+        if not o2.store_in_koji:
+            p2.error('--koji-only is valid only with --store-in-koji')
+        if o2.output is not None:
+            p2.error('--output can not be used together with --koji-only')
     if not o2.koji_only and o2.output is None and sys.stdout.isatty():
         p2.error('won\'t write output to a TTY, specify a file name')
     passphrase = read_key_passphrase(conn.config)
@@ -1102,8 +1105,11 @@ def cmd_sign_rpms(conn, args):
     if len(args) < 2:
         p2.error('key name and at least one RPM path or identification '
                  'expected')
-    if o2.koji_only and not o2.store_in_koji:
-        p2.error('--koji-only is valid only with --store-in-koji')
+    if o2.koji_only:
+        if not o2.store_in_koji:
+            p2.error('--koji-only is valid only with --store-in-koji')
+        if o2.output is not None:
+            p2.error('--output can not be used together with --koji-only')
     if o2.output is not None:
         try:
             os.mkdir(o2.output)

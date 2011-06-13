@@ -1,3 +1,8 @@
+2011-06-13  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/client.py (cmd_sign_rpm, cmd_sign_rpms): Reject (sigul sign-rpm*
+	-o ... --koji-only ...).
+
 2011-06-06  Miloslav Trmač  <mitr@redhat.com>
 
 	* configure.ac: Release 0.99.
