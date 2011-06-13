@@ -825,7 +825,8 @@ class SigningContext(object):
         except pexpect.ExceptionPexpect, e:
             msg = str(e).splitlines()[0] # We don't want all of the pexpect dump
             rpm.status = errors.UNKNOWN_ERROR
-            raise RPMFileError('Error signing %s: %s' % (rpm.rpm_id, msg))
+            raise RPMFileError('Error signing %s: %s, output %s' %
+                               (rpm.rpm_id, msg, child.before))
         if (not os.WIFEXITED(child.status) or
             os.WEXITSTATUS(child.status) != 0 or answer != 0):
             rpm.status = errors.UNKNOWN_ERROR

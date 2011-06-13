@@ -1,5 +1,8 @@
 2011-06-13  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/server.py (SigningContext.sign_rpm): If we fail due to unexpected
+	RPM output, record it.
+
 	* src/client.py (cmd_sign_rpm, cmd_sign_rpms): Reject (sigul sign-rpm*
 	-o ... --koji-only ...).
 
