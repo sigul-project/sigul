@@ -245,8 +245,9 @@ class RequestType(object):
         if payload_size > self.__max_payload:
             raise InvalidRequestError('Payload too large')
 
-    def forward_request_payload(self, unused_config, server_buf, client_buf,
-                                payload_size, unused_fields):
+    def forward_request_payload(self, unused_config, unused_user_name,
+                                server_buf, client_buf, payload_size,
+                                unused_fields):
         '''Forward (optionally modify) payload from client_buf to server_buf.'''
         server_buf.write(utils.u32_pack(payload_size))
         copy_file_data(server_buf, client_buf, payload_size)
@@ -256,7 +257,8 @@ class RequestType(object):
         client_buf.write(utils.u32_pack(payload_size))
         copy_file_data(client_buf, server_buf, payload_size)
 
-    def post_request_phase(self, config, client_buf, server_buf):
+    def post_request_phase(self, config, unused_user_name, client_buf,
+                           server_buf):
         '''Optional additional actions with client_buf and server_buf.'''
         pass
 
@@ -270,9 +272,12 @@ class KojiClient(object):
     The client will create only one koji session, reusing it for all requests.
 
     '''
-    def __init__(self, config, request_fields):
-        '''Initialize, using request_fields for user identification.'''
+    def __init__(self, config, user_name, request_fields):
+        '''Initialize, using request_fields for Koji instance selection.'''
         self.__config = config
+        if not utils.string_is_safe(user_name):
+            raise InvalidRequestError('Clietn certificate CN is not printable')
+        self.__user_name = user_name
         self.__koji_session = None
         self.__koji_config = None
         self.__request_fields = request_fields
@@ -300,10 +305,9 @@ class KojiClient(object):
         if self.__koji_session is None:
             try:
                 if settings.koji_do_proxy_auth:
-                    user = self.__request_fields.get('user')
-                    StringField('user').validate(user)
                     self.__koji_session = utils.koji_connect \
-                        (self.__koji_config, authenticate=True, proxyuser=user)
+                        (self.__koji_config, authenticate=True,
+                         proxyuser=self.__user_name)
                 else:
                     self.__koji_session = utils.koji_connect(self.__koji_config,
                                                              authenticate=True)
@@ -417,16 +421,16 @@ class SignRPMRequestType(RequestType):
         self.__koji_client = None
         self.__rpm = None
 
-    def forward_request_payload(self, config, server_buf, client_buf,
+    def forward_request_payload(self, config, user_name, server_buf, client_buf,
                                 payload_size, fields):
         '''Forward (optionally modify) payload from client_buf to server_buf.'''
         self.__request_fields = fields
-        self.__koji_client = KojiClient(config, fields)
+        self.__koji_client = KojiClient(config, user_name, fields)
         self.__rpm = RPMObject(fields, None, payload_size)
         if payload_size != 0:
             return super(SignRPMRequestType, self). \
-                forward_request_payload(config, server_buf, client_buf,
-                                        payload_size, fields)
+                forward_request_payload(config, user_name, server_buf,
+                                        client_buf, payload_size, fields)
 
         self.__rpm.compute_payload_url(self.__koji_client)
         url = self.__rpm.request_payload_url
@@ -602,8 +606,8 @@ class SignRPMsKojiThread(utils.WorkerThread):
 
     '''
 
-    def __init__(self, config, request_dst_queue, reply_dst_queue, src_queue,
-                 request_fields):
+    def __init__(self, config, user_name, request_dst_queue, reply_dst_queue,
+                 src_queue, request_fields):
         super(SignRPMsKojiThread, self). \
             __init__('sign-rpms:koji requests', 'koji thread',
                      input_queues=((src_queue, SignRPMsReadRequestThread.eof),
@@ -611,6 +615,7 @@ class SignRPMsKojiThread(utils.WorkerThread):
                      output_queues=((request_dst_queue, None),
                                     (reply_dst_queue, None)))
         self.__config = config
+        self.__user_name = user_name
         self.__request_dst = request_dst_queue
         self.__reply_dst = reply_dst_queue
         self.__src = src_queue
@@ -618,7 +623,8 @@ class SignRPMsKojiThread(utils.WorkerThread):
 
     def _real_run(self):
         '''Read and handle all koji subrequests.'''
-        koji_client = KojiClient(self.__config, self.__request_fields)
+        koji_client = KojiClient(self.__config, self.__user_name,
+                                 self.__request_fields)
         try:
             total_size = 0
             got_request_eof = False
@@ -863,13 +869,13 @@ class SignRPMsSendReplyThread(utils.WorkerThread):
 class SignRPMsRequestType(RequestType):
     '''A specialized handler for the 'sign-rpms' request.'''
 
-    def forward_request_payload(self, config, server_buf, client_buf,
+    def forward_request_payload(self, config, user_name, server_buf, client_buf,
                                 payload_size, fields):
         super(SignRPMsRequestType, self).forward_request_payload \
-            (config, server_buf, client_buf, payload_size, fields)
+            (config, user_name, server_buf, client_buf, payload_size, fields)
         self.__request_fields = fields
 
-    def post_request_phase(self, config, client_buf, server_buf):
+    def post_request_phase(self, config, user_name, client_buf, server_buf):
         logging.debug('In post_request_phase')
         subrequest_map = SubrequestMap()
 
@@ -889,7 +895,8 @@ class SignRPMsRequestType(RequestType):
                                                      tmp_dir))
             threads.append(SignRPMsReadReplyThread(koji_queue, server_buf,
                                                    subrequest_map, tmp_dir))
-            threads.append(SignRPMsKojiThread(config, q1, q2, koji_queue,
+            threads.append(SignRPMsKojiThread(config, user_name, q1, q2,
+                                              koji_queue,
                                               self.__request_fields))
             threads.append(SignRPMsSendRequestThread(q1, server_buf))
             threads.append(SignRPMsSendReplyThread(q2, client_buf,
@@ -986,7 +993,7 @@ class StoringProxy(object):
         self.__stored = ''
         return res
 
-def handle_connection(config, client_buf, server_buf):
+def handle_connection(config, user_name, client_buf, server_buf):
     '''Handle a single connection.'''
     # FIXME: handle server's reporting of unknown protocol version - there
     # is no inner session
@@ -1016,8 +1023,8 @@ def handle_connection(config, client_buf, server_buf):
     try:
         rt.validate(fields, payload_size)
         server_buf.write(client_proxy.stored_data())
-        rt.forward_request_payload(config, server_buf, client_buf, payload_size,
-                                   fields)
+        rt.forward_request_payload(config, user_name, server_buf, client_buf,
+                                   payload_size, fields)
 
         double_tls.bridge_inner_stream(client_buf, server_buf)
 
@@ -1045,7 +1052,7 @@ def handle_connection(config, client_buf, server_buf):
         buf = server_buf.read(64)
         client_buf.write(buf)
 
-        rt.post_request_phase(config, client_buf, server_buf)
+        rt.post_request_phase(config, user_name, client_buf, server_buf)
 
         # Closing the socket should technically be enough, but make sure the
         # client is not waiting for more input...
@@ -1123,7 +1130,7 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
             client_buf = double_tls.OuterBuffer(client_sock)
             server_buf = double_tls.OuterBuffer(server_sock)
 
-            handle_connection(config, client_buf, server_buf)
+            handle_connection(config, user_name, client_buf, server_buf)
         finally:
             if client_sock is not None:
                 client_sock.close()

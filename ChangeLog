@@ -1,5 +1,19 @@
 2011-06-13  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (RequestType, RequestType.post_request_phase): New
+	parameter user_name.  All users updated.
+	(KojiClient.__init__): New parameter user_name.  All users updated.
+	(KojiClient.__get_session): Do proxy authentication based on certificate
+	CN, not on sigul user name.
+	(SignRPMRequestType.forward_request_payload): Pass certificate CN to
+	KojiClient.
+	(SignRPMsKojiThread.__init__): New parameter user_name.
+	(SignRPMsKojiThread._real_run): Pass certificate CN to KojiClient.
+	(SignRPMsRequestType.post_request_phase): Pass certificate CN to
+	SignRPMsKojiThread.
+	(handle_connection): New parameter user_name.
+	(bridge_one_request): Pass certificate CN as Koji user name.
+
 	* src/server.py (SigningContext.sign_rpm): If we fail due to unexpected
 	RPM output, record it.
 
