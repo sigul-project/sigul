@@ -178,7 +178,7 @@ class RPMObject(object):
         rpm_info = self.get_rpm_info(koji_client)
         koji_client.add_signature(rpm_info, self.tmp_path)
 
- # Request type-specific code
+ # Header and payload size validation
 
 class Field(object):
     '''A field.'''
@@ -222,20 +222,17 @@ class YYYYMMDDField(Field):
             raise InvalidRequestError('Field %s is not a valid date' %
                                       self.name)
 
-class RequestType(object):
-    '''A supported request type.'''
+class RequestValidator(object):
+    '''A validator of header fields and payload size.'''
 
-    def __init__(self, fields, max_payload=0, default_fields=True):
-        if default_fields:
-            self.__fields = fields + (StringField('user'), StringField('op'))
-        else:
-            self.__fields = fields
+    def __init__(self, fields, max_payload):
+        self.__fields = fields
         self.__known_fields = set()
         for f in self.__fields:
             self.__known_fields.add(f.name)
         self.__max_payload = max_payload
 
-    def validate_data(self, fields, payload_size):
+    def validate(self, fields, payload_size):
         '''Validate fiels and payload_size.'''
         for key in fields.iterkeys():
             if key not in self.__known_fields:
@@ -245,9 +242,10 @@ class RequestType(object):
         if payload_size > self.__max_payload:
             raise InvalidRequestError('Payload too large')
 
-    def validate(self, conn):
-        '''Validate request headers in conn.'''
-        self.validate_data(conn.request_fields, conn.request_payload_size)
+ # Request type-specific code
+
+class RequestHandler(object):
+    '''Request type-specific connection handling.'''
 
     def forward_request_payload(self, conn):
         '''Forward (optionally modify) request payload in conn.'''
@@ -414,11 +412,11 @@ class KojiClient(object):
             utils.koji_disconnect(self.__koji_session)
             self.__koji_session = None
 
-class SignRPMRequestType(RequestType):
+class SignRPMRequestHandler(RequestHandler):
     '''A specialized handler for the 'sign-rpm' request.'''
 
     def __init__(self, *args, **kwargs):
-        super(SignRPMRequestType, self).__init__(*args, **kwargs)
+        super(SignRPMRequestHandler, self).__init__(*args, **kwargs)
         self.__koji_client = None
         self.__rpm = None
 
@@ -427,7 +425,8 @@ class SignRPMRequestType(RequestType):
         self.__rpm = RPMObject(conn.request_fields, None,
                                conn.request_payload_size)
         if conn.request_payload_size != 0:
-            return super(SignRPMRequestType, self).forward_request_payload(conn)
+            return super(SignRPMRequestHandler, self) \
+                .forward_request_payload(conn)
 
         self.__rpm.compute_payload_url(self.__koji_client)
         url = self.__rpm.request_payload_url
@@ -472,16 +471,14 @@ class SignRPMRequestType(RequestType):
             finally:
                 self.__rpm.remove_tmp_path()
         elif conn.request_fields.get('return-data') != utils.u32_pack(0):
-            super(SignRPMRequestType, self).forward_reply_payload(conn)
+            super(SignRPMRequestHandler, self).forward_reply_payload(conn)
         else:
             conn.client_buf.write(utils.u32_pack(0))
 
     def close(self):
-        super(SignRPMRequestType, self).close()
+        super(SignRPMRequestHandler, self).close()
         if self.__koji_client is not None:
             self.__koji_client.close()
-            self.__koji_client = None
-        self.__rpm = None
 
 class SubrequestMap(object):
     '''A map of subrequest ID => RPMObject, internally serialized.'''
@@ -518,16 +515,15 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
 
     eof = object()              # Used only for "... is eof"
 
-    # Only used for subheader validation
-    __subheader_RT = RequestType((Field('id'),
-                                  StringField('rpm-name', optional=True),
-                                  StringField('rpm-epoch', optional=True),
-                                  StringField('rpm-version', optional=True),
-                                  StringField('rpm-release', optional=True),
-                                  StringField('rpm-arch', optional=True),
-                                  Field('rpm-sigmd5', optional=True)),
-                                 max_payload=1024*1024*1024,
-                                 default_fields=False)
+    __subheader_validator = \
+        RequestValidator((Field('id'),
+                          StringField('rpm-name', optional=True),
+                          StringField('rpm-epoch', optional=True),
+                          StringField('rpm-version', optional=True),
+                          StringField('rpm-release', optional=True),
+                          StringField('rpm-arch', optional=True),
+                          Field('rpm-sigmd5', optional=True)),
+                         max_payload=1024*1024*1024)
 
     def __init__(self, conn, dest_queue, subrequest_map, tmp_dir):
         super(SignRPMsReadRequestThread, self). \
@@ -572,7 +568,7 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
         buf = self.__conn.client_buf.read(utils.u32_size)
         payload_size = utils.u32_unpack(buf)
 
-        self.__subheader_RT.validate_data(fields, payload_size)
+        self.__subheader_validator.validate(fields, payload_size)
         rpm = RPMObject(fields, client_proxy.stored_data(), payload_size)
 
         if payload_size == 0:
@@ -859,7 +855,7 @@ class SignRPMsSendReplyThread(utils.WorkerThread):
 
         rpm.remove_tmp_path()
 
-class SignRPMsRequestType(RequestType):
+class SignRPMsRequestHandler(RequestHandler):
     '''A specialized handler for the 'sign-rpms' request.'''
 
     def post_request_phase(self, conn):
@@ -896,7 +892,14 @@ class SignRPMsRequestType(RequestType):
         if exception is not None:
             raise exception[0], exception[1], exception[2]
 
-RT = RequestType
+class RT(object):
+    '''Request type description.'''
+
+    def __init__(self, fields, max_payload=0, handler=RequestHandler):
+        fields += (StringField('user'), StringField('op'))
+        self.validator = RequestValidator(fields, max_payload)
+        self.handler = handler
+
 SF = StringField
 request_types = {
     'list-users': RT(()),
@@ -925,23 +928,22 @@ request_types = {
     'change-passphrase': RT((SF('key'),)),
     'sign-text': RT((SF('key'),), max_payload=1024*1024*1024),
     'sign-data': RT((SF('key'),), max_payload=1024*1024*1024),
-    'sign-rpm': SignRPMRequestType((SF('key'), SF('rpm-name', optional=True),
-                                    SF('rpm-epoch', optional=True),
-                                    SF('rpm-version', optional=True),
-                                    SF('rpm-release', optional=True),
-                                    SF('rpm-arch', optional=True),
-                                    Field('rpm-sigmd5', optional=True),
-                                    BoolField('import-signature',
-                                              optional=True),
-                                    BoolField('return-data', optional=True),
-                                    SF('koji-instance', optional=True),
-                                    BoolField('v3-signature', optional=True)),
-                                   max_payload=1024*1024*1024),
-    'sign-rpms': SignRPMsRequestType((SF('key'), BoolField('import-signature',
-                                                           optional=True),
-                                      BoolField('return-data', optional=True),
-                                      SF('koji-instance', optional=True),
-                                      BoolField('v3-signature', optional=True)))
+    'sign-rpm': RT((SF('key'), SF('rpm-name', optional=True),
+                    SF('rpm-epoch', optional=True),
+                    SF('rpm-version', optional=True),
+                    SF('rpm-release', optional=True),
+                    SF('rpm-arch', optional=True),
+                    Field('rpm-sigmd5', optional=True),
+                    BoolField('import-signature', optional=True),
+                    BoolField('return-data', optional=True),
+                    SF('koji-instance', optional=True),
+                    BoolField('v3-signature', optional=True)),
+                   max_payload=1024*1024*1024, handler=SignRPMRequestHandler),
+    'sign-rpms': RT((SF('key'), BoolField('import-signature', optional=True),
+                     BoolField('return-data', optional=True),
+                     SF('koji-instance', optional=True),
+                     BoolField('v3-signature', optional=True)),
+                    handler=SignRPMsRequestHandler)
     }
 del RT
 del SF
@@ -984,8 +986,8 @@ class BridgeConnection(object):
     def read_request_headers(self):
         '''Read request data up to (and including) the request header.
 
-        Return (request type, StoringProxy with read data).  Set
-        self.request_fields and self.request_payload_size.
+        Return (request validator, StoringProxy with read data).  Set
+        self.handler, self.request_fields and self.request_payload_size.
 
         Raise InvalidRequestError.
 
@@ -1015,7 +1017,8 @@ class BridgeConnection(object):
             rt = request_types[op]
         except KeyError:
             raise InvalidRequestError('Unknown op value')
-        return (rt, proxy)
+        self.handler = rt.handler()
+        return (rt.validator, proxy)
 
     def read_request_payload_size(self):
         '''Read request payload size.'''
@@ -1083,27 +1086,27 @@ class BridgeConnection(object):
 
 def handle_connection(conn):
     '''Handle a single connection.'''
-    (rt, client_proxy) = conn.read_request_headers()
+    (validator, client_proxy) = conn.read_request_headers()
 
     try:
         conn.read_request_payload_size()
-        rt.validate(conn)
+        validator.validate(conn.request_fields, conn.request_payload_size)
         conn.server_buf.write(client_proxy.stored_data())
-        rt.forward_request_payload(conn)
+        conn.handler.forward_request_payload(conn)
 
         double_tls.bridge_inner_stream(conn.client_buf, conn.server_buf)
 
         conn.forward_reply_headers()
 
         conn.read_reply_payload_size()
-        rt.forward_reply_payload(conn)
+        conn.handler.forward_reply_payload(conn)
         conn.forward_reply_payload_authenticator()
 
-        rt.post_request_phase(conn)
+        conn.handler.post_request_phase(conn)
 
         conn.terminate_client_connection()
     finally:
-        rt.close()
+        conn.handler.close()
 
 
 _fas_connection = None

@@ -1,5 +1,27 @@
 2011-06-17  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (RequestValidator): Split from RequestType.
+	(RequestValidator.__init__): Remove default value of max_payload.
+	Remove default_fields handling.
+	(RequestValidator.validate): Rename back from validate_data.
+	(RequestHandler): Rename from RequestType, use one instance per
+	connection.
+	(RequestHandler.validate): Remove.
+	(SignRPMRequestHandler): Rename from SignRPMRequestType.
+	(SignRPMRequestHandler.close): Stop zeroizing state, this object
+	won't be reused for future connections.
+	(SignRPMsReadRequestThread.__subheader_validator): Use RequestValidator.
+	Rename from __subheader_RT.  All users updated.
+	(SignRPMsRequestHandler): Rename from SignRPMsRequestType.
+	(RT): New class holding named fields instead of using old
+	RequestType.  Default max_payload and common fields are now handled
+	here.
+	(request_types): Update for new RT.
+	(BridgeConnection.read_request_headers): Set self.handler.  Return only
+	the verifier.
+	(handle_connection): Use the separate validator directly.  Use
+	conn.handler instead of direct access to a RequestType.
+
 	* src/bridge.py (SignRPMRequestType.forward_reply_payload): Make this
 	more similar to SignRPMsSendReplyThread.__handle_one_rpm.
 
