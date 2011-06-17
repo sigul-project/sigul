@@ -1000,6 +1000,39 @@ class StoringProxy(object):
 class BridgeConnection(object):
     '''State and handling of a single connection.'''
 
+    @staticmethod
+    def handle_connection(config, client_sock, server_sock):
+        '''Handle a single connection using client_sock and server_sock.'''
+        client_sock.force_handshake()
+        cert = client_sock.get_peer_certificate()
+        assert cert is not None
+        user_name = cert.subject_common_name
+        logging.info('Client with CN %s connected', repr(user_name))
+        if (config.required_fas_group is not None and
+            not fas_user_is_in_group(config, user_name,
+                                     config.required_fas_group)):
+            raise InvalidRequestError('User %s not allowed to connect'
+                                      % repr(user_name))
+
+        client_buf = double_tls.OuterBuffer(client_sock)
+        server_buf = double_tls.OuterBuffer(server_sock)
+
+        conn = BridgeConnection(config, user_name, client_buf, server_buf)
+        try:
+            conn.forward_request_headers()
+            conn.handler.forward_request_payload(conn)
+
+            double_tls.bridge_inner_stream(conn.client_buf, conn.server_buf)
+
+            conn.forward_reply_headers()
+            conn.forward_reply_payload()
+
+            conn.handler.post_request_phase(conn)
+
+            conn.terminate_client_connection()
+        finally:
+            conn.finalize()
+
     def __init__(self, config, user_name, client_buf, server_buf):
         self.config = config
         self.handler = None
@@ -1110,38 +1143,6 @@ class BridgeConnection(object):
         if self.handler is not None:
             self.handler.close()
 
-def handle_connection(config, client_sock, server_sock):
-    '''Handle a single connection using client_sock and server_sock.'''
-    client_sock.force_handshake()
-    cert = client_sock.get_peer_certificate()
-    assert cert is not None
-    user_name = cert.subject_common_name
-    logging.info('Client with CN %s connected', repr(user_name))
-    if (config.required_fas_group is not None and
-        not fas_user_is_in_group(config, user_name, config.required_fas_group)):
-        raise InvalidRequestError('User %s not allowed to connect'
-                                  % repr(user_name))
-
-    client_buf = double_tls.OuterBuffer(client_sock)
-    server_buf = double_tls.OuterBuffer(server_sock)
-
-    conn = BridgeConnection(config, user_name, client_buf, server_buf)
-    try:
-        conn.forward_request_headers()
-        conn.handler.forward_request_payload(conn)
-
-        double_tls.bridge_inner_stream(conn.client_buf, conn.server_buf)
-
-        conn.forward_reply_headers()
-        conn.forward_reply_payload()
-
-        conn.handler.post_request_phase(conn)
-
-        conn.terminate_client_connection()
-    finally:
-        conn.finalize()
-
-
 def bridge_one_request(config, server_listen_sock, client_listen_sock):
     '''Forward one request and reply.'''
 
@@ -1154,7 +1155,8 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
             logging.debug('Waiting for the client to connect')
             (client_sock, _) = client_listen_sock.accept()
             try:
-                handle_connection(config, client_sock, server_sock)
+                BridgeConnection.handle_connection(config, client_sock,
+                                                   server_sock)
             finally:
                 client_sock.close()
         finally:
