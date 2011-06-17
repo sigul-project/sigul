@@ -1,3 +1,14 @@
+2011-06-17  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/bridge.py (BridgeConnection): New class.
+	(RequestType.forward_request_payload, RequestType.forward_reply_payload)
+	(RequestType.post_request_phase, KojiClient.__init__)
+	(SignRPMsReadRequestThread.__init__)
+	(SignRPMsKojiThread.__init__, handle_connection): Use
+	BridgeConnection instead of separate parameters and members.  All
+	users and subclasses updated.
+	(bridge_one_request): Create a BridgeConnection object.
+
 2011-06-13  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/bridge.py (RequestType, RequestType.post_request_phase): New

@@ -245,21 +245,18 @@ class RequestType(object):
         if payload_size > self.__max_payload:
             raise InvalidRequestError('Payload too large')
 
-    def forward_request_payload(self, unused_config, unused_user_name,
-                                server_buf, client_buf, payload_size,
-                                unused_fields):
-        '''Forward (optionally modify) payload from client_buf to server_buf.'''
-        server_buf.write(utils.u32_pack(payload_size))
-        copy_file_data(server_buf, client_buf, payload_size)
+    def forward_request_payload(self, conn, payload_size, unused_fields):
+        '''Forward (optionally modify) request payload in conn.'''
+        conn.server_buf.write(utils.u32_pack(payload_size))
+        copy_file_data(conn.server_buf, conn.client_buf, payload_size)
 
-    def forward_reply_payload(self, client_buf, server_buf, payload_size):
-        '''Forward (optionally modify) payload from server_buf to client_buf.'''
-        client_buf.write(utils.u32_pack(payload_size))
-        copy_file_data(client_buf, server_buf, payload_size)
+    def forward_reply_payload(self, conn, payload_size):
+        '''Forward (optionally modify) reply payload in conn.'''
+        conn.client_buf.write(utils.u32_pack(payload_size))
+        copy_file_data(conn.client_buf, conn.server_buf, payload_size)
 
-    def post_request_phase(self, config, unused_user_name, client_buf,
-                           server_buf):
-        '''Optional additional actions with client_buf and server_buf.'''
+    def post_request_phase(self, conn):
+        '''Optional additional actions on conn.'''
         pass
 
     def close(self):
@@ -267,17 +264,17 @@ class RequestType(object):
         pass
 
 class KojiClient(object):
-    '''Utilities for working with koji.
+    '''Utilities for working with Koji.
 
-    The client will create only one koji session, reusing it for all requests.
+    The client will one Koji session per connection, reusing it for all
+    subrequests.
 
     '''
-    def __init__(self, config, user_name, request_fields):
+    def __init__(self, conn, request_fields):
         '''Initialize, using request_fields for Koji instance selection.'''
-        self.__config = config
-        if not utils.string_is_safe(user_name):
-            raise InvalidRequestError('Clietn certificate CN is not printable')
-        self.__user_name = user_name
+        self.__conn = conn
+        if not utils.string_is_safe(conn.user_name):
+            raise InvalidRequestError('Client certificate CN is not printable')
         self.__koji_session = None
         self.__koji_config = None
         self.__request_fields = request_fields
@@ -297,7 +294,7 @@ class KojiClient(object):
             instance = self.__request_fields.get('koji-instance')
             StringField('koji-instance', optional=True).validate(instance)
             try:
-                self.__koji_config = utils.koji_read_config(self.__config,
+                self.__koji_config = utils.koji_read_config(self.__conn.config,
                                                             instance)
             except utils.KojiError, e:
                 raise ForwardingError('Error preparing Koji configuration: %s' %
@@ -307,7 +304,7 @@ class KojiClient(object):
                 if settings.koji_do_proxy_auth:
                     self.__koji_session = utils.koji_connect \
                         (self.__koji_config, authenticate=True,
-                         proxyuser=self.__user_name)
+                         proxyuser=self.__conn.user_name)
                 else:
                     self.__koji_session = utils.koji_connect(self.__koji_config,
                                                              authenticate=True)
@@ -421,30 +418,27 @@ class SignRPMRequestType(RequestType):
         self.__koji_client = None
         self.__rpm = None
 
-    def forward_request_payload(self, config, user_name, server_buf, client_buf,
-                                payload_size, fields):
-        '''Forward (optionally modify) payload from client_buf to server_buf.'''
+    def forward_request_payload(self, conn, payload_size, fields):
         self.__request_fields = fields
-        self.__koji_client = KojiClient(config, user_name, fields)
+        self.__koji_client = KojiClient(conn, fields)
         self.__rpm = RPMObject(fields, None, payload_size)
         if payload_size != 0:
             return super(SignRPMRequestType, self). \
-                forward_request_payload(config, user_name, server_buf,
-                                        client_buf, payload_size, fields)
+                forward_request_payload(conn, payload_size, fields)
 
         self.__rpm.compute_payload_url(self.__koji_client)
         url = self.__rpm.request_payload_url
         try:
             (src, payload_size) = urlgrabber_open(url)
             try:
-                server_buf.write(utils.u32_pack(payload_size))
-                copy_file_data(server_buf, src, payload_size)
+                conn.server_buf.write(utils.u32_pack(payload_size))
+                copy_file_data(conn.server_buf, src, payload_size)
             finally:
                 src.close()
         except urlgrabber.grabber.URLGrabError, e:
             raise ForwardingError('Error reading %s: %s' % (url, str(e)))
 
-    def forward_reply_payload(self, client_buf, server_buf, payload_size):
+    def forward_reply_payload(self, conn, payload_size):
         # Zero-length response should happen only on error.
         if (payload_size != 0 and
             self.__request_fields.get('import-signature') == utils.u32_pack(1)):
@@ -452,7 +446,7 @@ class SignRPMRequestType(RequestType):
             try:
                 tmp_file = os.fdopen(fd, 'w+')
                 try:
-                    copy_file_data(tmp_file, server_buf, payload_size)
+                    copy_file_data(tmp_file, conn.server_buf, payload_size)
                 finally:
                     tmp_file.close()
 
@@ -460,22 +454,21 @@ class SignRPMRequestType(RequestType):
 
                 if (self.__request_fields.get('return-data') ==
                     utils.u32_pack(0)):
-                    client_buf.write(utils.u32_pack(0))
+                    conn.client_buf.write(utils.u32_pack(0))
                 else:
-                    client_buf.write(utils.u32_pack(payload_size))
+                    conn.client_buf.write(utils.u32_pack(payload_size))
                     tmp_file = open(self.__rpm.tmp_path, 'rb')
                     try:
-                        copy_file_data(client_buf, tmp_file, payload_size)
+                        copy_file_data(conn.client_buf, tmp_file, payload_size)
                     finally:
                         tmp_file.close()
             finally:
                 self.__rpm.remove_tmp_path()
         elif self.__request_fields.get('return-data') != utils.u32_pack(0):
-            super(SignRPMRequestType, self).forward_reply_payload(client_buf,
-                                                                  server_buf,
+            super(SignRPMRequestType, self).forward_reply_payload(conn,
                                                                   payload_size)
         else:
-            client_buf.write(utils.u32_pack(0))
+            conn.client_buf.write(utils.u32_pack(0))
 
     def close(self):
         super(SignRPMRequestType, self).close()
@@ -531,13 +524,12 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
                                  max_payload=1024*1024*1024,
                                  default_fields=False)
 
-    def __init__(self, config, dest_queue, client_buf, subrequest_map, tmp_dir):
+    def __init__(self, conn, dest_queue, subrequest_map, tmp_dir):
         super(SignRPMsReadRequestThread, self). \
             __init__('sign-rpms:read requests', 'read request thread',
                      output_queues=((dest_queue, self.eof),))
-        self.__config = config
+        self.__conn = conn
         self.__dest = dest_queue
-        self.__client_buf = client_buf
         self.__subrequest_map = subrequest_map
         self.__tmp_dir = tmp_dir
 
@@ -545,7 +537,7 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
         total_size = 0
         while True:
             (rpm, size) = self.__read_one_request \
-                (self.__config.max_rpms_payloads_size - total_size)
+                (self.__conn.config.max_rpms_payloads_size - total_size)
             if rpm is None:
                 break
             total_size += size
@@ -553,14 +545,14 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
             self.__dest.put(rpm)
 
     def __read_one_request(self, remaining_size):
-        '''Read one request from self.__client_buf.
+        '''Read one request from self.__conn.
 
         Return (RPMObject, file size), (None, None) on EOF.  Raise
         InvalidRequestError, others.  Only allow remaining_size bytes for the
         payload.
 
         '''
-        client_proxy = StoringProxy(self.__client_buf)
+        client_proxy = StoringProxy(self.__conn.client_buf)
         try:
             fields = utils.read_fields(client_proxy.stored_read)
         except EOFError:
@@ -572,7 +564,7 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
         logging.info('Subrequest: %s', s)
         client_proxy.stored_read(64) # Ignore value
 
-        buf = self.__client_buf.read(utils.u32_size)
+        buf = self.__conn.client_buf.read(utils.u32_size)
         payload_size = utils.u32_unpack(buf)
 
         self.__subheader_RT.validate(fields, payload_size)
@@ -587,13 +579,13 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
                                                   dir=self.__tmp_dir)
             dst = os.fdopen(fd, 'w+')
             try:
-                copy_file_data(dst, self.__client_buf, payload_size)
+                copy_file_data(dst, self.__conn.client_buf, payload_size)
                 # Count whole blocks to avoid millions of 1-byte files filling
                 # the hard drive due to internal fragmentation.
                 size = utils.file_size_in_blocks(dst)
             finally:
                 dst.close()
-        rpm.request_payload_digest = self.__client_buf.read(64)
+        rpm.request_payload_digest = self.__conn.client_buf.read(64)
         return (rpm, size)
 
 class SignRPMsKojiThread(utils.WorkerThread):
@@ -606,7 +598,7 @@ class SignRPMsKojiThread(utils.WorkerThread):
 
     '''
 
-    def __init__(self, config, user_name, request_dst_queue, reply_dst_queue,
+    def __init__(self, conn, request_dst_queue, reply_dst_queue,
                  src_queue, request_fields):
         super(SignRPMsKojiThread, self). \
             __init__('sign-rpms:koji requests', 'koji thread',
@@ -614,8 +606,7 @@ class SignRPMsKojiThread(utils.WorkerThread):
                                    (src_queue, SignRPMsReadReplyThread.eof)),
                      output_queues=((request_dst_queue, None),
                                     (reply_dst_queue, None)))
-        self.__config = config
-        self.__user_name = user_name
+        self.__conn = conn
         self.__request_dst = request_dst_queue
         self.__reply_dst = reply_dst_queue
         self.__src = src_queue
@@ -623,8 +614,7 @@ class SignRPMsKojiThread(utils.WorkerThread):
 
     def _real_run(self):
         '''Read and handle all koji subrequests.'''
-        koji_client = KojiClient(self.__config, self.__user_name,
-                                 self.__request_fields)
+        koji_client = KojiClient(self.__conn, self.__request_fields)
         try:
             total_size = 0
             got_request_eof = False
@@ -640,7 +630,7 @@ class SignRPMsKojiThread(utils.WorkerThread):
                 elif rpm.reply_fields is None:
                     size = self.__handle_one_request_rpm(rpm, koji_client)
                     total_size += size
-                    if total_size > self.__config.max_rpms_payloads_size:
+                    if total_size > self.__conn.config.max_rpms_payloads_size:
                         raise InvalidRequestError('Total payload size too '
                                                   'large')
                     self.__request_dst.put(rpm)
@@ -869,37 +859,34 @@ class SignRPMsSendReplyThread(utils.WorkerThread):
 class SignRPMsRequestType(RequestType):
     '''A specialized handler for the 'sign-rpms' request.'''
 
-    def forward_request_payload(self, config, user_name, server_buf, client_buf,
-                                payload_size, fields):
+    def forward_request_payload(self, conn, payload_size, fields):
         super(SignRPMsRequestType, self).forward_request_payload \
-            (config, user_name, server_buf, client_buf, payload_size, fields)
+            (conn, payload_size, fields)
         self.__request_fields = fields
 
-    def post_request_phase(self, config, user_name, client_buf, server_buf):
+    def post_request_phase(self, conn):
         logging.debug('In post_request_phase')
         subrequest_map = SubrequestMap()
 
         tmp_dir = tempfile.mkdtemp()
         exception = None
         try:
-            client_buf.set_full_duplex(True)
-            server_buf.set_full_duplex(True)
+            conn.client_buf.set_full_duplex(True)
+            conn.server_buf.set_full_duplex(True)
 
             koji_queue = Queue.Queue(100)
             q1 = Queue.Queue(100)
             q2 = Queue.Queue(100)
 
             threads = []
-            threads.append(SignRPMsReadRequestThread(config, koji_queue,
-                                                     client_buf, subrequest_map,
-                                                     tmp_dir))
-            threads.append(SignRPMsReadReplyThread(koji_queue, server_buf,
+            threads.append(SignRPMsReadRequestThread(conn, koji_queue,
+                                                     subrequest_map, tmp_dir))
+            threads.append(SignRPMsReadReplyThread(koji_queue, conn.server_buf,
                                                    subrequest_map, tmp_dir))
-            threads.append(SignRPMsKojiThread(config, user_name, q1, q2,
-                                              koji_queue,
+            threads.append(SignRPMsKojiThread(conn, q1, q2, koji_queue,
                                               self.__request_fields))
-            threads.append(SignRPMsSendRequestThread(q1, server_buf))
-            threads.append(SignRPMsSendReplyThread(q2, client_buf,
+            threads.append(SignRPMsSendRequestThread(q1, conn.server_buf))
+            threads.append(SignRPMsSendReplyThread(q2, conn.client_buf,
                                                    self.__request_fields))
 
             (_, exception) = utils.run_worker_threads(threads,
@@ -908,8 +895,8 @@ class SignRPMsRequestType(RequestType):
                                                        ForwardingError))
         finally:
             shutil.rmtree(tmp_dir)
-            client_buf.set_full_duplex(False)
-            server_buf.set_full_duplex(False)
+            conn.client_buf.set_full_duplex(False)
+            conn.server_buf.set_full_duplex(False)
         if exception is not None:
             raise exception[0], exception[1], exception[2]
 
@@ -993,11 +980,20 @@ class StoringProxy(object):
         self.__stored = ''
         return res
 
-def handle_connection(config, user_name, client_buf, server_buf):
+class BridgeConnection(object):
+    '''State and handling of a single connection.'''
+
+    def __init__(self, config, user_name, client_buf, server_buf):
+        self.config = config
+        self.user_name = user_name
+        self.client_buf = client_buf
+        self.server_buf = server_buf
+
+def handle_connection(conn):
     '''Handle a single connection.'''
     # FIXME: handle server's reporting of unknown protocol version - there
     # is no inner session
-    client_proxy = StoringProxy(client_buf)
+    client_proxy = StoringProxy(conn.client_buf)
     buf = client_proxy.stored_read(utils.u32_size)
     client_version = utils.u32_unpack(buf)
     if client_version != utils.protocol_version:
@@ -1007,7 +1003,7 @@ def handle_connection(config, user_name, client_buf, server_buf):
         fields = utils.read_fields(client_proxy.stored_read)
     except utils.InvalidFieldsError, e:
         raise InvalidRequestError(str(e))
-    buf = client_buf.read(utils.u32_size)
+    buf = conn.client_buf.read(utils.u32_size)
     payload_size = utils.u32_unpack(buf)
 
     logging.info('Request: %s', utils.readable_fields(fields))
@@ -1022,13 +1018,12 @@ def handle_connection(config, user_name, client_buf, server_buf):
 
     try:
         rt.validate(fields, payload_size)
-        server_buf.write(client_proxy.stored_data())
-        rt.forward_request_payload(config, user_name, server_buf, client_buf,
-                                   payload_size, fields)
+        conn.server_buf.write(client_proxy.stored_data())
+        rt.forward_request_payload(conn, payload_size, fields)
 
-        double_tls.bridge_inner_stream(client_buf, server_buf)
+        double_tls.bridge_inner_stream(conn.client_buf, conn.server_buf)
 
-        server_proxy = StoringProxy(server_buf)
+        server_proxy = StoringProxy(conn.server_buf)
         buf = server_proxy.stored_read(utils.u32_size)
         try:
             fields = utils.read_fields(server_proxy.stored_read)
@@ -1044,19 +1039,19 @@ def handle_connection(config, user_name, client_buf, server_buf):
                 logging.info('Request error: %s', errors.message(error_code))
         # print repr(fields)
         server_proxy.stored_read(64) # Ignore value
-        client_buf.write(server_proxy.stored_data())
+        conn.client_buf.write(server_proxy.stored_data())
 
-        buf = server_buf.read(utils.u32_size)
+        buf = conn.server_buf.read(utils.u32_size)
         payload_size = utils.u32_unpack(buf)
-        rt.forward_reply_payload(client_buf, server_buf, payload_size)
-        buf = server_buf.read(64)
-        client_buf.write(buf)
+        rt.forward_reply_payload(conn, payload_size)
+        buf = conn.server_buf.read(64)
+        conn.client_buf.write(buf)
 
-        rt.post_request_phase(config, user_name, client_buf, server_buf)
+        rt.post_request_phase(conn)
 
         # Closing the socket should technically be enough, but make sure the
         # client is not waiting for more input...
-        client_buf.send_outer_eof()
+        conn.client_buf.send_outer_eof()
         # ... because we need to wait until client closes the connection.  The
         # client might have already shut down the write end of the connection,
         # sending a TLS close_notify alert.  If we don't read this alert and
@@ -1073,7 +1068,7 @@ def handle_connection(config, user_name, client_buf, server_buf):
         # client has not shut the conection, this will wait until the client
         # processes the data we sent and exits, closing the connection.
         try:
-            client_buf.read(1)
+            conn.client_buf.read(1)
         except EOFError:
             pass
 
@@ -1130,7 +1125,8 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
             client_buf = double_tls.OuterBuffer(client_sock)
             server_buf = double_tls.OuterBuffer(server_sock)
 
-            handle_connection(config, user_name, client_buf, server_buf)
+            conn = BridgeConnection(config, user_name, client_buf, server_buf)
+            handle_connection(conn)
         finally:
             if client_sock is not None:
                 client_sock.close()
