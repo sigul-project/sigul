@@ -118,6 +118,29 @@ def copy_file_data(dest, src, size):
     '''Copy size bytes from file-like src to file-like dst.'''
     utils.copy_data(dest.write, src.read, size)
 
+_fas_connection = None
+def fas_user_is_in_group(config, user_name, group_name):
+    '''Return True if user_name is in group.'''
+    global _fas_connection
+
+    try:
+        if _fas_connection is None:
+            logging.debug('Logging into FAS')
+            _fas_connection = \
+                fedora.client.AccountSystem(username=config.fas_user_name,
+                                            password=config.fas_password)
+        logging.debug('Authenticating user in FAS')
+        person = _fas_connection.person_by_username(user_name)
+        if len(person) == 0: # Not found
+            return False
+        for group in person.approved_memberships:
+            if str(group['name']) == group_name:
+                return True
+        return False
+    except (fedora.client.FedoraClientError,
+            fedora.client.FedoraServiceError), e:
+        raise BridgeError('Error communicating with FAS: %s' % str(e))
+
 def urlgrabber_open(url):
     '''Open url.
 
@@ -1104,29 +1127,6 @@ def handle_connection(conn):
     finally:
         conn.finalize()
 
-
-_fas_connection = None
-def fas_user_is_in_group(config, user_name, group_name):
-    '''Return True if user_name is in group.'''
-    global _fas_connection
-
-    try:
-        if _fas_connection is None:
-            logging.debug('Logging into FAS')
-            _fas_connection = \
-                fedora.client.AccountSystem(username=config.fas_user_name,
-                                            password=config.fas_password)
-        logging.debug('Authenticating user in FAS')
-        person = _fas_connection.person_by_username(user_name)
-        if len(person) == 0: # Not found
-            return False
-        for group in person.approved_memberships:
-            if str(group['name']) == group_name:
-                return True
-        return False
-    except (fedora.client.FedoraClientError,
-            fedora.client.FedoraServiceError), e:
-        raise BridgeError('Error communicating with FAS: %s' % str(e))
 
 def bridge_one_request(config, server_listen_sock, client_listen_sock):
     '''Forward one request and reply.'''
