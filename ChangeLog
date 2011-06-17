@@ -1,5 +1,8 @@
 2011-06-17  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (SignRPMRequestType.forward_reply_payload): Make this
+	more similar to SignRPMsSendReplyThread.__handle_one_rpm.
+
 	* src/bridge.py (RequestType.validate_data): Rename from
 	RequestType.validate.  All users updated.
 	(RequestType.validate): New method, use BridgeConnection.

@@ -456,17 +456,19 @@ class SignRPMRequestType(RequestType):
 
                 self.__rpm.add_signature_to_koji(self.__koji_client)
 
-                if conn.request_fields.get('return-data') == utils.u32_pack(0):
-                    conn.client_buf.write(utils.u32_pack(0))
+                if conn.request_fields.get('return-data') != utils.u32_pack(0):
+                    payload_size = conn.reply_payload_size
+                    src = open(self.__rpm.tmp_path, 'rb')
                 else:
-                    buf = utils.u32_pack(conn.reply_payload_size)
-                    conn.client_buf.write(buf)
-                    tmp_file = open(self.__rpm.tmp_path, 'rb')
-                    try:
-                        copy_file_data(conn.client_buf, tmp_file,
-                                       conn.reply_payload_size)
-                    finally:
-                        tmp_file.close()
+                    payload_size = 0
+                    src = None
+                try:
+                    conn.client_buf.write(utils.u32_pack(payload_size))
+                    if src is not None:
+                        copy_file_data(conn.client_buf, src, payload_size)
+                finally:
+                    if src is not None:
+                        src.close()
             finally:
                 self.__rpm.remove_tmp_path()
         elif conn.request_fields.get('return-data') != utils.u32_pack(0):
