@@ -1,5 +1,11 @@
 2011-06-17  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (BridgeConnection.__init__): Initialize self.handler.
+	(BridgeConnection.finalize): Split from handle_connection.  Handle cases
+	when handler was not initialized.
+	(handle_connection): Finalize the connection even when
+	conn.read_request_headers() fails.
+
 	* src/bridge.py (BridgeConnection.forward_reply_headers): New
 	function, split from handle_connection.
 	(BridgeConnection.read_reply_payload_size)

@@ -979,6 +979,7 @@ class BridgeConnection(object):
 
     def __init__(self, config, user_name, client_buf, server_buf):
         self.config = config
+        self.handler = None
         self.user_name = user_name
         self.client_buf = client_buf
         self.server_buf = server_buf
@@ -1082,11 +1083,15 @@ class BridgeConnection(object):
         except EOFError:
             pass
 
+    def finalize(self):
+        '''Drop per-connection state.'''
+        if self.handler is not None:
+            self.handler.close()
+
 def handle_connection(conn):
     '''Handle a single connection.'''
-    (validator, client_proxy) = conn.read_request_headers()
-
     try:
+        (validator, client_proxy) = conn.read_request_headers()
         conn.read_request_payload_size()
         validator.validate(conn.request_fields, conn.request_payload_size)
         conn.server_buf.write(client_proxy.stored_data())
@@ -1101,7 +1106,7 @@ def handle_connection(conn):
 
         conn.terminate_client_connection()
     finally:
-        conn.handler.close()
+        conn.finalize()
 
 
 _fas_connection = None
