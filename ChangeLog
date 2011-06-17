@@ -1,5 +1,8 @@
 2011-06-17  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (bridge_one_request): Close server socket even if
+	client has failed to connect.
+
 	* src/bridge.py (RequestValidator): Split from RequestType.
 	(RequestValidator.__init__): Remove default value of max_payload.
 	Remove default_fields handling.

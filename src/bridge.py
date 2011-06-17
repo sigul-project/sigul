@@ -1163,7 +1163,7 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
         finally:
             if client_sock is not None:
                 client_sock.close()
-                server_sock.close()
+            server_sock.close()
     except InvalidRequestError, e:
         logging.warning('Invalid request: %s', str(e))
     except InvalidReplyError, e:
