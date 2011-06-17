@@ -1019,33 +1019,33 @@ class BridgeConnection(object):
 
         conn = BridgeConnection(config, user_name, client_buf, server_buf)
         try:
-            conn.forward_request_headers()
-            conn.handler.forward_request_payload(conn)
+            conn.__forward_request_headers()
+            conn.__handler.forward_request_payload(conn)
 
             double_tls.bridge_inner_stream(conn.client_buf, conn.server_buf)
 
-            conn.forward_reply_headers()
-            conn.forward_reply_payload()
+            conn.__forward_reply_headers()
+            conn.__forward_reply_payload()
 
-            conn.handler.post_request_phase(conn)
+            conn.__handler.post_request_phase(conn)
 
-            conn.terminate_client_connection()
+            conn.__terminate_client_connection()
         finally:
-            conn.finalize()
+            conn.__finalize()
 
     def __init__(self, config, user_name, client_buf, server_buf):
         self.config = config
-        self.handler = None
         self.user_name = user_name
         self.client_buf = client_buf
         self.server_buf = server_buf
+        self.__handler = None
 
-    def forward_request_headers(self):
+    def __forward_request_headers(self):
         '''Read and forward request data up to the request payload size.
 
         Note that request payload size is read and validated, but not forwarded!
 
-        Set self.handler, self.request_fields and self.request_payload_size.
+        Set self.__handler, self.request_fields and self.request_payload_size.
 
         Raise InvalidRequestError.
 
@@ -1072,7 +1072,7 @@ class BridgeConnection(object):
             rt = request_types[op]
         except KeyError:
             raise InvalidRequestError('Unknown op value')
-        self.handler = rt.handler()
+        self.__handler = rt.handler()
 
         buf = self.client_buf.read(utils.u32_size) # Not using proxy
         self.request_payload_size = utils.u32_unpack(buf)
@@ -1081,7 +1081,7 @@ class BridgeConnection(object):
 
         self.server_buf.write(proxy.stored_data())
 
-    def forward_reply_headers(self):
+    def __forward_reply_headers(self):
         '''Read and forward reply data up to (and including) the reply header.
 
         Raise InvalidReplyError.
@@ -1105,15 +1105,15 @@ class BridgeConnection(object):
         proxy.stored_read(64) # Ignore value
         self.client_buf.write(proxy.stored_data())
 
-    def forward_reply_payload(self):
+    def __forward_reply_payload(self):
         '''Read and forward reply payload, including related metadata.'''
         buf = self.server_buf.read(utils.u32_size)
         self.reply_payload_size = utils.u32_unpack(buf)
-        self.handler.forward_reply_payload(self)
+        self.__handler.forward_reply_payload(self)
         buf = self.server_buf.read(64)
         self.client_buf.write(buf)
 
-    def terminate_client_connection(self):
+    def __terminate_client_connection(self):
         '''Correctly terminate the client's connection.'''
         # Closing the socket should technically be enough, but make sure the
         # client is not waiting for more input...
@@ -1138,10 +1138,10 @@ class BridgeConnection(object):
         except EOFError:
             pass
 
-    def finalize(self):
+    def __finalize(self):
         '''Drop per-connection state.'''
-        if self.handler is not None:
-            self.handler.close()
+        if self.__handler is not None:
+            self.__handler.close()
 
 def bridge_one_request(config, server_listen_sock, client_listen_sock):
     '''Forward one request and reply.'''

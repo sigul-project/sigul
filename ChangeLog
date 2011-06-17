@@ -1,5 +1,17 @@
 2011-06-17  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (BridgeConnection): Rename self.handler to
+	self.__handler.
+	(BridgeConnection.__forward_request_headers): Rename from
+	forward_request_headers.
+	(BridgeConnection.__forward_reply_headers): Rename from
+	forward_reply_headers.
+	(BridgeConnection.__forward_reply_payload): Rename from
+	forward_reply_payload.
+	(BridgeConnection.__terminate_client_connection): Rename from
+	terminate_client_connection.
+	(BridgeConnection.__finalize): Rename from finalize.
+
 	* src/bridge.py (BridgeConnection.handle_connection): Move from
 	a top-level function.
 
