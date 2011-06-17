@@ -1,5 +1,11 @@
 2011-06-17  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py	(BridgeConnection.forward_request_headers): Split from
+	handle_connection().
+	(BridgeConnection.read_request_headers)
+	(BridgeConnection.read_request_payload_size): Fold into
+	forward_request_headers().
+
 	* src/bridge.py (BridgeConnection.__init__): Initialize self.handler.
 	(BridgeConnection.finalize): Split from handle_connection.  Handle cases
 	when handler was not initialized.

@@ -984,16 +984,14 @@ class BridgeConnection(object):
         self.client_buf = client_buf
         self.server_buf = server_buf
 
-    def read_request_headers(self):
-        '''Read request data up to (and including) the request header.
+    def forward_request_headers(self):
+        '''Read and forward request data up to the request payload size.
 
-        Return (request validator, StoringProxy with read data).  Set
-        self.handler, self.request_fields and self.request_payload_size.
+        Note that request payload size is read and validated, but not forwarded!
+
+        Set self.handler, self.request_fields and self.request_payload_size.
 
         Raise InvalidRequestError.
-
-        Note that the request fields have not yet been validated when this
-        method returns.
 
         '''
         # FIXME: handle server's reporting of unknown protocol version - there
@@ -1019,12 +1017,13 @@ class BridgeConnection(object):
         except KeyError:
             raise InvalidRequestError('Unknown op value')
         self.handler = rt.handler()
-        return (rt.validator, proxy)
 
-    def read_request_payload_size(self):
-        '''Read request payload size.'''
-        buf = self.client_buf.read(utils.u32_size)
+        buf = self.client_buf.read(utils.u32_size) # Not using proxy
         self.request_payload_size = utils.u32_unpack(buf)
+
+        rt.validator.validate(self.request_fields, self.request_payload_size)
+
+        self.server_buf.write(proxy.stored_data())
 
     def forward_reply_headers(self):
         '''Read and forward reply data up to (and including) the reply header.
@@ -1091,10 +1090,7 @@ class BridgeConnection(object):
 def handle_connection(conn):
     '''Handle a single connection.'''
     try:
-        (validator, client_proxy) = conn.read_request_headers()
-        conn.read_request_payload_size()
-        validator.validate(conn.request_fields, conn.request_payload_size)
-        conn.server_buf.write(client_proxy.stored_data())
+        conn.forward_request_headers()
         conn.handler.forward_request_payload(conn)
 
         double_tls.bridge_inner_stream(conn.client_buf, conn.server_buf)
