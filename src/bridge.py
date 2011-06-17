@@ -1049,13 +1049,11 @@ class BridgeConnection(object):
         proxy.stored_read(64) # Ignore value
         self.client_buf.write(proxy.stored_data())
 
-    def read_reply_payload_size(self):
-        '''Read reply payload size.'''
+    def forward_reply_payload(self):
+        '''Read and forward reply payload, including related metadata.'''
         buf = self.server_buf.read(utils.u32_size)
         self.reply_payload_size = utils.u32_unpack(buf)
-
-    def forward_reply_payload_authenticator(self):
-        '''Forward reply payload authenticator.'''
+        self.handler.forward_reply_payload(self)
         buf = self.server_buf.read(64)
         self.client_buf.write(buf)
 
@@ -1097,10 +1095,7 @@ def handle_connection(conn):
         double_tls.bridge_inner_stream(conn.client_buf, conn.server_buf)
 
         conn.forward_reply_headers()
-
-        conn.read_reply_payload_size()
-        conn.handler.forward_reply_payload(conn)
-        conn.forward_reply_payload_authenticator()
+        conn.forward_reply_payload()
 
         conn.handler.post_request_phase(conn)
 
