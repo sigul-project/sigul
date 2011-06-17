@@ -1,9 +1,12 @@
 2011-06-17  Miloslav Trmač  <mitr@redhat.com>
 
-	* src/bridge.py	(fas_user_is_in_group): Move into infrastructure
+	* src/bridge.py (handle_connection): Move all connection-specific code
+	from bridge_one_request here.
+
+	* src/bridge.py (fas_user_is_in_group): Move into infrastructure
 	section.
 
-	* src/bridge.py	(BridgeConnection.forward_request_headers): Split from
+	* src/bridge.py (BridgeConnection.forward_request_headers): Split from
 	handle_connection().
 	(BridgeConnection.read_request_headers)
 	(BridgeConnection.read_request_payload_size): Fold into
