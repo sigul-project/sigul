@@ -1,5 +1,34 @@
 2011-06-17  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (RequestType.validate_data): Rename from
+	RequestType.validate.  All users updated.
+	(RequestType.validate): New method, use BridgeConnection.
+	(RequestType.forward_request_payload)
+	(RequestType.forward_reply_payload, KojiClient.__init__)
+	(KojiClient.__get_session, SignRPMsKojiThread.__init__)
+	(SignRPMsKojiThread._real_run)
+	(SignRPMsKojiThread.__handle_one_reply_rpm)
+	(SignRPMsSendReplyThread.__init__)
+	(SignRPMsSendReplyThread.__handle_one_rpm): Use BridgeConnection
+	fields instead of separate parameters.  All users and subclasses
+	updated.
+	(SignRPMRequestType.__init__)
+	(SignRPMRequestType.forward_request_payload, SignRPMRequestType.close):
+	Don't store request header fields.
+	(SignRPMRequestType.forward_reply_payload): Access request header fields
+	through BridgeConnection.
+	(SignRPMsRequestType.forward_request_payload)
+	(SignRPMsRequestType.close): Don't store request header fields.
+	(SignRPMsRequestType.post_request_phase): Access request header
+	fields through BridgeConnection.
+	(BridgeConnection.read_request_headers)
+	(BridgeConnection.read_request_payload_size)
+	(BridgeConnection.forward_reply_headers)
+	(BridgeConnection.read_reply_payload_size)
+	(BridgeConnection.forward_reply_payload_authenticator)
+	(BridgeConnection.terminate_client_connection): New methods, split from
+	handle_connection.
+
 	* src/bridge.py (BridgeConnection): New class.
 	(RequestType.forward_request_payload, RequestType.forward_reply_payload)
 	(RequestType.post_request_phase, KojiClient.__init__)
