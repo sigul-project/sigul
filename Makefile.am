@@ -21,6 +21,7 @@
 configdir = $(sysconfdir)/sigul
 logdir = $(localstatedir)/log
 piddir = $(localstatedir)/run
+pythondir = $(pkgdatadir)
 serverdatadir = $(localstatedir)/lib/sigul
 
 ## Targets
@@ -32,17 +33,17 @@ dist_config_DATA = config/bridge.conf config/client.conf config/server.conf
 man_MANS = doc/sigul.1 doc/sigul_bridge.8 doc/sigul_server.8 \
 	doc/sigul_server_add_admin.8 doc/sigul_server_create_db.8
 dist_man_MANS = doc/sigul_setup_client.1
-pkgdata_PYTHON = src/bridge.py \
+python_PYTHON = src/bridge.py \
 	src/client.py \
 	src/double_tls.py \
 	src/errors.py \
 	src/server.py src/server_add_admin.py src/server_common.py \
 	src/server_create_db.py \
 	src/utils.py
-nodist_pkgdata_PYTHON = src/settings.py
+nodist_python_PYTHON = src/settings.py
 
 ## Rules
-CLEANFILES = $(bin_SCRIPTS) $(sbin_SCRIPTS) $(man_MANS) $(nodist_pkgdata_PYTHON)
+CLEANFILES = $(bin_SCRIPTS) $(sbin_SCRIPTS) $(man_MANS) $(nodist_python_PYTHON)
 DISTCLEANFILES = atconfig
 EXTRA_DIST = doc/data-design.txt doc/protocol-design.txt \
 	doc/sigul.1.in doc/sigul_bridge.8.in doc/sigul_server.8.in \

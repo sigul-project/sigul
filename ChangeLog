@@ -1,3 +1,10 @@
+2012-06-03  Miloslav Trmač  <mitr@redhat.com>
+
+	* Makefile.am (pythondir): Override Python installation location.
+	(python_PYTHON, nodist_python_PYTHON): Rename from pkgdata_PYTHON
+	and nodist_pkgdata_PYTHON to work around automake's placement
+	restrictions.  All users updated.
+
 2011-06-17  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/bridge.py (BridgeConnection): Rename self.handler to
