@@ -402,7 +402,8 @@ AT_CHECK([printf 'imported-key-pw\0' | \
 AT_CHECK([printf 'imported-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		get-public-key imported-key > public.asc])
-AT_CHECK([cmp public.asc "$abs_srcdir/tests/imported-public-key.asc"])
+AT_CHECK([sed 's/^Version: .*$/Version: VERSION/' < public.asc | \
+		cmp - "$abs_srcdir/tests/imported-public-key.asc"])
 rm public.asc
 
 

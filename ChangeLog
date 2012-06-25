@@ -1,5 +1,10 @@
 2012-06-25  Miloslav Trmač  <mitr@redhat.com>
 
+	* tests/basic.at (Basic functionality): Replace GnuPG version by a
+	constant string before comparing the public key.
+	* tests/imported-public-key.asc: Replace GnuPG version by a constant
+	string.
+
 	* Makefile.am (installcheck-local): Make sure the test suite is
 	up-to-date before running it.
 
