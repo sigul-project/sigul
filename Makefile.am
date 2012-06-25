@@ -135,7 +135,7 @@ src/sigul_server_create_db: src/script.in Makefile
 clean-local:
 	$(SHELL) $(top_srcdir)/tests/testsuite --clean
 
-installcheck-local:
+installcheck-local: atconfig $(top_srcdir)/tests/testsuite
 	$(SHELL) $(top_srcdir)/tests/testsuite \
 		AUTOTEST_PATH=$(bindir):$(sbindir)
 
