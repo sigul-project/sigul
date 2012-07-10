@@ -1,4 +1,3 @@
 - should be able to service requests within the server in parallel?
-- koji proxy auth should be based on cert CN, not on sigul user name
 - better bridge error reporting - fake reply header, handle it in the client
 - rewrite to send as large chunks of data at a time as possible (decreases TLS framing overhead, removes wakeups/context switches)
