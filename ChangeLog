@@ -1,5 +1,11 @@
 2012-07-10  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/client.py (SignRPMArgumentExaminer.open_rpm): Refuse to work on
+	zero-length files (the bridge would try to replace them with something
+	looked up in Koji).
+	* tests/basic.at (Basic functionality): Test handling of empty files
+	in sign-rpm and sign-rpms.
+
 	* src/double_tls.py (_SplittingBuffer._active): Mark as inactive after
 	we've seen EOFs on both streams, don't wait for a TLS close notify and
 	FIN.

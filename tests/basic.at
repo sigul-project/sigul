@@ -483,6 +483,13 @@ AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed3.rpm], ,
 [signed3.rpm: rsa sha1 (md5) pgp md5 OK
 ])
 rm testrpm0.rpm signed3.rpm
+touch empty.rpm
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		sign-rpm -o signed.rpm key empty.rpm], 1, ,
+[Error: Cannot sign zero-length RPM file empty.rpm
+])
+rm empty.rpm
 
 
 # sign-rpms
@@ -499,6 +506,15 @@ done | LC_ALL=C sort > expected
 AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed/* | LC_ALL=C sort > output])
 AT_CHECK([diff -u expected output])
 rm -r expected output signed unsigned
+mkdir unsigned signed
+touch unsigned/empty.rpm
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		sign-rpms -o signed key unsigned/*], 1, ,
+[ERROR: Error signing unsigned/empty.rpm: Error: Cannot sign zero-length RPM file unsigned/empty.rpm
+])
+AT_CHECK([ls signed])
+rm -r signed unsigned
 
 
 # Terminate daemons

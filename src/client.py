@@ -421,6 +421,9 @@ class SignRPMArgumentExaminer(object):
             except IOError, e:
                 raise ClientError('Error opening %s: %s' % (arg, e.strerror))
             # Count whole blocks, that's what the bridge and server do.
+            if os.fstat(rpm_file.fileno()).st_size == 0:
+                raise ClientError('Error: Cannot sign zero-length RPM file %s'
+                                  % arg)
             size = utils.file_size_in_blocks(rpm_file)
         else:
             # Don't import koji before initializing ClientsConnection!  The rpm
