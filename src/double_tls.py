@@ -44,8 +44,15 @@ def _id(obj):
         __ids[obj] = new_id
         return new_id
 
+# _debug_file = None
+# _debug_pid = None
 def _debug(fmt, *args):
-    # print fmt % args
+    # global _debug_pid, _debug_file
+    # pid = os.getpid()
+    # if _debug_pid != pid:
+    #     _debug_pid = pid
+    #     _debug_file = open('/tmp/debug%d' % os.getpid(), 'w', 0)
+    # print >> _debug_file, fmt % args
     pass
 
 class ChildConnectionRefusedError(Exception):

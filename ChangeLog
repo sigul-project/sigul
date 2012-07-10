@@ -1,5 +1,8 @@
 2012-07-10  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/double_tls.py (_debug): Update sample to store output in per-PID
+	files, and disable buffering.
+
 	* src/double_tls.py (_CombiningBuffer._handle_errors): Don't send
 	EOF markers if the destination has been already shut down for other
 	reasons.
