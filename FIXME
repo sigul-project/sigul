@@ -2,3 +2,7 @@
 - better bridge error reporting - fake reply header, handle it in the client
 - rewrite to send as large chunks of data at a time as possible (decreases TLS
   framing overhead, removes wakeups/context switches)
+- Koji "pkgurl" is obsolete, need to replace this (ONLY IF the Fedora
+  infrastructure can handle it)
+  Seems we'll need (koji.pathinfo.build(build)+'/'+koji.pathinfo.rpm(rpm_info)),
+  and to manually configure koji.pathinfo with topurl from config
