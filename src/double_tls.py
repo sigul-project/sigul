@@ -380,11 +380,12 @@ class _SplittingBuffer(_ForwardingBuffer):
 
     @property
     def _active(self):
-        _debug('b%s active: open:%s, inner:%s, outer: %s', _id(self),
-               self.__src_open, len(self.__inner_buffer),
-               len(self.__outer_buffer))
-        return (self.__src_open or len(self.__inner_buffer) > 0 or
-                len(self.__outer_buffer) > 0)
+        _debug('b%s active: open:%s, inner:%s/%s, outer: %s/%s', _id(self),
+               self.__src_open, self.__got_inner_eof, len(self.__inner_buffer),
+               self.__got_outer_eof, len(self.__outer_buffer))
+        return ((self.__src_open and
+                 not (self.__got_inner_eof and self.__got_outer_eof)) or
+                len(self.__inner_buffer) > 0 or len(self.__outer_buffer) > 0)
 
     def _prepare_poll(self, poll_descs):
         _debug('b%s poll: open:%s, inner:%s, outer: %s', _id(self),

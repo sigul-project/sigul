@@ -1,5 +1,9 @@
 2012-07-10  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/double_tls.py (_SplittingBuffer._active): Mark as inactive after
+	we've seen EOFs on both streams, don't wait for a TLS close notify and
+	FIN.
+
 	* src/double_tls.py (_debug): Update sample to store output in per-PID
 	files, and disable buffering.
 
