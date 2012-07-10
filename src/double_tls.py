@@ -216,20 +216,28 @@ class _CombiningBuffer(_ForwardingBuffer):
     def _handle_errors(self, poll_descs):
         v = poll_descs.get(self.__inner_src, 0)
         if (v & _POLL_PROBLEM) != 0 and (v & nss.io.PR_POLL_READ) == 0:
-            _debug('b%s: inner src %s problem, adding EOF', _id(self),
-                   _id(self.__inner_src))
-            self.__inner_src_open = False
-            # Append the EOF even if the buffer is too large - this can only
-            # happen once per source.
-            self.__buffer += utils.u32_pack(_chunk_inner_mask)
+            if self.__inner_src_open:
+                _debug('b%s: inner src %s problem, adding EOF', _id(self),
+                       _id(self.__inner_src))
+                self.__inner_src_open = False
+                # Append the EOF even if the buffer is too large - this can only
+                # happen once per source.
+                self.__buffer += utils.u32_pack(_chunk_inner_mask)
+            else:
+                _debug('b%s: inner src %s problem after EOF, ignoring',
+                       _id(self), _id(self.__inner_src))
         v = poll_descs.get(self.__outer_src, 0)
         if (v & _POLL_PROBLEM) != 0 and (v & nss.io.PR_POLL_READ) == 0:
-            _debug('b%s: outer src %s problem, adding EOF', _id(self),
-                   _id(self.__outer_src))
-            self.__outer_src_open = False
-            # Append the EOF even if the buffer is too large - this can only
-            # happen once per source.
-            self.__buffer += utils.u32_pack(0)
+            if self.__outer_src_open:
+                _debug('b%s: outer src %s problem, adding EOF', _id(self),
+                       _id(self.__outer_src))
+                self.__outer_src_open = False
+                # Append the EOF even if the buffer is too large - this can only
+                # happen once per source.
+                self.__buffer += utils.u32_pack(0)
+            else:
+                _debug('b%s: outer src %s problem after EOF, ignoring',
+                       _id(self), _id(self.__outer_src))
         if (poll_descs.get(self.__dst, 0) & _POLL_PROBLEM) != 0:
             _debug('b%s: dst %s problem', _id(self), _id(self.__dst))
             if len(self.__buffer) > 0:

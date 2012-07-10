@@ -1,5 +1,9 @@
 2012-07-10  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/double_tls.py (_CombiningBuffer._handle_errors): Don't send
+	EOF markers if the destination has been already shut down for other
+	reasons.
+
 	* src/double_tls.py (_SplittingBuffer._handle_errors): Fix class name
 	in debug log.
 
