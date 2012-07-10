@@ -401,7 +401,7 @@ class _SplittingBuffer(_ForwardingBuffer):
             if len(self.__inner_buffer) > 0:
                 if not self.__inner_buffer_dropped:
                     self.__inner_buffer_dropped = True
-                    logging.debug('_ForwardingBuffer: inner data dropped')
+                    logging.debug('_SplittingBuffer: inner data dropped')
                 self.__inner_buffer = ''
         if (poll_descs.get(self.__outer_dst, 0) & _POLL_PROBLEM) != 0:
             _debug('b%s: outer dst %s problem', _id(self),
@@ -409,7 +409,7 @@ class _SplittingBuffer(_ForwardingBuffer):
             if len(self.__outer_buffer) > 0:
                 if not self.__outer_buffer_dropped:
                     self.__outer_buffer_dropped = True
-                    logging.debug('_ForwardingBuffer: outer data dropped')
+                    logging.debug('_SplittingBuffer: outer data dropped')
                 self.__outer_buffer = ''
 
     def _send(self, poll_descs):
