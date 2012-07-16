@@ -1135,6 +1135,14 @@ class BridgeConnection(object):
         # alert, preventing the kernel form sending a RST immediately.  If the
         # client has not shut the conection, this will wait until the client
         # processes the data we sent and exits, closing the connection.
+        #
+        # Note that the server->bridge connection does not have the same
+        # problem because the bridge first processes all data from the server,
+        # (then it sends it to the client and closes connection to the client)
+        # and only then does the brige close the socket to the server, sending
+        # a TLS close_notify - in fact the server often closes the connection
+        # and starts waiting for the next one long before the bridge is done
+        # with it.
         try:
             self.client_buf.read(1)
         except EOFError:

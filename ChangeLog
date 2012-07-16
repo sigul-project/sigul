@@ -1,5 +1,10 @@
 2012-07-16  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (BridgeConnection.__terminate_client_connection):
+	Document why this is only necessary for the client-bridge connection.
+
+2012-07-16  Miloslav Trmač  <mitr@redhat.com>
+
 	* src/utils.py (koji_read_config): Require 'topurl' instead of 'pkgurl'.
 	* src/bridge.py (KojiClient.__init__): New member self.__koji_pathinfo.
 	(KojiClient.__get_session): Initialize self.__koji_pathinfo from
