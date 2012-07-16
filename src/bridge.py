@@ -304,11 +304,13 @@ class KojiClient(object):
             raise InvalidRequestError('Client certificate CN is not printable')
         self.__koji_session = None
         self.__koji_config = None
+        self.__koji_pathinfo = None
 
     def __get_session(self):
         '''Return a koji session, creating it if necessary.
 
-        Also make sure self.__koji_config is set up.  Raise ForwardingError.
+        Also make sure self.__koji_config and self.__koji_pathinfo is set up.
+        Raise ForwardingError.
 
         '''
         # Don't import koji before opening sockets!  The rpm Python module
@@ -325,6 +327,7 @@ class KojiClient(object):
             except utils.KojiError, e:
                 raise ForwardingError('Error preparing Koji configuration: %s' %
                                       str(e))
+            self.__koji_pathinfo = koji.PathInfo(self.__koji_config['topurl'])
         if self.__koji_session is None:
             try:
                 if settings.koji_do_proxy_auth:
@@ -385,9 +388,8 @@ class KojiClient(object):
                 raise ForwardingError('RPM has no build')
         except (utils.KojiError, koji.GenericError), e:
             raise ForwardingError('Koji connection failed: %s' % str(e))
-        return '/'.join((self.__koji_config['pkgurl'], build['package_name'],
-                         build['version'], build['release'],
-                         koji.pathinfo.rpm(rpm_info)))
+        return (self.__koji_pathinfo.build(build) + '/' +
+                self.__koji_pathinfo.rpm(rpm_info))
 
     def add_signature(self, rpm_info, path):
         '''Add signature for rpm_info from path using session.

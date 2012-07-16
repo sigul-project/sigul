@@ -216,7 +216,7 @@ def koji_read_config(global_config, instance):
     parser = ConfigParser.ConfigParser()
     parser.read(('/etc/koji.conf', os.path.expanduser(config_path)))
     config = dict(parser.items('koji'))
-    for opt in ('server', 'cert', 'ca', 'serverca', 'pkgurl'):
+    for opt in ('server', 'cert', 'ca', 'serverca', 'topurl'):
         if opt not in config:
             raise KojiError('Missing koji configuration option %s' % opt)
     for opt in ('cert', 'ca', 'serverca'):

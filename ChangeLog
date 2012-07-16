@@ -1,3 +1,12 @@
+2012-07-16  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/utils.py (koji_read_config): Require 'topurl' instead of 'pkgurl'.
+	* src/bridge.py (KojiClient.__init__): New member self.__koji_pathinfo.
+	(KojiClient.__get_session): Initialize self.__koji_pathinfo from
+	topurl in Koji configuration.
+	(KojiClient.get_rpm_url): Use self.__koji_pathinfo.build instead of
+	hard-coding the build directory layout, like Koji 1.7 does.
+
 2012-07-10  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/client.py (SignRPMArgumentExaminer.open_rpm): Refuse to work on
