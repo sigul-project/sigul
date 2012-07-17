@@ -1,5 +1,8 @@
 2012-07-17  Miloslav Trmač  <mitr@redhat.com>
 
+	* configure.ac: Release 0.100.
+	* NEWS: Update.
+
 	* config/bridge.conf: Document per-Koji instance required-fas-group-*
 	variables.
 	* src/bridge.py (BridgeConfiguration._add_sections): Recognize '[koji]'

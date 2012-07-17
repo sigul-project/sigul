@@ -1,3 +1,18 @@
+Changes in version 0.100:
+- The bridge authenticates users to Koji based on the CN of their certificate,
+  not based on the user name defined on the server.
+- Use 'topurl' instead of 'pkgurl' from Koji configuration, following the change
+  in Koji 1.7.
+- Add support for restricting access to individual Koji instances to specific
+  FAS groups.
+- Changes to connection termination: end request processing even if something
+  (a firewall) swallows FIN packets.
+- Reject the nonsensical combination of (sigul sign-rpm{,s} --koji-only -o ...),
+  and reject signing of empty RPM files.
+- Log RPM output on signing failure.
+- Make sure to always close sockets in the bridge.
+- Miscellaneous cleanups.
+
 Changes in version 0.99:
 - Support for multiple koji instances in the client and bridge: new client
   parameter --koji-instance, client and bridge option koji-instances.
