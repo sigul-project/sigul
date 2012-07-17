@@ -1,3 +1,14 @@
+2012-07-17  Miloslav Trmač  <mitr@redhat.com>
+
+	* config/bridge.conf: Document per-Koji instance required-fas-group-*
+	variables.
+	* src/bridge.py (BridgeConfiguration._add_sections): Recognize '[koji]'
+	section.
+	(BridgeConfiguration._read_configuration): Set up self.koji_fas_groups.
+	(BridgeConnection.__forward_request_headers): Authorize user access to
+	Koji instance.
+	(BridgeConnection.__check_koji_instance_access): New method.
+
 2012-07-16  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/bridge.py (BridgeConnection.__terminate_client_connection):

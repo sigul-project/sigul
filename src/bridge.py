@@ -15,6 +15,7 @@
 #
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 
+import ConfigParser
 import Queue
 import base64
 import binascii
@@ -64,7 +65,7 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.KojiConfiguration,
 
     def _add_sections(self, sections):
         super(BridgeConfiguration, self)._add_sections(sections)
-        sections.add('bridge')
+        sections.update(('bridge', 'koji'))
 
     def _read_configuration(self, parser):
         super(BridgeConfiguration, self)._read_configuration(parser)
@@ -82,6 +83,17 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.KojiConfiguration,
         self.max_rpms_payloads_size = parser.getint('bridge',
                                                     'max-rpms-payloads-size')
         self.server_listen_port = parser.getint('bridge', 'server-listen-port')
+
+        self.koji_fas_groups = {}
+        for v in self.koji_instances.iterkeys():
+            name = 'required-fas-group-' + v
+            try:
+                group = parser.get('koji', name)
+                if group == '':
+                    group = None
+            except ConfigParser.NoOptionError:
+                group = None
+            self.koji_fas_groups[v] = group
 
 def create_listen_sock(config, port):
     sock = nss.ssl.SSLSocket(nss.io.PR_AF_INET)
@@ -1046,6 +1058,7 @@ class BridgeConnection(object):
         '''Read and forward request data up to the request payload size.
 
         Note that request payload size is read and validated, but not forwarded!
+        Also enforce self.config.koji_fas_groups.
 
         Set self.__handler, self.request_fields and self.request_payload_size.
 
@@ -1080,8 +1093,21 @@ class BridgeConnection(object):
         self.request_payload_size = utils.u32_unpack(buf)
 
         rt.validator.validate(self.request_fields, self.request_payload_size)
+        self.__check_koji_instance_access()
 
         self.server_buf.write(proxy.stored_data())
+
+    def __check_koji_instance_access(self):
+        '''Verify FAS group required for the specified Koji instance.'''
+        instance = self.request_fields.get('koji-instance')
+        StringField('koji-instance', optional=True).validate(instance)
+        if instance is not None and instance in self.config.koji_fas_groups:
+            group = self.config.koji_fas_groups[instance]
+            if (group is not None and
+                not fas_user_is_in_group(self.config, self.user_name, group)):
+                raise InvalidRequestError('User %s not allowed to use Koji '
+                                          'instance %s' % (repr(self.user_name),
+                                                           repr(instance)))
 
     def __forward_reply_headers(self):
         '''Read and forward reply data up to (and including) the reply header.
