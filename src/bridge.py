@@ -439,9 +439,7 @@ class KojiClient(object):
             if len(sigs) == 0:
                 session.addRPMSig(rpm_info['id'], base64.encodestring(sighdr))
         except (utils.KojiError, koji.GenericError), e:
-            # FIXME: restore
-            # raise ForwardingError('Koji connection failed: %s' % str(e))
-            logging.warning('Koji error: %s' % str(e))
+            raise ForwardingError('Koji connection failed: %s' % str(e))
 
     def close(self):
         '''Disconnect from koji.'''

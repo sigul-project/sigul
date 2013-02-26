@@ -1,3 +1,8 @@
+2013-02-26  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/bridge.py (KojiClient.add_signature): Raise an exception instead
+	of just silently logging a warning.
+
 2012-07-17  Miloslav Trmač  <mitr@redhat.com>
 
 	* configure.ac: Release 0.100.
