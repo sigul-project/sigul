@@ -1,3 +1,11 @@
+2015-11-18  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/utils.py (WorkerThread.__init__): New member
+	ignored_exception_types.
+	(WorkerThread.run): Log an uncaught exception in self._real_run()
+	immediately, using self.ignored_exception_types.
+	(run_worker_threads): Initialize thread's ignored_exception_types.
+
 2013-02-26  Miloslav Trmač  <mitr@redhat.com>
 
 	* src/bridge.py (KojiClient.add_signature): Raise an exception instead

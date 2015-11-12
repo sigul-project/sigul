@@ -551,6 +551,7 @@ class WorkerThread(threading.Thread):
         self.input_queues = input_queues
         self.output_queues = output_queues
         self.exc_info = None
+        self.ignored_exception_types = ()
 
     def run(self):
         try:
@@ -565,6 +566,12 @@ class WorkerThread(threading.Thread):
                                         self.name, exc_info=True)
         except:
             self.exc_info = sys.exc_info()
+            if not isinstance(self.exc_info[1], self.ignored_exception_types):
+                log_exception(self.exc_info,
+                              ('Unexpected error in %s' % self.description))
+            else:
+                logging.debug('%s: Terminated by an exception %s' %
+                              (self.name, repr(self.exc_info)))
 
     def _real_run(self):
         '''The real body of the thread.'''
@@ -582,6 +589,7 @@ def run_worker_threads(threads, exception_types=()):
 
     '''
     for t in threads:
+        t.ignored_exception_types = exception_types
         t.start()
 
     ok = True
