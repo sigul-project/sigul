@@ -1,5 +1,15 @@
 2015-11-18  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (SignRPMsKojiRequestThread)
+	(SignRPMsKojiReplyThread): New classes, split from...
+	(SignRPMsKojiThread): ... this.
+	(SignRPMsKojiRequestThread._real_run)
+	(SignRPMsSendRequestThread._real_run): Rely on utils.WorkerThread to
+	put the end-of-stream None value to the queue when done.
+	(SignRPMsRequestHandler.post_request_phase): Use
+	SignRPMsKojiRequestThread and SignRPMsKojiReplyThread instead of the
+	shared SignRPMsKojiThread.
+
 	* src/utils.py (WorkerThread.__init__): New member
 	ignored_exception_types.
 	(WorkerThread.run): Log an uncaught exception in self._real_run()

@@ -624,26 +624,22 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
         rpm.request_payload_digest = self.__conn.client_buf.read(64)
         return (rpm, size)
 
-class SignRPMsKojiThread(utils.WorkerThread):
-    '''A thread that talks to koji for sign-rpm subrequests and subreplies.
+class SignRPMsKojiRequestThread(utils.WorkerThread):
+    '''A thread that talks to koji for sign-rpm subrequests.
 
-    The requests in request_dst_queue, reply_dst_queue and src_queue are
-    RPMObject objects, with None marking end of the requests in *_dst_queue, and
-    SignRPMsReadRequestThread.eof and SignRPMsReadReplyThread.eof marking the
-    end of requests/replies in src_queue.
+    The requests in dest_queue and src_queue are RPMObject objects, with None
+    marking end of the requests in dest_queue, and
+    SignRPMsReadRequestThread.eof marking the end of requests in src_queue.
 
     '''
 
-    def __init__(self, conn, request_dst_queue, reply_dst_queue, src_queue):
-        super(SignRPMsKojiThread, self). \
-            __init__('sign-rpms:koji requests', 'koji thread',
-                     input_queues=((src_queue, SignRPMsReadRequestThread.eof),
-                                   (src_queue, SignRPMsReadReplyThread.eof)),
-                     output_queues=((request_dst_queue, None),
-                                    (reply_dst_queue, None)))
+    def __init__(self, conn, dest_queue, src_queue):
+        super(SignRPMsKojiRequestThread, self). \
+            __init__('sign-rpms:koji requests', 'koji request thread',
+                     input_queues=((src_queue, SignRPMsReadRequestThread.eof),),
+                     output_queues=((dest_queue, None),))
         self.__conn = conn
-        self.__request_dst = request_dst_queue
-        self.__reply_dst = reply_dst_queue
+        self.__dest = dest_queue
         self.__src = src_queue
 
     def _real_run(self):
@@ -651,26 +647,15 @@ class SignRPMsKojiThread(utils.WorkerThread):
         koji_client = KojiClient(self.__conn)
         try:
             total_size = 0
-            got_request_eof = False
-            got_reply_eof = False
-            while not (got_request_eof and got_reply_eof):
+            while True:
                 rpm = self.__src.get()
                 if rpm is SignRPMsReadRequestThread.eof:
-                    self.__request_dst.put(None)
-                    got_request_eof = True
-                elif rpm is SignRPMsReadReplyThread.eof:
-                    self.__reply_dst.put(None)
-                    got_reply_eof = True
-                elif rpm.reply_fields is None:
-                    size = self.__handle_one_request_rpm(rpm, koji_client)
-                    total_size += size
-                    if total_size > self.__conn.config.max_rpms_payloads_size:
-                        raise InvalidRequestError('Total payload size too '
-                                                  'large')
-                    self.__request_dst.put(rpm)
-                else:
-                    self.__handle_one_reply_rpm(rpm, koji_client)
-                    self.__reply_dst.put(rpm)
+                    break
+                size = self.__handle_one_request_rpm(rpm, koji_client)
+                total_size += size
+                if total_size > self.__conn.config.max_rpms_payloads_size:
+                    raise InvalidRequestError('Total payload size too large')
+                self.__dest.put(rpm)
         finally:
             koji_client.close()
 
@@ -691,20 +676,6 @@ class SignRPMsKojiThread(utils.WorkerThread):
             # filling the hard drive due to internal fragmentation.
             size = utils.path_size_in_blocks(rpm.tmp_path)
         return size
-
-    def __handle_one_reply_rpm(self, rpm, koji_client):
-        '''Handle an incoming reply using koji_client.
-
-        Raise ForwardingError.
-
-        '''
-        logging.debug('%s: Started handling reply %s', self.name,
-                      utils.readable_fields(rpm.reply_fields))
-        # Zero-length response should happen only on error.
-        if (rpm.reply_payload_size != 0 and
-            (self.__conn.request_fields.get('import-signature') ==
-             utils.u32_pack(1))):
-            rpm.add_signature_to_koji(koji_client)
 
 class SignRPMsSendRequestThread(utils.WorkerThread):
     '''A thread that forwards sign-rpm subrequests.
@@ -845,6 +816,51 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
         rpm.reply_payload_digest = self.__server_buf.read(64)
         return rpm
 
+class SignRPMsKojiReplyThread(utils.WorkerThread):
+    '''A thread that talks to koji for sign-rpm subreplies.
+
+    The requests in dest_queue and src_queue are RPMObject objects, with None
+    marking end of the requests in dest_queue, and SignRPMsReadReplyThread.eof
+    marking the replies in src_queue.
+
+    '''
+
+    def __init__(self, conn, dest_queue, src_queue):
+        super(SignRPMsKojiReplyThread, self). \
+            __init__('sign-rpms:koji replies', 'koji reply thread',
+                     input_queues=((src_queue, SignRPMsReadReplyThread.eof),),
+                     output_queues=((dest_queue, None),))
+        self.__conn = conn
+        self.__dest = dest_queue
+        self.__src = src_queue
+
+    def _real_run(self):
+        '''Read and handle all koji subreplies.'''
+        koji_client = KojiClient(self.__conn)
+        try:
+            while True:
+                rpm = self.__src.get()
+                if rpm is SignRPMsReadReplyThread.eof:
+                    break
+                self.__handle_one_reply_rpm(rpm, koji_client)
+                self.__dest.put(rpm)
+        finally:
+            koji_client.close()
+
+    def __handle_one_reply_rpm(self, rpm, koji_client):
+        '''Handle an incoming reply using koji_client.
+
+        Raise ForwardingError.
+
+        '''
+        logging.debug('%s: Started handling reply %s', self.name,
+                      utils.readable_fields(rpm.reply_fields))
+        # Zero-length response should happen only on error.
+        if (rpm.reply_payload_size != 0 and
+            (self.__conn.request_fields.get('import-signature') ==
+             utils.u32_pack(1))):
+            rpm.add_signature_to_koji(koji_client)
+
 class SignRPMsSendReplyThread(utils.WorkerThread):
     '''A thread that forwards sign-rpm subreplies.
 
@@ -903,18 +919,20 @@ class SignRPMsRequestHandler(RequestHandler):
             conn.client_buf.set_full_duplex(True)
             conn.server_buf.set_full_duplex(True)
 
-            koji_queue = Queue.Queue(100)
             q1 = Queue.Queue(100)
             q2 = Queue.Queue(100)
+            q3 = Queue.Queue(100)
+            q4 = Queue.Queue(100)
 
             threads = []
-            threads.append(SignRPMsReadRequestThread(conn, koji_queue,
+            threads.append(SignRPMsReadRequestThread(conn, q1,
                                                      subrequest_map, tmp_dir))
-            threads.append(SignRPMsReadReplyThread(koji_queue, conn.server_buf,
+            threads.append(SignRPMsKojiRequestThread(conn, q2, q1))
+            threads.append(SignRPMsSendRequestThread(q2, conn.server_buf))
+            threads.append(SignRPMsReadReplyThread(q3, conn.server_buf,
                                                    subrequest_map, tmp_dir))
-            threads.append(SignRPMsKojiThread(conn, q1, q2, koji_queue))
-            threads.append(SignRPMsSendRequestThread(q1, conn.server_buf))
-            threads.append(SignRPMsSendReplyThread(conn, q2))
+            threads.append(SignRPMsKojiReplyThread(conn, q4, q3))
+            threads.append(SignRPMsSendReplyThread(conn, q4))
 
             (_, exception) = utils.run_worker_threads(threads,
                                                       (InvalidRequestError,
