@@ -1,5 +1,16 @@
 2015-11-18  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/bridge.py (SignRPMsReadRequestThread.eof): Remove.
+	(SignRPMsReadRequestThread.__init__)
+	(SignRPMsKojiRequestThread.__init__)
+	(SignRPMsKojiRequestThread._real_run): Use None instead of
+	SignRPMsReadRequestThread.eof as the end-of-stream marker.
+	(SignRPMsReadReplyThread.eof): Remove.
+	(SignRPMsReadReplyThread.__init__)
+	(SignRPMsKojiReplyThread.__init__)
+	(SignRPMsKojiReplyThread._real_run): Use None instead of
+	SignRPMsReadReplyThread.eof as the end-of-stream marker.
+
 	* src/bridge.py (SignRPMsKojiRequestThread)
 	(SignRPMsKojiReplyThread): New classes, split from...
 	(SignRPMsKojiThread): ... this.

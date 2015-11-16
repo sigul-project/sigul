@@ -543,12 +543,10 @@ class SubrequestMap(object):
 class SignRPMsReadRequestThread(utils.WorkerThread):
     '''A thread that reads sign-rpm subrequests.
 
-    The requests are put into dest_queue as RPMObject objects, with
-    SignRPMsReadRequestThread.eof marking end of the requests.
+    The requests are put into dest_queue as RPMObject objects, with None
+    marking end of the requests.
 
     '''
-
-    eof = object()              # Used only for "... is eof"
 
     __subheader_validator = \
         RequestValidator((Field('id'),
@@ -563,7 +561,7 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
     def __init__(self, conn, dest_queue, subrequest_map, tmp_dir):
         super(SignRPMsReadRequestThread, self). \
             __init__('sign-rpms:read requests', 'read request thread',
-                     output_queues=((dest_queue, self.eof),))
+                     output_queues=((dest_queue, None),))
         self.__conn = conn
         self.__dest = dest_queue
         self.__subrequest_map = subrequest_map
@@ -628,15 +626,14 @@ class SignRPMsKojiRequestThread(utils.WorkerThread):
     '''A thread that talks to koji for sign-rpm subrequests.
 
     The requests in dest_queue and src_queue are RPMObject objects, with None
-    marking end of the requests in dest_queue, and
-    SignRPMsReadRequestThread.eof marking the end of requests in src_queue.
+    marking end of the requests.
 
     '''
 
     def __init__(self, conn, dest_queue, src_queue):
         super(SignRPMsKojiRequestThread, self). \
             __init__('sign-rpms:koji requests', 'koji request thread',
-                     input_queues=((src_queue, SignRPMsReadRequestThread.eof),),
+                     input_queues=((src_queue, None),),
                      output_queues=((dest_queue, None),))
         self.__conn = conn
         self.__dest = dest_queue
@@ -649,7 +646,7 @@ class SignRPMsKojiRequestThread(utils.WorkerThread):
             total_size = 0
             while True:
                 rpm = self.__src.get()
-                if rpm is SignRPMsReadRequestThread.eof:
+                if rpm is None:
                     break
                 size = self.__handle_one_request_rpm(rpm, koji_client)
                 total_size += size
@@ -734,16 +731,14 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
 class SignRPMsReadReplyThread(utils.WorkerThread):
     '''A thread that reads sign-rpm subreplies.
 
-    The replies are put into dest_queue as RPMObject objects, with
-    SignRPMsReadReplyThread.eof marking end of the replies.
+    The replies are put into dest_queue as RPMObject objects, with None marking
+    end of the replies.
 
     '''
-    eof = object()              # Used only for "... is eof"
-
     def __init__(self, dest_queue, server_buf, subrequest_map, tmp_dir):
         super(SignRPMsReadReplyThread, self). \
             __init__('sign-rpms:read replies', 'read reply thread',
-                     output_queues=((dest_queue, self.eof),))
+                     output_queues=((dest_queue, None),))
         self.__dest = dest_queue
         self.__server_buf = server_buf
         self.__subrequest_map = subrequest_map
@@ -820,15 +815,14 @@ class SignRPMsKojiReplyThread(utils.WorkerThread):
     '''A thread that talks to koji for sign-rpm subreplies.
 
     The requests in dest_queue and src_queue are RPMObject objects, with None
-    marking end of the requests in dest_queue, and SignRPMsReadReplyThread.eof
-    marking the replies in src_queue.
+    marking end of the requests.
 
     '''
 
     def __init__(self, conn, dest_queue, src_queue):
         super(SignRPMsKojiReplyThread, self). \
             __init__('sign-rpms:koji replies', 'koji reply thread',
-                     input_queues=((src_queue, SignRPMsReadReplyThread.eof),),
+                     input_queues=((src_queue, None),),
                      output_queues=((dest_queue, None),))
         self.__conn = conn
         self.__dest = dest_queue
@@ -840,7 +834,7 @@ class SignRPMsKojiReplyThread(utils.WorkerThread):
         try:
             while True:
                 rpm = self.__src.get()
-                if rpm is SignRPMsReadReplyThread.eof:
+                if rpm is None:
                     break
                 self.__handle_one_reply_rpm(rpm, koji_client)
                 self.__dest.put(rpm)
