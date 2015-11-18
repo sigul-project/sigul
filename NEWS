@@ -1,3 +1,15 @@
+Changes in version 0.101:
+- If a worker thread within sign-rpms terminates with an exception, log it
+  immediately instead of logging it only after all preceding threads in the
+  processing chain terminate (which may never happen).
+- In sign-rpms, split the Koji-interacting thread on the bridge into a separate
+  thread for getting information about incoming RPMs and a separate thread for
+  storing signatures into Koji, to fix a deadlock (when processing replies
+  in the bridge depends on being able to send more requests to the server, while
+  the server needs replies to be processed in order to accept more requests).
+- Fail a signing operation if a signature cannot be recorded in Koji as requested
+  instead of just logging a warning.
+
 Changes in version 0.100:
 - The bridge authenticates users to Koji based on the CN of their certificate,
   not based on the user name defined on the server.

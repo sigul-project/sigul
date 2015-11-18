@@ -1,5 +1,8 @@
 2015-11-18  Miloslav Trmač  <mitr@redhat.com>
 
+	* configure.ac: Release 0.101.
+	* NEWS: Update.
+
 	* src/bridge.py (SignRPMsReadRequestThread.eof): Remove.
 	(SignRPMsReadRequestThread.__init__)
 	(SignRPMsKojiRequestThread.__init__)
