@@ -1,5 +1,9 @@
 2015-11-26  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (run_worker_threads): Do not log exceptions after
+	waiting on a thread, the thread has logged it already at termination
+	time.
+
 	* src/utils.py (log_exception): New parameter thread_name.  All users
 	changed.
 

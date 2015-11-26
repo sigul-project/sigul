@@ -663,10 +663,7 @@ def run_worker_threads(threads, exception_types=()):
         logging.debug('%s finished, exc_info: %s', t.name, repr(t.exc_info))
         if t.exc_info is not None:
             ok = False
-            if not isinstance(t.exc_info[1], exception_types):
-                log_exception(t.name, t.exc_info,
-                              ('Unexpected error in %s' % t.description))
-            elif exception is None:
+            if isinstance(t.exc_info[1], exception_types) and exception is None:
                 exception = t.exc_info
     return (ok, exception)
 
