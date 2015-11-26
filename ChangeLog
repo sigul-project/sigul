@@ -1,5 +1,8 @@
 2015-11-26  Miloslav Trmač  <mitr@redhat.com>
 
+	* src/utils.py (log_exception): New parameter thread_name.  All users
+	changed.
+
 	* src/utils.py (WorkerQueueOrphanedError, WorkerQueue): New classes.
 	(WorkerThread.run): Mark input queues as orphaned. Be fairly silent
 	about failures sending EOF to orphaned queues.

@@ -620,7 +620,7 @@ class WorkerThread(threading.Thread):
         except:
             self.exc_info = sys.exc_info()
             if not isinstance(self.exc_info[1], self.ignored_exception_types):
-                log_exception(self.exc_info,
+                log_exception(self.name, self.exc_info,
                               ('Unexpected error in %s' % self.description))
             else:
                 logging.debug('%s: Terminated by an exception %s' %
@@ -664,7 +664,7 @@ def run_worker_threads(threads, exception_types=()):
         if t.exc_info is not None:
             ok = False
             if not isinstance(t.exc_info[1], exception_types):
-                log_exception(t.exc_info,
+                log_exception(t.name, t.exc_info,
                               ('Unexpected error in %s' % t.description))
             elif exception is None:
                 exception = t.exc_info
@@ -801,22 +801,29 @@ def path_size_in_blocks(path):
     # 512 is what (info libc) says.  See also <sys/stat.h> in POSIX.
     return st.st_blocks * 512
 
-def log_exception(exc_info, default_msg):
-    '''Log exc_info, using default_msg if nothing better is known.'''
+def log_exception(thread_name, exc_info, default_msg):
+    '''Log exc_info, using default_msg if nothing better is known.
+
+    Use thread_name if it is not None.
+    '''
+    if thread_name is not None:
+        prefix = thread_name + ': '
+    else:
+        prefix = ''
     e = exc_info[1]
     if isinstance(e, (IOError, EOFError, socket.error)):
-        logging.error('I/O error: %s' % repr(e))
+        logging.error(prefix + 'I/O error: %s' % repr(e))
     elif isinstance(e, nss.error.NSPRError):
         if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
-            logging.error('I/O error: NSPR connection reset')
+            logging.error(prefix + 'I/O error: NSPR connection reset')
         elif e.errno == nss.error.PR_END_OF_FILE_ERROR:
-            logging.error('I/O error: Unexpected EOF in NSPR')
+            logging.error(prefix + 'I/O error: Unexpected EOF in NSPR')
         else:
-            logging.error('NSPR error', exc_info=exc_info)
+            logging.error(prefix + 'NSPR error', exc_info=exc_info)
     elif isinstance(e, WorkerQueueOrphanedError):
-        logging.info('Writing to work queue failed, queue orphaned')
+        logging.info(prefix + 'Writing to work queue failed, queue orphaned')
     else:
-        logging.error(default_msg, exc_info=exc_info)
+        logging.error(prefix + default_msg, exc_info=exc_info)
 
 def read_password(config, prompt):
     '''Return a password using prompt, based on config.batch_mode.
