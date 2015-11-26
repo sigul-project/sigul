@@ -1,3 +1,11 @@
+Changes in version 0.102:
+- If a worker thread within sign-rpms terminates, make sure that threads
+  producing work for the terminated thread do not block indefinitely.
+- Similarly, if a processing of sign-replies within the bridge fails, terminate
+  processing of incoming requests.
+- Include thread name when logging worker thread-specific exceptions, and only
+  log them once.
+
 Changes in version 0.101:
 - If a worker thread within sign-rpms terminates with an exception, log it
   immediately instead of logging it only after all preceding threads in the

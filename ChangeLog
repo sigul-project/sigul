@@ -1,5 +1,8 @@
 2015-11-26  Miloslav Trmač  <mitr@redhat.com>
 
+	* configure.ac: Release 0.102.
+	* NEWS: Update.
+
 	* src/bridge.py (SignRPMsReadReplyThread._real_run): On exceptions,
 	shut down the server socket to cause *RequestThread to terminate even
 	if the server is blocking and waiting for this thread to continue reading
