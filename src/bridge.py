@@ -23,6 +23,7 @@ import logging
 import os
 import signal
 import shutil
+import socket
 import sys
 import tempfile
 import threading
@@ -744,11 +745,47 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
         self.__tmp_dir = tmp_dir
 
     def _real_run(self):
-        while True:
-            rpm = self.__read_one_reply()
-            if rpm is None:
-                break
-            self.__dest.put(rpm)
+        try:
+            while True:
+                rpm = self.__read_one_reply()
+                if rpm is None:
+                    break
+                self.__dest.put(rpm)
+        except:
+            # This is a pretty horrible hack. If we stop reading replies from
+            # the server (e.g. because this thread or one of its consumers
+            # fails), the server will eventually block when the TCP buffers
+            # for the server->bridge connection fill, but as long as bridge
+            # keeps replying with zero-window ACKs, the connection will never
+            # time out and our request-side threads will not terminate.
+            #
+            # Ideally we would studown(SHUT_RD), and the kernel would send a RST
+            # to the server about the unread data, but the Linux kernel actually
+            # ignores SHUT_RD for TCP.
+            #
+            # Instead, shut down the server socket also for writing; this will
+            # cause SignRPMsSendRequestThread to terminate, and we are not even
+            # waiting for the server to notice: after all our threads
+            # terminate, the socket will be closed bu ys (probably with a RST
+            # because this thread has not handled all data).
+            #
+            # Finally, use socket.socket instead of the equivalent NSPR call to
+            # avoid any possible multithreading/locking issues within NSPR and
+            # NSS; the NSS socket is still in full-duplex mode, so touching the
+            # sending side might not be a good idea.
+            try:
+                logging.debug('%s: Exception, shutting down write side as well',
+                              self.name)
+                fd = self.__server_buf.socket.fileno()
+                sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                finally:
+                    sock.close()
+            except Exception, e:
+                logging.debug('%s: Shut down failed: %s', self.name, repr(e))
+                # But otherwise ignore this, raise the original one
+            raise
 
     def __read_one_reply(self):
         '''Read one reply from self.__server_buf.
