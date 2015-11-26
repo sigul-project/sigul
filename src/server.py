@@ -15,7 +15,6 @@
 #
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 
-import Queue
 import binascii
 import cStringIO
 import crypt
@@ -1403,8 +1402,8 @@ def cmd_sign_rpms(db, conn):
     tmp_dir = tempfile.mkdtemp()
     exception = None
     try:
-        q1 = Queue.Queue(100)
-        q2 = Queue.Queue(100)
+        q1 = utils.WorkerQueue(100)
+        q2 = utils.WorkerQueue(100)
         threads = []
         threads.append(SignRPMsRequestThread(conn, q1,
                                              subrequest_header_nss_key,

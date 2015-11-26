@@ -16,6 +16,7 @@
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 
 import ConfigParser
+import Queue
 import datetime
 import errno
 import getpass
@@ -532,6 +533,53 @@ def yyyy_mm_dd_is_valid(s):
 
  # Threading utilities
 
+class WorkerQueueOrphanedError(Exception):
+    '''Putting an item into a WorkerQueue failed because it is orphaned.'''
+    pass
+
+class WorkerQueue(object):
+    '''A synchronized queue similar to Queue.Queue, except that it can be marked
+    as orphaned; if so, attempts to put more items into the queue will never
+    block, but may raise WorkerQueueOrphanedError.
+
+    (Note that the writer is not guaranteed to get WorkerQueueOrphanedError for
+    all unprocessed items because the queue may become orphaned after putting
+    an item into the queue.)
+    '''
+
+    def __init__(self, maxsize=0):
+        '''Create a FIFO queue.  See Queue.Queue.'''
+        self.__queue = Queue.Queue(maxsize)
+        self.__orphaned = threading.Event() # Used as a thread-safe boolean.
+
+    def get(self):
+        '''Remove and return an item from the queue. See Queue.get().'''
+        assert not self.__orphaned.is_set()
+        return self.__queue.get()
+
+    def put(self, item):
+        '''Put item into the queue.  See Queue.put().
+
+        Do not block on an orphaned queue; possibly raise
+        WorkerQueueOrphanedError.
+        '''
+        timeout = 0.001
+        while True:
+            if self.__orphaned.is_set():
+                raise WorkerQueueOrphanedError('Work queue orphaned by consumer')
+            try:
+                self.__queue.put(item, True, timeout)
+            except Queue.Full:
+                pass
+            else:
+                break
+            if timeout < 10:
+                timeout *= 2
+
+    def mark_orphaned(self):
+        '''Mark the queue as orphaned; future additions will fail.'''
+        self.__orphaned.set()
+
 class WorkerThread(threading.Thread):
     '''A temporary thread, with exception logging done in parent.
 
@@ -558,9 +606,14 @@ class WorkerThread(threading.Thread):
             try:
                 self._real_run()
             finally:
+                for (queue, _) in self.input_queues:
+                    queue.mark_orphaned()
                 for (queue, eof) in self.output_queues:
                     try:
                         queue.put(eof)
+                    except WorkerQueueOrphanedError:
+                        logging.debug('%s: Sending queue EOF failed, queue '
+                                      'already orphaned', self.name)
                     except:
                         logging.warning('%s: Error sending queue EOF',
                                         self.name, exc_info=True)
@@ -601,7 +654,10 @@ def run_worker_threads(threads, exception_types=()):
         # block on t.join() anyway.
         logging.debug('Sending final EOFs to %s...', t.name)
         for (queue, eof) in t.input_queues:
-            queue.put(eof)
+            try:
+                queue.put(eof)
+            except WorkerQueueOrphanedError:
+                pass
         logging.debug('Waiting for %s...', t.name)
         t.join()
         logging.debug('%s finished, exc_info: %s', t.name, repr(t.exc_info))
@@ -757,6 +813,8 @@ def log_exception(exc_info, default_msg):
             logging.error('I/O error: Unexpected EOF in NSPR')
         else:
             logging.error('NSPR error', exc_info=exc_info)
+    elif isinstance(e, WorkerQueueOrphanedError):
+        logging.info('Writing to work queue failed, queue orphaned')
     else:
         logging.error(default_msg, exc_info=exc_info)
 

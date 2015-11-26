@@ -1,3 +1,14 @@
+2015-11-26  Miloslav Trmač  <mitr@redhat.com>
+
+	* src/utils.py (WorkerQueueOrphanedError, WorkerQueue): New classes.
+	(WorkerThread.run): Mark input queues as orphaned. Be fairly silent
+	about failures sending EOF to orphaned queues.
+	(run_worker_threads): Silently ignore failures sending EOF to orphaned
+	queues.
+	(log_exception): Recognize WorkerQueueOrphanedError.
+	* src/bridge.py (SignRPMsRequestHandler.post_request_phase)
+	* src/server.py (cmd_sign_rpms): Use utils.WorkerQueue.
+
 2015-11-18  Miloslav Trmač  <mitr@redhat.com>
 
 	* configure.ac: Release 0.101.

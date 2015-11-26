@@ -16,7 +16,6 @@
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 
 import ConfigParser
-import Queue
 import base64
 import binascii
 import errors
@@ -913,10 +912,10 @@ class SignRPMsRequestHandler(RequestHandler):
             conn.client_buf.set_full_duplex(True)
             conn.server_buf.set_full_duplex(True)
 
-            q1 = Queue.Queue(100)
-            q2 = Queue.Queue(100)
-            q3 = Queue.Queue(100)
-            q4 = Queue.Queue(100)
+            q1 = utils.WorkerQueue(100)
+            q2 = utils.WorkerQueue(100)
+            q3 = utils.WorkerQueue(100)
+            q4 = utils.WorkerQueue(100)
 
             threads = []
             threads.append(SignRPMsReadRequestThread(conn, q1,
