@@ -217,10 +217,10 @@ def koji_read_config(global_config, instance):
     parser = ConfigParser.ConfigParser()
     parser.read(('/etc/koji.conf', os.path.expanduser(config_path)))
     config = dict(parser.items('koji'))
-    for opt in ('server', 'cert', 'ca', 'serverca', 'topurl'):
+    for opt in ('server', 'cert', 'serverca', 'topurl'):
         if opt not in config:
             raise KojiError('Missing koji configuration option %s' % opt)
-    for opt in ('cert', 'ca', 'serverca'):
+    for opt in ('cert', 'serverca'):
         config[opt] = os.path.expanduser(config[opt])
     return config
 
@@ -237,7 +237,7 @@ def koji_connect(koji_config, authenticate, proxyuser=None):
 
     session = koji.ClientSession(koji_config['server'])
     if authenticate:
-        session.ssl_login(koji_config['cert'], koji_config['ca'],
+        session.ssl_login(koji_config['cert'], None,
                           koji_config['serverca'], proxyuser=proxyuser)
     try:
         version = session.getAPIVersion()
