@@ -1149,11 +1149,15 @@ def cmd_sign_text(db, conn):
 def cmd_sign_data(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
     signature_file = tempfile.TemporaryFile()
+    armor = conn.outer_field_bool('armor')
+    if armor is None:
+        armor = False
     try:
         server_common.gpg_detached_signature(conn.config, signature_file,
                                              conn.payload_file,
                                              access.key.fingerprint,
-                                             key_passphrase)
+                                             key_passphrase,
+                                             armor=armor)
         logging.info('Signed data %s with key %s',
                      binascii.b2a_hex(conn.payload_sha512_digest),
                      access.key.name)

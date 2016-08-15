@@ -376,7 +376,7 @@ def gpg_clearsign(config, signed_file, cleartext_file, fingerprint, passphrase):
     ctx.sign(cleartext_file, signed_file, gpgme.SIG_MODE_CLEAR)
 
 def gpg_detached_signature(config, signature_file, cleartext_file, fingerprint,
-                           passphrase):
+                           passphrase, armor):
     '''Create a detachted signature.
 
     Sign contents of cleartext_file, write the signature to signature_file.
@@ -387,6 +387,6 @@ def gpg_detached_signature(config, signature_file, cleartext_file, fingerprint,
     _gpg_set_passphrase(ctx, passphrase)
     key = ctx.get_key(fingerprint, True)
     ctx.signers = (key,)
-    ctx.armor = False
+    ctx.armor = armor
     ctx.textmode = False
     ctx.sign(cleartext_file, signature_file, gpgme.SIG_MODE_DETACH)

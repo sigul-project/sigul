@@ -845,10 +845,12 @@ def cmd_sign_data(conn, args):
                                description='Create a detached signature')
     p2.add_option('-o', '--output', metavar='FILE',
                   help='Write output to this file')
+    p2.add_option('-a', '--armor', action='store_true',
+                  help='Enable GnuPG armoring of the result')
     (o2, args) = p2.parse_args(args)
     if len(args) != 2:
         p2.error('key name and input file path expected')
-    if o2.output is None and sys.stdout.isatty():
+    if o2.output is None and sys.stdout.isatty() and not o2.armor:
         p2.error('won\'t write output to a TTY, specify a file name')
     passphrase = read_key_passphrase(conn.config)
     try:
@@ -857,7 +859,8 @@ def cmd_sign_data(conn, args):
         raise ClientError('Error opening %s: %s' % (args[1], e.strerror))
 
     try:
-        conn.connect('sign-data', {'key': safe_string(args[0])})
+        conn.connect('sign-data', {'key': safe_string(args[0]),
+                                   'armor': o2.armor or False})
         conn.send_payload_from_file(f)
     finally:
         f.close()
