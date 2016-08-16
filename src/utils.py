@@ -308,6 +308,12 @@ def nss_init(config):
                                (config.nss_dir,))
         raise
     nss.ssl.set_domestic_policy()
+    nss.ssl.set_ssl_default_option(nss.ssl.SSL_ENABLE_SSL2, False)
+    nss.ssl.set_ssl_default_option(nss.ssl.SSL_ENABLE_SSL3, False)
+    nss.ssl.set_ssl_default_option(nss.ssl.SSL_ENABLE_TLS, True)
+    nss.ssl.set_ssl_default_option(nss.ssl.SSL_V2_COMPATIBLE_HELLO, False)
+    nss.ssl.set_default_ssl_version_range(nss.ssl.SSL_LIBRARY_VERSION_TLS_1_2,
+                                          nss.ssl.SSL_LIBRARY_VERSION_TLS_1_2)
     nss.ssl.config_server_session_id_cache()
 
 _derivation_counter_1 = u32_pack(1)
