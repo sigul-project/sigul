@@ -95,6 +95,24 @@ class KeyAccess(object):
         self.key = key
         self.user = user
         self.key_admin = key_admin
+        self.encrypted_passphrase = None
+
+    def get_passphrase(self, config, user_passphrase):
+        if self.encrypted_passphrase is None:
+            # Perform a decryption attempt anyway to make timing attacks more
+            # difficult.  gpg will probably choke on the attempt quickly
+            # enough, too bad.
+            encrypted_passphrase = 'x'
+        else:
+            encrypted_passphrase = self.encrypted_passphrase
+        
+        try:
+            passphrase = gpg_decrypt(config,
+                                     encrypted_passphrase,
+                                     user_passphrase)
+        except gpgme.GpgmeError:
+            return None
+        return passphrase
 
     def set_passphrase(self, config, key_passphrase, user_passphrase):
         self.encrypted_passphrase = gpg_encrypt_symmetric(config,

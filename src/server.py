@@ -538,21 +538,15 @@ class ServersConnection(object):
                 self.auth_fail('user is not a server administrator')
         else:
             assert user_passphrase is not None
-            encrypted_passphrase = None
+            access = None
             if user is not None and key is not None:
                 access = (db.query(KeyAccess).filter_by(user=user, key=key).
                           first())
-                if access is not None:
-                    encrypted_passphrase = access.encrypted_passphrase
-            if encrypted_passphrase is None:
-                # Perform a decryption attempt anyway to make timing attacks
-                # more difficult.  gpg will probably choke on the attempt
-                # quickly enough, too bad.
-                encrypted_passphrase = 'x'
-            try:
-                server_common.gpg_decrypt(self.config, encrypted_passphrase,
-                                          user_passphrase)
-            except gpgme.GpgmeError:
+            if access is None:
+                access = KeyAccess(None, None)
+            key_passphrase = access.get_passphrase(self.config,
+                                                   user_passphrase)
+            if not key_passphrase:
                 self.auth_fail('passphrase does not match')
             assert user is not None and key is not None and access is not None
         return (user, key, access) # OK
@@ -599,22 +593,14 @@ class ServersConnection(object):
             self.auth_fail('passphrase field missing')
         user = db.query(User).filter_by(name=user).first()
         key = db.query(Key).filter_by(name=key).first()
-        encrypted_passphrase = None
         access = None
         if user is not None and key is not None:
             access = db.query(KeyAccess).filter_by(user=user, key=key).first()
-            if access is not None:
-                encrypted_passphrase = access.encrypted_passphrase
-        if encrypted_passphrase is None:
-            # Perform a decryption attempt anyway to make timing attacks more
-            # difficult.  gpg will probably choke on the attempt quickly
-            # enough, too bad.
-            encrypted_passphrase = 'x'
-        try:
-            key_passphrase = server_common.gpg_decrypt(self.config,
-                                                       encrypted_passphrase,
-                                                       user_passphrase)
-        except gpgme.GpgmeError:
+        if access is None:
+            access = KeyAccess(None, None)
+        key_passphrase = access.get_passphrase(self.config,
+                                               user_passphrase)
+        if not key_passphrase:
             self.auth_fail('passphrase does not match')
         assert user is not None and key is not None and access is not None
         return (access, key_passphrase)
