@@ -23,8 +23,13 @@ logdir = $(localstatedir)/log
 piddir = $(localstatedir)/run
 pythondir = $(pkgdatadir)
 serverdatadir = $(localstatedir)/lib/sigul
+AUTOMAKE_OPTIONS = subdir-objects
 
 ## Targets
+bin_PROGRAMS = sigul-ostree-helper
+sigul_ostree_helper_SOURCES = src/sigul-ostree-helper.c
+sigul_ostree_helper_CFLAGS = $(libostree_CFLAGS)
+sigul_ostree_helper_LDFLAGS = $(libostree_LIBS)
 bin_SCRIPTS = src/sigul
 dist_bin_SCRIPTS = src/sigul_setup_client
 sbin_SCRIPTS = src/sigul_bridge src/sigul_server src/sigul_server_add_admin \

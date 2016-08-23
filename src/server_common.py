@@ -17,9 +17,11 @@
 
 import cStringIO
 import crypt
+import json
 import logging
 import os
 import shutil
+import subprocess
 import tempfile
 
 import gpgme
@@ -187,6 +189,21 @@ def db_open(config):
 def db_create(config):
     '''Create database metadata.'''
     _db_metadata.create_all(_db_get_engine(config))
+
+# OSTree utility
+def call_ostree_helper(args, stdin=None):
+    args = ['/usr/libexec/sigul-ostree-helper'] + args
+    proc = subprocess.Popen(args, stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    (stdout, stderr) = proc.communicate(stdin)
+    if proc.returncode != 0:
+        logging.error('Unexpected error from ostree helper. rc: %i, '
+                      'stdout: %s, stderr: %s' % (proc.returncode,
+                                                  stdout,
+                                                  stderr))
+        raise Exception('Error when calling ostree helper')
+    return stdout
 
  # GPG utilities
 

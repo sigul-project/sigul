@@ -874,6 +874,38 @@ def cmd_sign_data(conn, args):
     except IOError, e:
         raise ClientError('Error writing to %s: %s' % (o2.output, e.strerror))
 
+def cmd_sign_ostree(conn, args):
+    p2 = optparse.OptionParser(usage='%prog sign-ostree [options] key hash input_file',
+                               description='Sign an OSTree commit object')
+    p2.add_option('-o', '--output', metavar='FILE',
+                  help='Write output to this file')
+    (o2, args) = p2.parse_args(args)
+    if len(args) != 3:
+        p2.error('key name, commit hash and input file path expected')
+    if o2.output is None and sys.stdout.isatty():
+        p2.error('won\'t write output to a TTY, specify a file name')
+    passphrase = read_key_passphrase(conn.config)
+    try:
+        f = open(args[2], 'rb')
+    except IOError, e:
+        raise ClientError('Error opening %s: %s' % (args[1], e.strerror))
+
+    try:
+        conn.connect('sign-ostree', {'key': safe_string(args[0]),
+                                     'ostree-hash': args[1]})
+        conn.send_payload_from_file(f)
+    finally:
+        f.close()
+    conn.send_inner({'passphrase': passphrase})
+    conn.read_response()
+    try:
+        if o2.output is None:
+            conn.write_payload_to_file(sys.stdout)
+        else:
+            utils.write_new_file(o2.output, conn.write_payload_to_file)
+    except IOError, e:
+        raise ClientError('Error writing to %s: %s' % (o2.output, e.strerror))
+
 def cmd_sign_rpm(conn, args):
     p2 = optparse.OptionParser(usage='%prog sign-rpm [options] '
                                'key rpmfile-or-nevra',
@@ -1207,6 +1239,7 @@ command_handlers = {
     'change-passphrase': (cmd_change_passphrase, 'Change key passphrase'),
     'sign-text': (cmd_sign_text, 'Output a cleartext signature of a text'),
     'sign-data': (cmd_sign_data, 'Create a detached signature'),
+    'sign-ostree': (cmd_sign_ostree, 'Sign an OSTree commit object'),
     'sign-rpm': (cmd_sign_rpm, 'Sign a RPM'),
     'sign-rpms': (cmd_sign_rpms, 'Sign one or more RPMs'),
     }

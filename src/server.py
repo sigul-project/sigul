@@ -15,9 +15,11 @@
 #
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 
+import base64
 import binascii
 import cStringIO
 import crypt
+import hashlib
 import logging
 import os
 import shutil
@@ -26,6 +28,7 @@ import socket
 import string
 import struct
 import subprocess
+import shutil
 import sys
 import tempfile
 import time
@@ -1150,6 +1153,49 @@ def cmd_sign_data(db, conn):
         conn.send_reply_header(errors.OK, {})
         conn.send_reply_payload_from_file(signature_file)
     finally:
+        signature_file.close()
+
+@request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
+def cmd_sign_ostree(db, conn):
+    (access, key_passphrase) = conn.authenticate_user(db)
+    input_file = tempfile.TemporaryFile()
+    signature_file = tempfile.TemporaryFile()
+    file_hash = conn.safe_outer_field('ostree-hash')
+    # Prepare the directory structure that libostree wants
+    ostree_path = tempfile.mkdtemp()
+    server_common.call_ostree_helper(['init-repo', ostree_path])
+    os.mkdir(os.path.join(ostree_path, 'objects', file_hash[:2]))
+    shutil.copyfile(conn.payload_file.name,
+                    os.path.join(ostree_path, 'objects', file_hash[:2],
+                                 '%s.commit' % file_hash[2:]))
+    try:
+        data = server_common.call_ostree_helper(['get-data', ostree_path,
+                                                 file_hash])
+        input_file.write(base64.b64decode(data))
+        input_file.flush()
+        input_file.seek(0)
+        checksum = hashlib.sha256(input_file.read()).hexdigest()
+        if checksum != file_hash:
+            raise InvalidRequestError('ostree-hash does not match payload')
+        server_common.gpg_detached_signature(conn.config, signature_file,
+                                             input_file,
+                                             access.key.fingerprint,
+                                             key_passphrase,
+                                             armor=False)
+        logging.info('Signed ostree hash %s with key %s',
+                     file_hash,
+                     access.key.name)
+        signature_file.seek(0)
+        server_common.call_ostree_helper(['import-signature', ostree_path,
+                                          file_hash],
+                                         stdin=base64.b64encode(signature_file.read()))
+        with open(os.path.join(ostree_path, 'objects', file_hash[:2],
+                               '%s.commitmeta' % file_hash[2:])) as metafile:
+            conn.send_reply_header(errors.OK, {})
+            conn.send_reply_payload_from_file(metafile)
+    finally:
+        shutil.rmtree(ostree_path)
+        input_file.close()
         signature_file.close()
 
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE,

@@ -31,5 +31,9 @@ AC_ARG_VAR([GPG])
 # This interface seems to be undocumented, but bison uses it ;-)
 AM_MISSING_PROG([AUTOM4TE], [autom4te])
 
+dnl For the OSTree helper
+AC_PROG_CC
+PKG_CHECK_MODULES([libostree], [ostree-1])
+
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
