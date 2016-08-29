@@ -140,6 +140,10 @@ src/sigul_server_create_db: src/script.in Makefile
 clean-local:
 	$(SHELL) $(top_srcdir)/tests/testsuite --clean
 
+check-local: atconfig $(top_srcdir)/tests/testsuite src/settings.py
+	$(SHELL) $(top_srcdir)/tests/testsuite \
+		SIGULPATH=$(abs_top_srcdir)/src
+
 installcheck-local: atconfig $(top_srcdir)/tests/testsuite
 	$(SHELL) $(top_srcdir)/tests/testsuite \
 		AUTOTEST_PATH=$(bindir):$(sbindir)

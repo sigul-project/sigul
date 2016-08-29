@@ -90,13 +90,14 @@ AT_CHECK([pk12util -d server -i server.p12 -k nss_password_file \
 		-w pkcs12_password_file], , [ignore])
 rm server.p12
 
+mkdir server/gnupg/
 [cat > server/server.conf <<EOF
 [server]
 bridge-hostname: localhost
 [database]
 database-path: $(pwd)/server/server.sqlite
 [gnupg]
-gnupg-home: $(pwd)/server
+gnupg-home: $(pwd)/server/gnupg
 gnupg-key-type: RSA
 gnupg-key-usage: sign
 [daemon]
@@ -402,7 +403,7 @@ AT_CHECK([printf 'imported-key-pw\0' | \
 AT_CHECK([printf 'imported-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		get-public-key imported-key > public.asc])
-AT_CHECK([sed 's/^Version: .*$/Version: VERSION/' < public.asc | \
+AT_CHECK([grep -v 'Version: ' < public.asc | \
 		cmp - "$abs_srcdir/tests/imported-public-key.asc"])
 rm public.asc
 
