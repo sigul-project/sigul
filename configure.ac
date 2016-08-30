@@ -1,8 +1,8 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT([sigul], [0.102], [mitr@redhat.com], ,
-        [https://fedorahosted.org/sigul/])
+AC_INIT([sigul], [0.103], [puiterwijk@redhat.com], ,
+        [https://pagure.io/sigul/])
 AC_COPYRIGHT(
-[Copyright (C) 2009, 2012, 2015 Red Hat, Inc.  All rights reserved.
+[Copyright (C) 2009, 2012, 2015, 2016 Red Hat, Inc.  All rights reserved.
 
 This copyrighted material is made available to anyone wishing to use, modify,
 copy, or redistribute it subject to the terms and conditions of the GNU General
@@ -16,7 +16,8 @@ Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 code or documentation are not subject to the GNU General Public License and may
 only be used or replicated with the express permission of Red Hat, Inc.
 
-Red Hat Author: Miloslav Trmac <mitr@redhat.com>])
+Red Hat Author: Miloslav Trmac <mitr@redhat.com>
+Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>])
 AC_PREREQ([2.63b])
 AC_CONFIG_SRCDIR([src/server.py])
 AC_CONFIG_AUX_DIR([admin])
