@@ -778,18 +778,41 @@ class RPMFile(object):
 class SigningContext(object):
     '''A tool for running rpm --addsign.'''
 
+    _rpm_sign_args_gpg_workaround = None
+    @staticmethod
+    def _get_rpm_sign_args_gpg_workaround():
+        """
+        This function returns the --batch --passphrase-fd 3 arguments for the
+        gpg_sign_cmd if the current version of rpm/gnupg1 needs those, and an
+        empty string otherwise.
+        """
+        if SigningContext._rpm_sign_args_gpg_workaround is None:
+            # Build
+            # Don't import rpm at the top of the file!  The rpm Python module
+            # calls NSS_NoDB_Init() during its initialization, which breaks our
+            # attempts to initialize nss with our certificate database.
+            import rpm
+            SigningContext._rpm_sign_args_gpg_workaround = \
+                '--batch' in rpm.expandMacro('%{__gpg_sign_cmd}')
+        if SigningContext._rpm_sign_args_gpg_workaround:
+            return '--batch --passphrase-fd 3 '
+        else:
+            return ''
+
     def __init__(self, conn, key, key_passphrase):
         self.__key = key
         self.__key_passphrase = key_passphrase
         self.__argv = ['--define', '_signature gpg',
-                       '--define', '_gpg_name %s' % key.fingerprint]
+                       '--define', '_gpg_name %s' % key.fingerprint,
+                       '--define', '__gpg %s' % settings.gnupg_bin]
         field_value = conn.outer_field_bool('v3-signature')
         if field_value is not None and field_value:
             # Add --force-v3-sigs to the value in redhat-rpm-config-9.0.3-3.fc10
             self.__argv += ['--define',
                             '__gpg_sign_cmd %{__gpg} gpg --force-v3-sigs '
-                            '--batch --no-verbose --no-armor --passphrase-fd 3 '
-                            '--no-secmem-warning -u "%{_gpg_name}" -sbo '
+                            '--no-verbose --no-armor ' +
+                            SigningContext._get_rpm_sign_args_gpg_workaround()
+                            + '--no-secmem-warning -u "%{_gpg_name}" -sbo '
                             '%{__signature_filename} %{__plaintext_filename}']
         self.__env = dict(os.environ) # Shallow copy, uses our $GNUPGHOME
         self.__env['LC_ALL'] = 'C'
@@ -804,10 +827,26 @@ class SigningContext(object):
             child = pexpect.spawn('rpm', self.__argv + ['--addsign', rpm.path],
                                   env=self.__env,
                                   timeout=config.signing_timeout)
-            child.expect('Enter pass phrase: ')
+            child.expect(['Enter pass phrase: ',
+                          'Enter passphrase: '])
             child.sendline(self.__key_passphrase)
             answer = child.expect(['Pass phrase is good\.',
-                                   'Pass phrase check failed'])
+                                   pexpect.EOF,
+                                   # For some insane reason, rpmsign sometimes
+                                   # asks the passphrase twice.
+                                   'Enter passphrase:',
+                                   'Pass phrase check failed',
+                                   'bad passphrase'])
+            if answer == 2:  # Passphrase asked again
+                child.sendline(self.__key_passphrase)
+                answer = child.expect(['Pass phrase is good\.',
+                                       pexpect.EOF,
+                                       # We don't expect this again, but to
+                                       # keep the same indexes.
+                                       'Enter passphrase:',
+                                       'Pass phrase check failed',
+                                       'bad passphrase'])
+
             child.expect(pexpect.EOF)
             child.close()
         except pexpect.ExceptionPexpect, e:
@@ -816,7 +855,7 @@ class SigningContext(object):
             raise RPMFileError('Error signing %s: %s, output %s' %
                                (rpm.rpm_id, msg, child.before))
         if (not os.WIFEXITED(child.status) or
-            os.WEXITSTATUS(child.status) != 0 or answer != 0):
+            os.WEXITSTATUS(child.status) != 0 or answer not in [0, 1]):
             rpm.status = errors.UNKNOWN_ERROR
             raise RPMFileError('Error signing %s: status %d, output %s'
                                % (rpm.rpm_id, child.status, child.before))
