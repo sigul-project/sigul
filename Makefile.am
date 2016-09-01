@@ -58,7 +58,7 @@ EXTRA_DIST = doc/data-design.txt doc/protocol-design.txt \
 	tests/testsuite tests/package.m4 tests/testsuite.at $(TESTFILES) \
 	tests/imported-public-key.asc tests/imported-secret-key.asc \
 	tests/new-key-substitute.asc tests/testrpm.spec
-TESTFILES = tests/basic.at
+TESTFILES = tests/basic.at tests/strict-usernames.at
 
 doc/sigul.1: doc/sigul.1.in Makefile
 	$(MKDIR_P) doc

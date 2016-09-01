@@ -18,6 +18,7 @@
 import base64
 import binascii
 import cStringIO
+import ConfigParser
 import crypt
 import hashlib
 import logging
@@ -73,7 +74,9 @@ class ServerConfiguration(server_common.GPGConfiguration,
                          'max-rpms-payloads-size': 10 * 1024 * 1024 * 1024,
                          'passphrase-length': 64,
                          'server-cert-nickname': 'sigul-server-cert',
-                         'signing-timeout': 60})
+                         'signing-timeout': 60,
+                         'lenient-username-check': 'no',
+                         'proxy-usernames': ''})
 
     def _add_sections(self, sections):
         super(ServerConfiguration, self)._add_sections(sections)
@@ -101,6 +104,9 @@ class ServerConfiguration(server_common.GPGConfiguration,
                                                     'max-rpms-payloads-size')
         self.server_cert_nickname = parser.get('server', 'server-cert-nickname')
         self.signing_timeout = parser.getint('server', 'signing-timeout')
+        self.lenient_username_check = parser.getboolean('server', 'lenient-username-check')
+        self.proxy_usernames = [us.strip() for us in
+                                parser.get('server', 'proxy-usernames').split(',')]
 
 class RequestHandled(Exception):
     '''Used to terminate further processing of the request.'''
@@ -177,6 +183,9 @@ class ServersConnection(object):
         self.payload_path = None
         self.payload_file = None
         utils.nss_init(config) # May raise utils.NSSInitError
+
+    def peer_subject(self):
+        return self.__client.peercert.subject
 
     def outer_field(self, key, required=False):
         '''Return an outer field value, or None if not present.
@@ -479,16 +488,26 @@ class ServersConnection(object):
         logging.warning('Request authentication failed: %s', reason)
         self.send_error(errors.AUTHENTICATION_FAILED, log_it=False)
 
+    def _verify_username(self, outer_user):
+        if self.config.lenient_username_check:
+            # The admin disabled the strict user vs CN check
+            return
+        peeruser = self.peer_subject().common_name
+        if peeruser in self.config.proxy_usernames:
+            # This CN was explicitly authorized to use other usernames
+            return
+        if peeruser != outer_user:
+            self.auth_fail('Cert CN and user differ')
+
     def authenticate_admin(self, db):
         '''Check the request is a valid administration request.
 
         Raise RequestHandled (on permission denied), InvalidRequestError.
         '''
-
-
         user = self.safe_outer_field('user')
         if user is None:
             self.auth_fail('user field missing')
+        self._verify_username(user)
         password = self.inner_field('password')
         if password is None:
             self.auth_fail('password field missing')
@@ -517,6 +536,7 @@ class ServersConnection(object):
         user = self.safe_outer_field('user')
         if user is None:
             self.auth_fail('user field missing')
+        self._verify_username(user)
         key = self.safe_outer_field('key')
         if key is None:
             self.auth_fail('key field missing')
@@ -588,6 +608,7 @@ class ServersConnection(object):
         user = self.safe_outer_field('user')
         if user is None:
             self.auth_fail('user field missing')
+        self._verify_username(user)
         key = self.safe_outer_field('key')
         if key is None:
             self.auth_fail('key field missing')

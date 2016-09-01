@@ -552,6 +552,7 @@ class DoubleTLSClient(object):
         self.__hostname = hostname
         self.__port = port
         self.__cert_nickname = cert_nickname
+        self.peercert = None
         # The connection between child and parent is called a "pipe" although
         # it is a pair of sockets.  "socket" is the network socket used for
         # the outer TLS session.
@@ -671,9 +672,9 @@ class DoubleTLSClient(object):
                                               cert.find_kea_type())
             self.__inner.reset_handshake(True)
             self.__inner.force_handshake()
-            cert = self.__inner.get_peer_certificate()
-            assert cert is not None
-            logging.info('Connection from %s' % repr(cert.subject))
+            self.peercert = self.__inner.get_peer_certificate()
+            assert self.peercert is not None
+            logging.info('Connection from %s' % repr(self.peercert.subject))
         except:
             self.__inner.close()
             self.__inner = None
