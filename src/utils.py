@@ -260,7 +260,10 @@ class NSSConfiguration(Configuration):
 
     def _add_defaults(self, defaults):
         super(NSSConfiguration, self)._add_defaults(defaults)
-        defaults.update({'nss-dir': '~/.sigul', 'nss-password': None})
+        defaults.update({'nss-dir': '~/.sigul',
+                         'nss-password': None,
+                         'nss-min-tls': 'tls1.2',
+                         'nss-max-tls': 'tls1.2'})
 
     def _add_sections(self, sections):
         super(NSSConfiguration, self)._add_sections(sections)
@@ -275,6 +278,8 @@ class NSSConfiguration(Configuration):
         self.nss_password = parser.get('nss', 'nss-password')
         if self.nss_password is None:
             self.nss_password = getpass.getpass('NSS database password: ')
+        self.nss_min_tls = parser.get('nss', 'nss-min-tls')
+        self.nss_max_tls = parser.get('nss', 'nss-max-tls')
 
 def nss_client_auth_callback_single(unused_ca_names, cert):
     '''Provide the specified certificate.'''
@@ -312,8 +317,9 @@ def nss_init(config):
     nss.ssl.set_ssl_default_option(nss.ssl.SSL_ENABLE_SSL3, False)
     nss.ssl.set_ssl_default_option(nss.ssl.SSL_ENABLE_TLS, True)
     nss.ssl.set_ssl_default_option(nss.ssl.SSL_V2_COMPATIBLE_HELLO, False)
-    nss.ssl.set_default_ssl_version_range(nss.ssl.SSL_LIBRARY_VERSION_TLS_1_2,
-                                          nss.ssl.SSL_LIBRARY_VERSION_TLS_1_2)
+    min_tls = nss.ssl.ssl_library_version_from_name(config.nss_min_tls)
+    max_tls = nss.ssl.ssl_library_version_from_name(config.nss_max_tls)
+    nss.ssl.set_default_ssl_version_range(min_tls, max_tls)
     nss.ssl.config_server_session_id_cache()
 
 _derivation_counter_1 = u32_pack(1)
