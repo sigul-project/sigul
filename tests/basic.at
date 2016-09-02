@@ -94,6 +94,8 @@ mkdir server/gnupg/
 [cat > server/server.conf <<EOF
 [server]
 bridge-hostname: localhost
+# This check is lenient here since we try different usernames
+lenient-username-check: yes
 [database]
 database-path: $(pwd)/server/server.sqlite
 [gnupg]
@@ -142,7 +144,6 @@ AT_CHECK([printf 'rootroot\0' | \
 		list-users], ,
 [root
 ])
-
 
 # new-user
 AT_CHECK([printf 'rootroot\0' | \
@@ -465,6 +466,13 @@ AT_CHECK([printf 'root-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		sign-data -o data.sig key data])
 AT_CHECK([gpg -q --homedir gnupg --verify data.sig data], , , [ignore])
+AT_CHECK([grep 'BEGIN PGP ' data.sig], 1, [ignore], [ignore])
+rm data.sig
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		sign-data -a -o data.sig key data])
+AT_CHECK([gpg -q --homedir gnupg --verify data.sig data], , , [ignore])
+AT_CHECK([grep 'BEGIN PGP ' data.sig], 0, [ignore], [ignore])
 rm data data.sig
 
 
