@@ -20,13 +20,13 @@ import binascii
 import cStringIO
 import ConfigParser
 import crypt
+import json
 import hashlib
 import logging
 import os
 import shutil
 import signal
 import socket
-import string
 import struct
 import subprocess
 import shutil
@@ -236,6 +236,17 @@ class ServersConnection(object):
         v = self.__inner_fields.get(key)
         if required and v is None:
             raise InvalidRequestError('Required inner field %s missing.' % key)
+        return v
+
+    def safe_inner_field(self, key, **kwargs):
+        '''Return an inner field value, or None if not present.
+
+        Raise InvalidRequestError if field is not a safe string.
+
+        '''
+        v = self.inner_field(key, **kwargs)
+        if v is not None and not utils.string_is_safe(v):
+            raise InvalidRequestError('Field %s has unsafe value' % repr(key))
         return v
 
     def read_request(self):
@@ -680,13 +691,6 @@ def key_access_by_names(db, conn):
         conn.send_error(errors.KEY_USER_NOT_FOUND)
     return access
 
-_passphrase_characters = string.ascii_letters + string.digits
-def random_passphrase(conn):
-    '''Return a random passphrase.'''
-    random = nss.nss.generate_random(conn.config.passphrase_length)
-    return ''.join(_passphrase_characters[ord(c) % len(_passphrase_characters)]
-                   for c in random)
-
 class RPMFileError(Exception):
     pass
 
@@ -994,7 +998,7 @@ def cmd_new_key(db, conn):
     if conn.config.gnupg_subkey_type is not None:
         key_attrs += ('Subkey-Type: %s\n' % conn.config.gnupg_subkey_type +
                       'Subkey-Length: %d\n' % conn.config.gnupg_subkey_length)
-    key_passphrase = random_passphrase(conn)
+    key_passphrase = utils.random_passphrase(conn.config.passphrase_length)
     key_attrs += 'Passphrase: %s\n' % key_passphrase
     name = conn.safe_outer_field('name-real')
     if name is None:
@@ -1047,7 +1051,8 @@ def cmd_new_key(db, conn):
         db.add(key)
         access = KeyAccess(key, admin, key_admin=True)
         access.set_passphrase(conn.config, key_passphrase=key_passphrase,
-                              user_passphrase=user_passphrase)
+                              user_passphrase=user_passphrase,
+                              bind_params=None)
         db.add(access)
         db.commit()
     except:
@@ -1070,7 +1075,7 @@ def cmd_import_key(db, conn):
     admin = db.query(User).filter_by(name=admin_name).first()
     if admin is None:
         conn.send_error(errors.USER_NOT_FOUND)
-    new_key_passphrase = random_passphrase(conn)
+    new_key_passphrase = utils.random_passphrase(conn.config.passphrase_length)
     import_key_passphrase = conn.inner_field('passphrase', required=True)
     user_passphrase = conn.inner_field('new-passphrase', required=True)
 
@@ -1091,7 +1096,8 @@ def cmd_import_key(db, conn):
         db.add(key)
         access = KeyAccess(key, admin, key_admin=True)
         access.set_passphrase(conn.config, key_passphrase=new_key_passphrase,
-                              user_passphrase=user_passphrase)
+                              user_passphrase=user_passphrase,
+                              bind_params=None)
         db.add(access)
         db.commit()
     except:
@@ -1143,9 +1149,24 @@ def cmd_grant_key_access(db, conn):
     if (db.query(KeyAccess).filter_by(user=user, key=access.key).first() is not
         None):
         conn.send_error(errors.ALREADY_EXISTS)
+    server_binding = conn.safe_inner_field('server-binding', required=False)
+    client_binding = conn.safe_inner_field('client-binding', required=False)
+    try:
+        if server_binding is not None:
+            server_binding = json.loads(server_binding)
+            logging.info('Server binding requested: %s' % server_binding)
+        if client_binding is not None:
+            client_binding = json.loads(client_binding)
+            logging.info('Client binding used: %s' % client_binding)
+    except Exception as ex:
+        raise InvalidRequestError('Unable to decode binding args: %s' % ex)
     a2 = KeyAccess(access.key, user, key_admin=False)
-    a2.set_passphrase(conn.config, key_passphrase=key_passphrase,
-                      user_passphrase=new_passphrase)
+    try:
+        a2.set_passphrase(conn.config, key_passphrase=key_passphrase,
+                          user_passphrase=new_passphrase,
+                          bind_params=server_binding)
+    except NotImplementedError():
+        raise InvalidRequestError('Non-implemented binding mechanism requested')
     db.add(a2)
     db.commit()
     conn.send_reply_ok_only()
@@ -1175,7 +1196,7 @@ def cmd_change_passphrase(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
     new_passphrase = conn.inner_field('new-passphrase', required=True)
     access.set_passphrase(conn.config, key_passphrase=key_passphrase,
-                          user_passphrase=new_passphrase)
+                          user_passphrase=new_passphrase, bind_params=None)
     db.commit()
     conn.send_reply_ok_only()
 
@@ -1516,6 +1537,16 @@ def cmd_sign_rpms(db, conn):
     if exception is not None:
         raise exception[0], exception[1], exception[2]
 
+@request_handler()
+def cmd_list_binding_methods(db, conn):
+    conn.authenticate_admin(db)
+    methods = utils.BindingMethodRegistry.get_registered_methods()
+    conn.send_reply_header(errors.OK, {'num-methods': len(methods)})
+    payload = ''
+    for method in methods:
+        payload += method + '\x00'
+    conn.send_reply_payload(payload)
+
 def unknown_request_handler(unused_db, conn):
     conn.send_reply_header(errors.UNKNOWN_OP, {})
     conn.send_reply_payload('')
@@ -1601,6 +1632,8 @@ def main():
         config = ServerConfiguration(options.config_file)
     except utils.ConfigurationError, e:
         sys.exit(str(e))
+
+    utils.BindingMethodRegistry.register_enabled_methods(config)
 
     server_common.gpg_modify_environ(config)
 

@@ -17,6 +17,7 @@
 
 import binascii
 import errno
+import json
 import getpass
 import logging
 import optparse
@@ -53,7 +54,8 @@ class ClientConfiguration(utils.KojiConfiguration, utils.NSSConfiguration,
         super(ClientConfiguration, self)._add_defaults(defaults)
         defaults.update({'bridge-port': 44334,
                          'client-cert-nickname': 'sigul-client-cert',
-                         'user-name': getpass.getuser()})
+                         'user-name': getpass.getuser(),
+                         'passphrase-length': 128},)
 
     def _add_sections(self, sections):
         super(ClientConfiguration, self)._add_sections(sections)
@@ -66,6 +68,7 @@ class ClientConfiguration(utils.KojiConfiguration, utils.NSSConfiguration,
         self.client_cert_nickname = parser.get('client', 'client-cert-nickname')
         self.server_hostname = parser.get('client', 'server-hostname')
         self.user_name = parser.get('client', 'user-name')
+        self.passphrase_length = parser.get('client', 'passphrase-length')
         self.batch_mode = False
 
 def safe_string(s):
@@ -397,6 +400,20 @@ def key_user_passphrase_or_password(config, o2):
         return {'password': password}
     passphrase = read_key_passphrase(config)
     return {'passphrase': passphrase}
+
+def get_bound_passphrase(config, filename):
+    bound_passphrase = None
+    with open(filename, 'r') as pwdfile:
+        bound_passphrase = pwdfile.read()
+    if not bound_passphrase:
+        raise ClientError('No passphrase in file')
+    passphrase = utils.unbind_passphrase(config, bound_passphrase)
+    if passphrase is None:
+        raise ClientError('Unable to unbind the passphrase on the client')
+    if bound_passphrase == passphrase:
+        # Please don't use this mechanism for unbound passphrases....
+        raise ClientError('Passphrase file is unbound!')
+    return passphrase
 
 class SignRPMArgumentExaminer(object):
     '''An object that can be used to analyze sign-rpm{s,} operands.'''
@@ -743,21 +760,64 @@ def cmd_list_key_users(conn, args):
 def cmd_grant_key_access(conn, args):
     p2 = optparse.OptionParser(usage='%prog grant-key-access key user',
                                description='Grant key access to a user')
+    p2.add_option('-b', '--server-binding-method', action='append',
+                  dest='server_binding_methods',
+                  help='Method used to bind this passphrase to server (' +
+                       'use sigul get-server-binding-methods to get ' +
+                       'available methods)')
+    p2.add_option('-c', '--client-binding-method', action='append',
+                  dest='client_binding_methods',
+                  help='client used to bind this passphrase to server (' +
+                       'use sigul get-binding-methods to get ' +
+                       'available methods)')
+    p2.add_option('-w', '--write-passphrase-file', action='store',
+                  dest='passphrase_file',
+                  help='File to store bound passphrase (works only with ' +
+                       '--client-bind-method, and is required if used)')
     (o2, args) = p2.parse_args(args)
     if len(args) != 2:
         p2.error('key name and user name expected')
+    if o2.passphrase_file is not None and o2.client_binding_methods is None:
+        p2.error('Passphrase file only accepted with client-side binding')
+    if o2.passphrase_file is None and o2.client_binding_methods is not None:
+        p2.error('Client-side binding requires a passphrase file')
+    if o2.passphrase_file is not None and os.path.exists(o2.passphrase_file):
+        p2.error('Output passphrase file exists')
+    try:
+        client_binding = utils.bind_list_to_object(o2.client_binding_methods)
+    except ValueError as ex:
+        p2.error('Error in client binding config: %s' % ex)
+    try:
+        server_binding = utils.bind_list_to_object(o2.server_binding_methods)
+    except ValueError as ex:
+        p2.error('Error in server binding config: %s' % ex)
+
     passphrase = read_key_passphrase(conn.config)
-    new_passphrase = read_new_password(conn.config,
-                                       'Key passphrase for the new user: ',
-                                       'Key passphrase for the new user '
-                                       '(again): ')
+    if o2.passphrase_file:
+        new_passphrase = utils.random_passphrase(conn.config.passphrase_length)
+        bound_passphrase = utils.bind_passphrase(conn.config,
+                                                 new_passphrase,
+                                                 client_binding)
+    else:
+        new_passphrase = read_new_password(conn.config,
+                                           'Key passphrase for the new user: ',
+                                           'Key passphrase for the new user '
+                                           '(again): ')
 
     conn.connect('grant-key-access',
                  {'key': safe_string(args[0]), 'name': safe_string(args[1])})
     conn.empty_payload()
-    conn.send_inner({'passphrase': passphrase,
-                     'new-passphrase': new_passphrase})
+    inner_args = {'passphrase': passphrase,
+                  'new-passphrase': new_passphrase}
+    if client_binding is not None:
+        inner_args['client-binding'] = json.dumps(client_binding)
+    if server_binding is not None:
+        inner_args['server-binding'] = json.dumps(server_binding)
+    conn.send_inner(inner_args)
     conn.read_response(no_payload=True)
+    if o2.passphrase_file is not None:
+        with open(o2.passphrase_file, 'w') as ppfile:
+            ppfile.write(bound_passphrase)
 
 def cmd_revoke_key_access(conn, args):
     p2 = optparse.OptionParser(usage='%prog revoke-key-access [options] key '
@@ -819,7 +879,11 @@ def cmd_sign_text(conn, args):
     (o2, args) = p2.parse_args(args)
     if len(args) != 2:
         p2.error('key name and input file path expected')
-    passphrase = read_key_passphrase(conn.config)
+
+    if conn.config.passphrase:
+        passphrase = conn.config.passphrase
+    else:
+        passphrase = read_key_passphrase(conn.config)
     try:
         f = open(args[1])
     except IOError, e:
@@ -847,12 +911,19 @@ def cmd_sign_data(conn, args):
                   help='Write output to this file')
     p2.add_option('-a', '--armor', action='store_true',
                   help='Enable GnuPG armoring of the result')
+    p2.add_option('-f', '--passphrase-file', action='store',
+                  dest='passphrase_file',
+                  help='File with bound passphrase')
     (o2, args) = p2.parse_args(args)
     if len(args) != 2:
         p2.error('key name and input file path expected')
     if o2.output is None and sys.stdout.isatty() and not o2.armor:
         p2.error('won\'t write output to a TTY, specify a file name')
-    passphrase = read_key_passphrase(conn.config)
+
+    if conn.config.passphrase:
+        passphrase = conn.config.passphrase
+    else:
+        passphrase = read_key_passphrase(conn.config)
     try:
         f = open(args[1], 'rb')
     except IOError, e:
@@ -884,7 +955,11 @@ def cmd_sign_ostree(conn, args):
         p2.error('key name, commit hash and input file path expected')
     if o2.output is None and sys.stdout.isatty():
         p2.error('won\'t write output to a TTY, specify a file name')
-    passphrase = read_key_passphrase(conn.config)
+
+    if conn.config.passphrase:
+        passphrase = conn.config.passphrase
+    else:
+        passphrase = read_key_passphrase(conn.config)
     try:
         f = open(args[2], 'rb')
     except IOError, e:
@@ -934,7 +1009,11 @@ def cmd_sign_rpm(conn, args):
             p2.error('--output can not be used together with --koji-only')
     if not o2.koji_only and o2.output is None and sys.stdout.isatty():
         p2.error('won\'t write output to a TTY, specify a file name')
-    passphrase = read_key_passphrase(conn.config)
+
+    if conn.config.passphrase:
+        passphrase = conn.config.passphrase
+    else:
+        passphrase = read_key_passphrase(conn.config)
 
     # See conn.send_outer_fields() later
     conn.connect(None, None)
@@ -1157,7 +1236,11 @@ def cmd_sign_rpms(conn, args):
                                   (o2.output, e.strerror))
     elif not o2.koji_only:
         p2.error('--output is mandatory without --koji-only')
-    passphrase = read_key_passphrase(conn.config)
+
+    if conn.config.passphrase:
+        passphrase = conn.config.passphrase
+    else:
+        passphrase = read_key_passphrase(conn.config)
 
     f = {'key': safe_string(args[0])}
     if o2.store_in_koji:
@@ -1214,6 +1297,31 @@ def cmd_sign_rpms(conn, args):
     if not ok:
         raise ClientError('')
 
+def cmd_list_binding_methods(conn, args):
+    p2 = optparse.OptionParser(usage='%prog list-binding-methods',
+                               description='List binding methods supported ' +
+                                           'by client')
+    (_, args) = p2.parse_args(args)
+    if len(args) != 0:
+        p2.error('unexpected arguments')
+    for method in utils.BindingMethodRegistry.get_registered_methods():
+        print method
+
+def cmd_list_server_binding_methods(conn, args):
+    p2 = optparse.OptionParser(usage='%prog list-server-binding-methods',
+                               description='List binding methods supported ' +
+                                           'by the server')
+    (_, args) = p2.parse_args(args)
+    if len(args) != 0:
+        p2.error('unexpected arguments')
+    password = read_admin_password(conn.config)
+
+    conn.connect('list-binding-methods', {})
+    conn.empty_payload()
+    conn.send_inner({'password': password})
+    conn.read_response()
+    print_list_in_payload(conn, 'num-methods')
+
 
 # name: (handler, help)
 command_handlers = {
@@ -1242,9 +1350,11 @@ command_handlers = {
     'sign-ostree': (cmd_sign_ostree, 'Sign an OSTree commit object'),
     'sign-rpm': (cmd_sign_rpm, 'Sign a RPM'),
     'sign-rpms': (cmd_sign_rpms, 'Sign one or more RPMs'),
+    'list-binding-methods': (cmd_list_binding_methods,
+                             'List bind methods supported by client'),
+    'list-server-binding-methods': (cmd_list_server_binding_methods,
+                                    'List bind methods supported by server'),
     }
-
-
 
 def handle_global_options():
     '''Handle global options.
@@ -1262,6 +1372,9 @@ def handle_global_options():
     utils.optparse_add_config_file_option(parser, '~/.sigul/client.conf')
     parser.add_option('-u', '--user-name', metavar='USER',
                       help='User name sent to the server')
+    parser.add_option('-f', '--passphrase-file', action='store',
+                      dest='passphrase_file',
+                      help='File with bound passphrase')
     utils.optparse_add_verbosity_option(parser)
     parser.set_defaults(help_commands=False)
     parser.disable_interspersed_args()
@@ -1286,6 +1399,13 @@ def handle_global_options():
     config.batch_mode = options.batch
     if options.user_name:
         config.user_name = options.user_name
+
+    utils.BindingMethodRegistry.register_enabled_methods(config)
+    if options.passphrase_file:
+        config.passphrase = get_bound_passphrase(config,
+                                                 options.passphrase_file)
+    else:
+        config.passphrase = None
 
     return (config, command_handlers[args[0]][0], args[1:])
 

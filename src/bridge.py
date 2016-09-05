@@ -1031,7 +1031,8 @@ request_types = {
                      BoolField('return-data', optional=True),
                      SF('koji-instance', optional=True),
                      BoolField('v3-signature', optional=True)),
-                    handler=SignRPMsRequestHandler)
+                    handler=SignRPMsRequestHandler),
+    'list-binding-methods': RT(()),
     }
 del RT
 del SF

@@ -114,9 +114,15 @@ class KeyAccess(object):
                                      user_passphrase)
         except gpgme.GpgmeError:
             return None
+        passphrase = utils.unbind_passphrase(config, passphrase)
+        if passphrase is None:
+            logging.warning('Unable to unbind passphrase')
         return passphrase
 
-    def set_passphrase(self, config, key_passphrase, user_passphrase):
+    def set_passphrase(self, config, key_passphrase, user_passphrase,
+                       bind_params):
+        key_passphrase = utils.bind_passphrase(config, key_passphrase,
+                                               bind_params)
         self.encrypted_passphrase = gpg_encrypt_symmetric(config,
                                                           key_passphrase,
                                                           user_passphrase)
