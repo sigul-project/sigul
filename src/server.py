@@ -1258,6 +1258,7 @@ def cmd_sign_ostree(db, conn):
         checksum = hashlib.sha256(input_file.read()).hexdigest()
         if checksum != file_hash:
             raise InvalidRequestError('ostree-hash does not match payload')
+        input_file.seek(0)
         server_common.gpg_detached_signature(conn.config, signature_file,
                                              input_file,
                                              access.key.fingerprint,

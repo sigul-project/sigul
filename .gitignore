@@ -19,7 +19,7 @@
 /src/sigul_server
 /src/sigul_server_add_admin
 /src/sigul_server_create_db
-/sigul-ostree-helper
+/src/sigul-ostree-helper
 Makefile.in
 *.pyc
 *.o

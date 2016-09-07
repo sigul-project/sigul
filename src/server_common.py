@@ -198,7 +198,7 @@ def db_create(config):
 
 # OSTree utility
 def call_ostree_helper(args, stdin=None):
-    args = ['/usr/libexec/sigul-ostree-helper'] + args
+    args = ['sigul-ostree-helper'] + args
     proc = subprocess.Popen(args, stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)

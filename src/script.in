@@ -1,3 +1,5 @@
 #! /bin/sh
-PYTHONPATH=$PYTHONPATH${PYTHONPATH:+:}@pkgdatadir@ \
-    exec @PYTHON@ ${SIGULPATH:-@pkgdatadir@}/@program@.py "$@"
+export SIGULPATH=${SIGULPATH:-@pkgdatadir@}
+export PATH=$PATH:$SIGULPATH
+PYTHONPATH=$PYTHONPATH${PYTHONPATH:+:}$SIGULPATH \
+    exec @PYTHON@ ${SIGULPATH}/@program@.py "$@"
