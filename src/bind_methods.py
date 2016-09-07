@@ -32,7 +32,10 @@ def tpm_bind(value, pcrs=None):
     if pcrs:
         for pcr in pcrs.split(','):
             cmd.extend(['--pcr', pcr])
-    proc = subprocess.Popen(cmd)
+    proc = subprocess.Popen(cmd,
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
     (stdout, stderr) = proc.communicate(value)
     if proc.returncode != 0:
         logging.error('Unable to seal with TPM. RC: %i, stdout: %s, stderr: %s'
@@ -46,7 +49,10 @@ def tpm_unbind(value):
     This assumes that the SRK secret is set to TSS_WELL_KNOWN.
     """
     cmd = ['tpm_unsealdata', '--srk-well-known', '--infile', '/dev/stdin']
-    proc = subprocess.Popen(cmd)
+    proc = subprocess.Popen(cmd,
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
     (stdout, stderr) = proc.communicate(value)
     if proc.returncode != 0:
         logging.error('Unable to unseal with TPM. RC: %i, stdout: %s, '
