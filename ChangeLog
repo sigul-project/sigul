@@ -1,3 +1,10 @@
+2016-09-07  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* configure.ac: Release 0.103.
+	* NEWS: Update.
+
+	* Lots of new features, as listed in NEWS.
+
 2015-11-26  Miloslav Trmač  <mitr@redhat.com>
 
 	* configure.ac: Release 0.102.

@@ -1,3 +1,15 @@
+Changes in version 0.200:
+- Passphrase binding framework implemented, allowing admins to bind specific
+  passphrases to hardware on the client and server.
+- Add TPM passphrase binding method.
+- Armoring can now be requested for sign-data.
+- Crypto configuration upgraded to more recent values, SSL2/3 disabled, TLS
+  by default TLS1.2-TLS1.2, configurable.
+- Add support for signing ostree commits.
+- Fix signing on more recent versions of RPM/gnupg1.
+- Strict checking that certificate Common Name matches with the provided
+  username if not configured to be lenient.
+
 Changes in version 0.102:
 - If a worker thread within sign-rpms terminates, make sure that threads
   producing work for the terminated thread do not block indefinitely.

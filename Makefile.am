@@ -39,6 +39,7 @@ man_MANS = doc/sigul.1 doc/sigul_bridge.8 doc/sigul_server.8 \
 	doc/sigul_server_add_admin.8 doc/sigul_server_create_db.8
 dist_man_MANS = doc/sigul_setup_client.1
 python_PYTHON = src/bridge.py \
+	src/bind_methods.py \
 	src/client.py \
 	src/double_tls.py \
 	src/errors.py \
