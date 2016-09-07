@@ -43,7 +43,7 @@ class InvalidResponseError(ClientError):
     '''The response received from the bridge/server is not valid.'''
     pass
 
- # Infrastructure
+# Infrastructure
 
 class ClientConfiguration(utils.KojiConfiguration, utils.NSSConfiguration,
                           utils.Configuration):
@@ -479,7 +479,7 @@ class SignRPMArgumentExaminer(object):
             utils.koji_disconnect(self.__koji_session)
             self.__koji_session = None
 
- # Command handlers
+# Command handlers
 
 def cmd_list_users(conn, args):
     p2 = optparse.OptionParser(usage='%prog list-users',

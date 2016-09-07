@@ -32,7 +32,7 @@ import sqlalchemy.orm
 import settings
 import utils
 
- # Configuration
+# Configuration
 
 class ServerBaseConfiguration(utils.DaemonIDConfiguration,
                               utils.NSSConfiguration, utils.Configuration):
@@ -64,7 +64,7 @@ class ServerBaseConfiguration(utils.DaemonIDConfiguration,
                                            'not an existing file' %
                                            self.database_path)
 
- # Database
+# Database
 
 class User(object):
     def __init__(self, name, clear_password=None, admin=False):
@@ -211,7 +211,7 @@ def call_ostree_helper(args, stdin=None):
         raise Exception('Error when calling ostree helper')
     return stdout
 
- # GPG utilities
+# GPG utilities
 
 class GPGError(Exception):
     '''Error performing a GPG operation.'''

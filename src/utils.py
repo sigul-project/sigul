@@ -43,7 +43,7 @@ import nss.ssl
 
 import settings
 
- # Configuration handling
+# Configuration handling
 
 class ConfigurationError(Exception):
     '''Error reading utility configuration.'''
@@ -161,7 +161,7 @@ def get_daemon_options(description, default_config_file):
                         daemonize=False)
     return optparse_parse_options_only(parser)
 
- # Koji utilities
+# Koji utilities
 
 class KojiConfiguration(Configuration):
 
@@ -257,7 +257,7 @@ def koji_disconnect(session):
     except:
         pass
 
- # Crypto utilities
+# Crypto utilities
 
 class NSSConfiguration(Configuration):
 
@@ -458,7 +458,7 @@ class SHA512HMACWriter(_DigestsWriter):
         assert len(auth) == 64
         self._write_fn(auth)
 
- # Protocol utilities
+# Protocol utilities
 
 protocol_version = 0
 
@@ -546,7 +546,7 @@ def yyyy_mm_dd_is_valid(s):
         return False
     return True
 
- # Threading utilities
+# Threading utilities
 
 class WorkerQueueOrphanedError(Exception):
     '''Putting an item into a WorkerQueue failed because it is orphaned.'''
@@ -682,7 +682,7 @@ def run_worker_threads(threads, exception_types=()):
                 exception = t.exc_info
     return (ok, exception)
 
- # Utilities for daemons
+# Utilities for daemons
 
 class DaemonIDConfiguration(Configuration):
     '''UID/GID configuration for a daemon.'''
@@ -792,7 +792,7 @@ def delete_pid_file(options, daemon_name):
 def sigterm_handler(*unused_args):
     sys.exit(0) # "raise SystemExit..."
 
- # Miscellaneous utilities
+# Miscellaneous utilities
 
 def copy_data(write_fn, read_fn, size):
     '''Copy size bytes using write_fn and read_fn.'''

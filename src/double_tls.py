@@ -810,7 +810,6 @@ class DoubleTLSClient(object):
             logging.shutdown()
             os._exit(self.__unrecoverable_error_exit_code)
 
-
 class OuterBuffer(object):
 
     '''A buffer allowing access to the outer stream of a _DoubleTLS socket.'''

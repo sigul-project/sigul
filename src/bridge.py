@@ -43,7 +43,7 @@ import double_tls
 import settings
 import utils
 
- # Infrastructure
+# Infrastructure
 
 class BridgeError(Exception):
     pass
@@ -213,7 +213,7 @@ class RPMObject(object):
         rpm_info = self.get_rpm_info(koji_client)
         koji_client.add_signature(rpm_info, self.tmp_path)
 
- # Header and payload size validation
+# Header and payload size validation
 
 class Field(object):
     '''A field.'''
@@ -277,7 +277,7 @@ class RequestValidator(object):
         if payload_size > self.__max_payload:
             raise InvalidRequestError('Payload too large')
 
- # Request type-specific code
+# Request type-specific code
 
 class RequestHandler(object):
     '''Request type-specific connection handling.'''
@@ -1037,7 +1037,7 @@ request_types = {
 del RT
 del SF
 
- # Request handling
+# Request handling
 
 class StoringProxy(object):
     '''A proxy for a double_tls.OuterBuffer that stores read outer data.'''

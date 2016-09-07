@@ -1556,7 +1556,6 @@ def unknown_request_handler(unused_db, conn):
 request_handlers[None] = RequestHandler(unknown_request_handler,
                                         RequestHandler.PAYLOAD_MEMORY)
 
-
 
 _CHILD_OK = 0                   # Handled a request
 _CHILD_CONNECTION_REFUSED = 1   # Connection to the bridge was refused
