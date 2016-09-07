@@ -97,6 +97,8 @@ unix-group:
 [nss]
 nss-dir: $(pwd)/server
 nss-password: nss-pw
+[binding]
+enabled: test
 EOF]
 
 AT_CHECK([sigul_server_create_db -c server/server.conf -v -v])
@@ -124,6 +126,8 @@ user-name: root
 [nss]
 nss-dir: $(pwd)/client
 nss-password: nss-pw
+[binding]
+enabled: test
 EOF]
 
 # Import test key
@@ -173,7 +177,7 @@ AT_CHECK([printf 'imported-key-pw\0' | \
 		grant-key-access imported-key user2 \
         -c test,may_unbind=0 -b test,may_unbind=1 -w passphrase2.dat])
 AT_CHECK([printf 'imported-key-pw\0' | \
-		sigul -c client/client.conf --batch -v -v \
+		sigul -c client/client.conf --batch \
 		grant-key-access imported-key user3 \
         -c test,may_unbind=1 -b test,may_unbind=0 -w passphrase3.dat])
 AT_CHECK([printf 'imported-key-pw\0' | \
@@ -203,7 +207,7 @@ Unable to unbind the passphrase on the client
 ])
 
 # Test using a server-side non-unbindable passphrase
-AT_CHECK([sigul -c client/client.conf --batch -v -v \
+AT_CHECK([sigul -c client/client.conf --batch \
 		-u user3 -f passphrase3.dat sign-text -o data.asc \
         imported-key data], 1, ,
 [Error: Authentication failed

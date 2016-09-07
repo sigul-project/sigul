@@ -46,7 +46,7 @@ class InvalidResponseError(ClientError):
 # Infrastructure
 
 class ClientConfiguration(utils.KojiConfiguration, utils.NSSConfiguration,
-                          utils.Configuration):
+                          utils.BindingConfiguration, utils.Configuration):
 
     default_config_file = 'client.conf'
 
@@ -407,7 +407,7 @@ def get_bound_passphrase(config, filename):
         bound_passphrase = pwdfile.read()
     if not bound_passphrase:
         raise ClientError('No passphrase in file')
-    passphrase = utils.unbind_passphrase(config, bound_passphrase)
+    passphrase = utils.unbind_passphrase(bound_passphrase)
     if passphrase is None:
         raise ClientError('Unable to unbind the passphrase on the client')
     if bound_passphrase == passphrase:
@@ -795,8 +795,7 @@ def cmd_grant_key_access(conn, args):
     passphrase = read_key_passphrase(conn.config)
     if o2.passphrase_file:
         new_passphrase = utils.random_passphrase(conn.config.passphrase_length)
-        bound_passphrase = utils.bind_passphrase(conn.config,
-                                                 new_passphrase,
+        bound_passphrase = utils.bind_passphrase(new_passphrase,
                                                  client_binding)
     else:
         new_passphrase = read_new_password(conn.config,

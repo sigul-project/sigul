@@ -41,6 +41,7 @@ import nss.error
 import nss.nss
 import nss.ssl
 
+import bind_methods
 import settings
 
 # Configuration handling
@@ -916,6 +917,21 @@ class MethodRegistry(object):
 
 
 # Passphrase binding
+class BindingConfiguration(Configuration):
+
+    def _add_defaults(self, defaults):
+        super(BindingConfiguration, self)._add_defaults(defaults)
+        defaults.update({'enabled': ''})
+
+    def _add_sections(self, sections):
+        super(BindingConfiguration, self)._add_sections(sections)
+        sections.add('binding')
+
+    def _read_configuration(self, parser):
+        super(BindingConfiguration, self)._read_configuration(parser)
+        self.bindings_enabled = parser.get('binding', 'enabled').split(',')
+
+
 class BindingMethodRegistry(MethodRegistry):
     @classmethod
     def register_method(cls, method, binding_function, unbinding_function):
@@ -953,15 +969,12 @@ class BindingMethodRegistry(MethodRegistry):
 
     @staticmethod
     def register_enabled_methods(config):
-        # TODO
-        def test_bind(passphrase, may_unbind):
-            return passphrase, {'may_unbind': may_unbind}
-        def test_unbind(bound, may_unbind):
-            if may_unbind != '1':
-                return None
-            return bound
-
-        BindingMethodRegistry.register_method('test', test_bind, test_unbind)
+        for method in config.bindings_enabled:
+            if method != '':
+                method = method.strip()
+                func = getattr(bind_methods, method)
+                bindf, unbindf = func(config)
+                BindingMethodRegistry.register_method(method, bindf, unbindf)
 
 
 def random_passphrase(length):
@@ -983,7 +996,7 @@ def bind_list_to_object(bind_list):
         bindings.append(binding)
     return bindings
 
-def unbind_passphrase(config, bound_passphrase):
+def unbind_passphrase(bound_passphrase):
     """Try to undo binding to get the raw key passphrase back.
 
     This function will get either a raw passphrase string, or a json object
@@ -1010,7 +1023,7 @@ def unbind_passphrase(config, bound_passphrase):
 
     return str(bound_passphrase)
 
-def bind_passphrase(config, passphrase, bind_params):
+def bind_passphrase(passphrase, bind_params):
     """Bind the passphrase to the hardware.
 
     This takes bind_params, which is a list of ways used to bind the
