@@ -64,9 +64,9 @@ class ServerConfiguration(server_common.GPGConfiguration,
     def _add_defaults(self, defaults):
         super(ServerConfiguration, self)._add_defaults(defaults)
         defaults.update({'bridge-port': 44333,
-                         'gnupg-key-type': 'DSA',
-                         'gnupg-key-length': 1024,
-                         'gnupg-subkey-type': 'ELG-E',
+                         'gnupg-key-type': 'RSA',
+                         'gnupg-key-length': 2048,
+                         'gnupg-subkey-type': 'RSA',
                          'gnupg-subkey-length': 2048,
                          'gnupg-key-usage': 'sign',
                          'max-file-payload-size': 1024 * 1024 * 1024,
