@@ -911,9 +911,6 @@ def cmd_sign_data(conn, args):
                   help='Write output to this file')
     p2.add_option('-a', '--armor', action='store_true',
                   help='Enable GnuPG armoring of the result')
-    p2.add_option('-f', '--passphrase-file', action='store',
-                  dest='passphrase_file',
-                  help='File with bound passphrase')
     (o2, args) = p2.parse_args(args)
     if len(args) != 2:
         p2.error('key name and input file path expected')
