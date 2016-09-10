@@ -462,6 +462,25 @@ AT_CHECK([printf 'unprivileged2-key-pw\0' | \
 ])
 rm data data.asc
 
+# sign-git-tag
+AT_CHECK([mkdir gitrepo])
+AT_CHECK([cd gitrepo; \
+        git init; \
+        git config user.name sigultest; \
+        git config user.email sigul@test.example.com; \
+        echo foobar >baz; \
+        git add baz; \
+        git commit -m foobar; \
+        git tag -a testtag -m testing; \
+        cd ..], 0, [ignore])
+AT_CHECK([cd gitrepo;
+        printf 'root-key-pw\0' | \
+            sigul -c ../client/client.conf --batch -v -v \
+            sign-git-tag key testtag; \
+        cd ..])
+AT_CHECK([GNUPGHOME=gnupg git --git-dir=gitrepo/.git/ tag -v testtag 2>&1 \
+        | grep "Good signature"], 0, [ignore])
+
 # sign-ostree
 AT_DATA([ostree.commit.b64], [[dmVyc2lvbgByYXdoaWRlLjQ5AABzCAAAcnBtb3N0cmVlLmlucHV0aGFzaAAAAAAAMGNkYzIwYWZl
 NjRlMjFmMWUxMDA3MDcxY2Y4MzEwNmI3ODk0NjJkMTM2YmQyOTE3YTM2ZmNiMzU4ZDI2Mjk1YwAA

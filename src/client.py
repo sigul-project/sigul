@@ -25,6 +25,7 @@ import optparse
 import os
 import socket
 import struct
+import subprocess
 import sys
 
 import nss.nss
@@ -942,6 +943,56 @@ def cmd_sign_data(conn, args):
     except IOError, e:
         raise ClientError('Error writing to %s: %s' % (o2.output, e.strerror))
 
+def call_git(args, stdin=None, ignore_error=False, strip_newline=False):
+    args = ['git'] + args
+    proc = subprocess.Popen(args,
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    (stdout, stderr) = proc.communicate(stdin)
+    if proc.returncode != 0:
+        if ignore_error:
+            return None
+        raise ClientError('Error while calling git, args %s, return code %d, '
+                          'stdout %s, stderr %s' % (args,
+                                                    proc.returncode,
+                                                    stdout,
+                                                    stderr))
+    if strip_newline:
+        stdout = stdout.replace('\n', '')
+    return stdout
+
+def cmd_sign_git_tag(conn, args):
+    p2 = optparse.OptionParser(usage='%prog sign-git-tag [options] tagname',
+                               description='Sign a GPG tag')
+    (o2, args) = p2.parse_args(args)
+    if len(args) != 2:
+        p2.error('key name and tag name expected')
+
+    if not call_git(['status'], ignore_error=True):
+        p2.error('Please run this inside a git repo directory')
+
+    if conn.config.passphrase:
+        passphrase = conn.config.passphrase
+    else:
+        passphrase = read_key_passphrase(conn.config)
+
+    unsigned_oid = call_git(['show-ref', '-s', 'refs/tags/%s' % args[1]],
+                            strip_newline=True)
+    unsigned_obj = call_git(['cat-file', '-p', unsigned_oid])
+
+    conn.connect('sign-git-tag', {'key': safe_string(args[0])})
+    conn.send_payload(unsigned_obj)
+    conn.send_inner({'passphrase': passphrase})
+    conn.read_response()
+
+    signature = conn.read_payload()
+    signed_obj = unsigned_obj + signature
+    signed_oid = call_git(['hash-object', '-t', 'tag', '-w', '--stdin'],
+                          stdin=signed_obj, strip_newline=True)
+    call_git(['update-ref', 'refs/tags/%s' % args[1], signed_oid,
+              unsigned_oid])
+
 def cmd_sign_ostree(conn, args):
     p2 = optparse.OptionParser(usage='%prog sign-ostree [options] key hash input_file',
                                description='Sign an OSTree commit object')
@@ -1344,6 +1395,7 @@ command_handlers = {
     'change-passphrase': (cmd_change_passphrase, 'Change key passphrase'),
     'sign-text': (cmd_sign_text, 'Output a cleartext signature of a text'),
     'sign-data': (cmd_sign_data, 'Create a detached signature'),
+    'sign-git-tag': (cmd_sign_git_tag, 'Sign a git tag'),
     'sign-ostree': (cmd_sign_ostree, 'Sign an OSTree commit object'),
     'sign-rpm': (cmd_sign_rpm, 'Sign a RPM'),
     'sign-rpms': (cmd_sign_rpms, 'Sign one or more RPMs'),

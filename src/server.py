@@ -1238,6 +1238,50 @@ def cmd_sign_data(db, conn):
         signature_file.close()
 
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
+def cmd_sign_git_tag(db, conn):
+    # An annotated tag object looks like:
+    # object xxxxxxx
+    # type commit
+    # tag tagname
+    # tagger name <email> datetime utcdiff
+    #
+    # Tag message
+    (access, key_passphrase) = conn.authenticate_user(db)
+
+    tag_lines = conn.payload_file.readlines()
+    if not tag_lines[0].startswith('object '):
+        raise InvalidRequestError('No valid tag object provided')
+    if not tag_lines[1].startswith('type commit'):
+        raise InvalidRequestError('No annotated tag object provided')
+    if not tag_lines[2].startswith('tag '):
+        raise InvalidRequestError('No tag object provided')
+    if not tag_lines[3].startswith('tagger '):
+        raise InvalidRequestError('No tagger provided')
+
+    commit_oid = tag_lines[0].split(' ')[1].replace('\n', '')
+    tag_name = tag_lines[2].split(' ')[1].replace('\n', '')
+    tagger = ' '.join(tag_lines[3].split(' ', 1)[1:]).replace('\n', '')
+
+    conn.payload_file.seek(0)
+
+    signature_file = tempfile.TemporaryFile()
+    try:
+        server_common.gpg_detached_signature(conn.config, signature_file,
+                                             conn.payload_file,
+                                             access.key.fingerprint,
+                                             key_passphrase,
+                                             armor=True)
+        logging.info('Signed git tag %s, commit %s, tagger %s with key %s',
+                     tag_name,
+                     commit_oid,
+                     tagger,
+                     access.key.name)
+        conn.send_reply_header(errors.OK, {})
+        conn.send_reply_payload_from_file(signature_file)
+    finally:
+        signature_file.close()
+
+@request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_ostree(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
     input_file = tempfile.TemporaryFile()
