@@ -353,7 +353,10 @@ def read_admin_password(config):
 
 def read_key_passphrase(config):
     '''Return a key passphrase.'''
-    return utils.read_password(config, 'Key passphrase: ')
+    if config.passphrase:
+        return config.passphrase
+    else:
+        return utils.read_password(config, 'Key passphrase: ')
 
 def read_new_password(config, prompt1, prompt2):
     '''Return a new password (ask for it twice).'''
@@ -889,10 +892,7 @@ def cmd_change_passphrase(conn, args):
     except ValueError as ex:
         p2.error('Error in server binding config: %s' % ex)
 
-    if conn.config.passphrase:
-        passphrase = conn.config.passphrase
-    else:
-        passphrase = read_key_passphrase(conn.config)
+    passphrase = read_key_passphrase(conn.config)
     if o2.passphrase_file:
         new_passphrase = utils.random_passphrase(conn.config.passphrase_length)
         bound_passphrase = utils.bind_passphrase(new_passphrase,
@@ -927,10 +927,7 @@ def cmd_sign_text(conn, args):
     if len(args) != 2:
         p2.error('key name and input file path expected')
 
-    if conn.config.passphrase:
-        passphrase = conn.config.passphrase
-    else:
-        passphrase = read_key_passphrase(conn.config)
+    passphrase = read_key_passphrase(conn.config)
     try:
         f = open(args[1])
     except IOError, e:
@@ -964,10 +961,7 @@ def cmd_sign_data(conn, args):
     if o2.output is None and sys.stdout.isatty() and not o2.armor:
         p2.error('won\'t write output to a TTY, specify a file name')
 
-    if conn.config.passphrase:
-        passphrase = conn.config.passphrase
-    else:
-        passphrase = read_key_passphrase(conn.config)
+    passphrase = read_key_passphrase(conn.config)
     try:
         f = open(args[1], 'rb')
     except IOError, e:
@@ -1018,10 +1012,7 @@ def cmd_sign_git_tag(conn, args):
     if not call_git(['status'], ignore_error=True):
         p2.error('Please run this inside a git repo directory')
 
-    if conn.config.passphrase:
-        passphrase = conn.config.passphrase
-    else:
-        passphrase = read_key_passphrase(conn.config)
+    passphrase = read_key_passphrase(conn.config)
 
     unsigned_oid = call_git(['show-ref', '-s', 'refs/tags/%s' % args[1]],
                             strip_newline=True)
@@ -1050,10 +1041,7 @@ def cmd_sign_ostree(conn, args):
     if o2.output is None and sys.stdout.isatty():
         p2.error('won\'t write output to a TTY, specify a file name')
 
-    if conn.config.passphrase:
-        passphrase = conn.config.passphrase
-    else:
-        passphrase = read_key_passphrase(conn.config)
+    passphrase = read_key_passphrase(conn.config)
     try:
         f = open(args[2], 'rb')
     except IOError, e:
@@ -1104,10 +1092,7 @@ def cmd_sign_rpm(conn, args):
     if not o2.koji_only and o2.output is None and sys.stdout.isatty():
         p2.error('won\'t write output to a TTY, specify a file name')
 
-    if conn.config.passphrase:
-        passphrase = conn.config.passphrase
-    else:
-        passphrase = read_key_passphrase(conn.config)
+    passphrase = read_key_passphrase(conn.config)
 
     # See conn.send_outer_fields() later
     conn.connect(None, None)
@@ -1331,10 +1316,7 @@ def cmd_sign_rpms(conn, args):
     elif not o2.koji_only:
         p2.error('--output is mandatory without --koji-only')
 
-    if conn.config.passphrase:
-        passphrase = conn.config.passphrase
-    else:
-        passphrase = read_key_passphrase(conn.config)
+    passphrase = read_key_passphrase(conn.config)
 
     f = {'key': safe_string(args[0])}
     if o2.store_in_koji:

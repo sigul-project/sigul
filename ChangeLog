@@ -1,6 +1,7 @@
 2016-09-16  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* Allow changing passphrase binding after granting
+	* Allow passing a bound passphrase everywhere a passphrase is accepted
 
 2016-09-10  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
