@@ -1196,8 +1196,20 @@ def cmd_get_public_key(db, conn):
 def cmd_change_passphrase(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
     new_passphrase = conn.inner_field('new-passphrase', required=True)
+    server_binding = conn.safe_inner_field('server-binding', required=False)
+    client_binding = conn.safe_inner_field('client-binding', required=False)
+    try:
+        if server_binding is not None:
+            server_binding = json.loads(server_binding)
+            logging.info('Server binding requested: %s' % server_binding)
+        if client_binding is not None:
+            client_binding = json.loads(client_binding)
+            logging.info('Client binding used: %s' % client_binding)
+    except Exception as ex:
+        raise InvalidRequestError('Unable to decode binding args: %s' % ex)
     access.set_passphrase(conn.config, key_passphrase=key_passphrase,
-                          user_passphrase=new_passphrase, bind_params=None)
+                          user_passphrase=new_passphrase,
+                          bind_params=server_binding)
     db.commit()
     conn.send_reply_ok_only()
 

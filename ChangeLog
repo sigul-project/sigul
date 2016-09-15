@@ -1,3 +1,11 @@
+2016-09-16  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* Allow changing passphrase binding after granting
+
+2016-09-10  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* Implement sign-git-tag
+
 2016-09-07  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* configure.ac: Release 0.103.

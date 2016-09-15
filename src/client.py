@@ -857,19 +857,65 @@ def cmd_get_public_key(conn, args):
 def cmd_change_passphrase(conn, args):
     p2 = optparse.OptionParser(usage='%prog change-passphrase key',
                                description='Change key passphrase')
+    p2.add_option('-b', '--server-binding-method', action='append',
+                  dest='server_binding_methods',
+                  help='Method used to bind this passphrase to server (' +
+                       'use sigul get-server-binding-methods to get ' +
+                       'available methods)')
+    p2.add_option('-c', '--client-binding-method', action='append',
+                  dest='client_binding_methods',
+                  help='client used to bind this passphrase to server (' +
+                       'use sigul get-binding-methods to get ' +
+                       'available methods)')
+    p2.add_option('-w', '--write-passphrase-file', action='store',
+                  dest='passphrase_file',
+                  help='File to store bound passphrase (works only with ' +
+                       '--client-bind-method, and is required if used)')
     (o2, args) = p2.parse_args(args)
     if len(args) != 1:
         p2.error('key name expected')
-    passphrase = read_key_passphrase(conn.config)
-    new_passphrase = read_new_password(conn.config,
-                                       'New key passphrase: ',
-                                       'New key passphrase (again): ')
+    if o2.passphrase_file is not None and o2.client_binding_methods is None:
+        p2.error('Passphrase file only accepted with client-side binding')
+    if o2.passphrase_file is None and o2.client_binding_methods is not None:
+        p2.error('Client-side binding requires a passphrase file')
+    if o2.passphrase_file is not None and os.path.exists(o2.passphrase_file):
+        p2.error('Output passphrase file exists')
+    try:
+        client_binding = utils.bind_list_to_object(o2.client_binding_methods)
+    except ValueError as ex:
+        p2.error('Error in client binding config: %s' % ex)
+    try:
+        server_binding = utils.bind_list_to_object(o2.server_binding_methods)
+    except ValueError as ex:
+        p2.error('Error in server binding config: %s' % ex)
+
+    if conn.config.passphrase:
+        passphrase = conn.config.passphrase
+    else:
+        passphrase = read_key_passphrase(conn.config)
+    if o2.passphrase_file:
+        new_passphrase = utils.random_passphrase(conn.config.passphrase_length)
+        bound_passphrase = utils.bind_passphrase(new_passphrase,
+                                                 client_binding)
+    else:
+        new_passphrase = read_new_password(conn.config,
+                                           'Key passphrase for the new user: ',
+                                           'Key passphrase for the new user '
+                                           '(again): ')
 
     conn.connect('change-passphrase', {'key': safe_string(args[0])})
     conn.empty_payload()
-    conn.send_inner({'passphrase': passphrase,
-                     'new-passphrase': new_passphrase})
+    inner_args = {'passphrase': passphrase,
+                  'new-passphrase': new_passphrase}
+    if client_binding is not None:
+        inner_args['client-binding'] = json.dumps(client_binding)
+    if server_binding is not None:
+        inner_args['server-binding'] = json.dumps(server_binding)
+    conn.send_inner(inner_args)
     conn.read_response(no_payload=True)
+    if o2.passphrase_file is not None:
+        with open(o2.passphrase_file, 'w') as ppfile:
+            ppfile.write(bound_passphrase)
 
 def cmd_sign_text(conn, args):
     p2 = optparse.OptionParser(usage='%prog sign-text [options] key input_file',
