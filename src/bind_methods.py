@@ -61,8 +61,88 @@ def tpm_unbind(value):
         return None
     return stdout
 
-def tpm(config):
+def tpm():
     return (tpm_bind, tpm_unbind)
+
+
+# Binding to PKCS11 token with openssl engine_pkcs11
+pkcs11_config = {}
+
+def pkcs11_bind(value, token):
+    """This function binds data with a PKCS11 token using engine_pkcs11.
+
+    Argument required is the token, which needs to have been configured in the
+    config file.
+    """
+    global pkcs11_config
+
+    if token not in pkcs11_config['tokens']:
+        logging.error('Binding attempted with unknown pkcs11 token %s' % token)
+        return None, None
+
+    pubkey = pkcs11_config['%s_pubkey' % token]
+
+    cmd = ['openssl', 'smime', '-encrypt', '-aes-256-cbc', pubkey]
+    proc = subprocess.Popen(cmd,
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    (stdout, stderr) = proc.communicate(value)
+    if proc.returncode != 0:
+        logging.error('Unable to bind with PKCS11 token %s. RC: %i, stdout: %s'
+                      ', stderr: %s'
+                      % (token, proc.returncode, stdout, stderr))
+        return None, None
+    return stdout, {'token': token}
+
+def pkcs11_unbind(value, token):
+    """This function unbinds data with engine_pkcs11.
+
+    This requires that the token identified is configured.
+    """
+    global pkcs11_config
+
+    if token not in pkcs11_config['tokens']:
+        logging.error('Unbinding attempted with unknown pkcs11 token %s'
+                      % token)
+        return None
+
+    privkey = pkcs11_config['%s_privkey' % token]
+    pin = pkcs11_config['%s_pin' % token]
+
+    value = pin + '\n' + value
+
+    cmd = ['openssl', 'smime', '-decrypt', '-keyform', 'engine', '-passin',
+           'stdin', '-engine', 'pkcs11', '-inkey', privkey]
+    proc = subprocess.Popen(cmd,
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    (stdout, stderr) = proc.communicate(value)
+    if proc.returncode != 0:
+        logging.error('Unable to unbind with PKCS11 token %s. RC: %i, stdout: '
+                      '%s, stderr: %s'
+                      % (token, proc.returncode, stdout, stderr))
+        return None
+    return stdout
+
+def pkcs11(tokens, **config):
+    # Check config
+    tokens = map(str.strip, tokens.split(','))
+    for token in tokens:
+        # This is a lazy way of checking: it will just throw KeyError
+        config['%s_pubkey' % token]
+        config['%s_privkey' % token]
+        config['%s_pin' % token]
+        assert 'pkcs11:' not in config['%s_pubkey' % token]
+        assert 'pkcs11:' in config['%s_privkey' % token]
+
+    global pkcs11_config
+    # We primarily do the split here so that we fail early if required
+    # arguments are not provided
+    config['tokens'] = tokens
+    pkcs11_config = config
+    return (pkcs11_bind, pkcs11_unbind)
 
 
 # Test binding method
