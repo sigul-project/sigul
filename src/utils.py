@@ -931,6 +931,14 @@ class BindingConfiguration(Configuration):
     def _read_configuration(self, parser):
         super(BindingConfiguration, self)._read_configuration(parser)
         self.bindings_enabled = parser.get('binding', 'enabled').split(',')
+        self.binding_config = {}
+        for item in parser.items('binding'):
+            item = item[0]
+            module, _, param = item.partition('_')
+            if module and param:
+                if module not in self.binding_config:
+                    self.binding_config[module] = {}
+                self.binding_config[module][param] = value
 
 
 class BindingMethodRegistry(MethodRegistry):
@@ -974,7 +982,8 @@ class BindingMethodRegistry(MethodRegistry):
             if method != '':
                 method = method.strip()
                 func = getattr(bind_methods, method)
-                bindf, unbindf = func(config)
+                method_config = config.binding_config.get(method, {})
+                bindf, unbindf = func(**method_config)
                 BindingMethodRegistry.register_method(method, bindf, unbindf)
 
 

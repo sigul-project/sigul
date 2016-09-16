@@ -74,5 +74,5 @@ def test_unbind(bound, may_unbind):
         return None
     return bound
 
-def test(config):
+def test():
     return (test_bind, test_unbind)
