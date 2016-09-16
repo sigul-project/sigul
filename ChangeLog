@@ -1,3 +1,13 @@
+2016-09-17  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* config.ac: Release 0.201
+	* NEWS: Update.
+
+	* src/utils.py (BindingMethodRegistry.register_enabled_methods): Only
+	pass arguments needed for the module being initialized.
+
+	* src/bind_methods.py: Implement pkcs11 binding method.
+
 2016-09-16  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* Allow changing passphrase binding after granting
@@ -9,7 +19,7 @@
 
 2016-09-07  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
-	* configure.ac: Release 0.103.
+	* configure.ac: Release 0.200.
 	* NEWS: Update.
 
 	* Lots of new features, as listed in NEWS.

@@ -1,3 +1,8 @@
+Changes in version 0.201:
+- PKCS11 passphrase binding implemented.
+- Allow changing binding arguments later.
+- Add sign-git-tag command.
+
 Changes in version 0.200:
 - Passphrase binding framework implemented, allowing admins to bind specific
   passphrases to hardware on the client and server.
