@@ -29,8 +29,8 @@ AUTOMAKE_OPTIONS = subdir-objects
 if have_ostree
 bin_PROGRAMS = src/sigul-ostree-helper
 src_sigul_ostree_helper_SOURCES = src/sigul-ostree-helper.c
-src_sigul_ostree_helper_CFLAGS = $(libostree_CFLAGS)
-src_sigul_ostree_helper_LDFLAGS = $(libostree_LIBS)
+src_sigul_ostree_helper_CFLAGS = $(AM_CFLAGS) $(libostree_CFLAGS)
+src_sigul_ostree_helper_LDFLAGS = $(AM_LDFLAGS) $(libostree_LIBS)
 endif
 bin_SCRIPTS = src/sigul
 dist_bin_SCRIPTS = src/sigul_setup_client
