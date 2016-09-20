@@ -622,6 +622,10 @@ class WorkerThread(threading.Thread):
         try:
             try:
                 self._real_run()
+            except:
+                logging.error('Worker %s (%s) encountered an error processing',
+                              self.name, self.description,
+                              exc_info=True)
             finally:
                 for (queue, _) in self.input_queues:
                     queue.mark_orphaned()
@@ -640,8 +644,8 @@ class WorkerThread(threading.Thread):
                 log_exception(self.name, self.exc_info,
                               ('Unexpected error in %s' % self.description))
             else:
-                logging.debug('%s: Terminated by an exception %s' %
-                              (self.name, repr(self.exc_info)))
+                logging.debug('%s: Terminated by an exception',
+                              self.name, exc_info=True)
 
     def _real_run(self):
         '''The real body of the thread.'''

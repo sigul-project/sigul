@@ -1,3 +1,7 @@
+2016-09-20  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/utils.py (WorkerThread.run): Report any errors thrown in _real_run.
+
 2016-09-17  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* config.ac: Release 0.201
