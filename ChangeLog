@@ -1,3 +1,8 @@
+2016-09-24  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/utils.py (BindingConfiguration): Correctly retrieve the value of
+	binding configuration arguments.
+
 2016-09-20  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/utils.py (WorkerThread.run): Report any errors thrown in _real_run.

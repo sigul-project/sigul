@@ -936,8 +936,7 @@ class BindingConfiguration(Configuration):
         super(BindingConfiguration, self)._read_configuration(parser)
         self.bindings_enabled = parser.get('binding', 'enabled').split(',')
         self.binding_config = {}
-        for item in parser.items('binding'):
-            item = item[0]
+        for item, value in parser.items('binding'):
             module, _, param = item.partition('_')
             if module and param:
                 if module not in self.binding_config:
