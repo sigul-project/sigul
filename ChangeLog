@@ -1,3 +1,10 @@
+2016-09-27  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/bind_methods.py (tpm): Allow providing SRK on start or in
+	configuration.
+
+	* src/bind_methods.py (pkcs11): Allow providing PKCS11 PIN on start
+
 2016-09-24  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/utils.py (BindingConfiguration): Correctly retrieve the value of

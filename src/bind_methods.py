@@ -15,10 +15,13 @@
 #
 # Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
 
+from getpass import getpass
 import logging
 import subprocess
 
 # Binding to a TPM1.2
+tpm_srk = None
+
 def tpm_bind(value, pcrs=None):
     """This function seals data with a TPM1.2 using trousers.
 
@@ -28,7 +31,13 @@ def tpm_bind(value, pcrs=None):
 
     This assumes that the SRK secret is set to TSS_WELL_KNOWN.
     """
-    cmd = ['tpm_sealdata', '--well-known']
+    global tpm_srk
+    cmd = ['tpm_sealdata']
+    if tpm_srk:
+        value = tpm_srk + '\n' + value
+    else:
+        cmd.append('--well-known')
+
     if pcrs:
         for pcr in pcrs.split(','):
             cmd.extend(['--pcr', pcr])
@@ -48,7 +57,12 @@ def tpm_unbind(value):
 
     This assumes that the SRK secret is set to TSS_WELL_KNOWN.
     """
-    cmd = ['tpm_unsealdata', '--srk-well-known', '--infile', '/dev/stdin']
+    global tpm_srk
+    cmd = ['tpm_unsealdata', '--infile', '/dev/stdin']
+    if tpm_srk:
+        value = tpm_srk + '\n' + value
+    else:
+        cmd.append('--srk-well-known')
     proc = subprocess.Popen(cmd,
                             stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE,
@@ -61,7 +75,14 @@ def tpm_unbind(value):
         return None
     return stdout
 
-def tpm():
+def tpm(**config):
+    global tpm_srk
+    if 'srk' in config:
+        tpm_srk = config['srk']
+    elif 'nosrk' in config and config['nosrk']:
+        tpm_srk = None
+    else:
+        tpm_srk = getpass('Enter TPM SRK: ')
     return (tpm_bind, tpm_unbind)
 
 
@@ -133,9 +154,12 @@ def pkcs11(tokens, **config):
         # This is a lazy way of checking: it will just throw KeyError
         config['%s_pubkey' % token]
         config['%s_privkey' % token]
-        config['%s_pin' % token]
         assert 'pkcs11:' not in config['%s_pubkey' % token]
         assert 'pkcs11:' in config['%s_privkey' % token]
+
+        if ('%s_pin' % token) not in config:
+            config['%s_pin'] = getpass('PIN code for token "%s": ' % token)
+        config['%s_pin' % token]
 
     global pkcs11_config
     # We primarily do the split here so that we fail early if required
