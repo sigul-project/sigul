@@ -1,3 +1,7 @@
+2016-10-03  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/server.py: Added gpg_signature for plain gpg signatures.
+
 2016-10-01  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/utils.py (nss_init): Check whether NSS password is correct on

@@ -404,6 +404,22 @@ def gpg_decrypt(config, ciphertext, passphrase):
     ctx.decrypt(cStringIO.StringIO(ciphertext), data)
     return data.getvalue()
 
+def gpg_signature(config, signature_file, cleartext_file, fingerprint,
+                  passphrase, armor):
+    '''Create a normal signature.
+
+    Sign contents of cleartext_file, write the signature to signature_file.
+    Use key with fingerprint and passphrase.
+
+    '''
+    ctx = _gpg_open(config)
+    _gpg_set_passphrase(ctx, passphrase)
+    key = ctx.get_key(fingerprint, True)
+    ctx.signers = (key,)
+    ctx.armor = armor
+    ctx.textmode = False
+    ctx.sign(cleartext_file, signature_file, gpgme.SIG_MODE_NORMAL)
+
 def gpg_clearsign(config, signed_file, cleartext_file, fingerprint, passphrase):
     '''Create a cleartext signature.
 
