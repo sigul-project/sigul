@@ -21,5 +21,6 @@ AT_TESTED([sigul sigul_bridge sigul_server sigul_server_create_db] dnl
 
 m4_include([basic.at])
 m4_include([ostree.at])
+m4_include([containers.at])
 m4_include([strict-usernames.at])
 m4_include([bound-passphrase.at])

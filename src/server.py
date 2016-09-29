@@ -1342,6 +1342,51 @@ def cmd_sign_ostree(db, conn):
         input_file.close()
         signature_file.close()
 
+@request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
+def cmd_sign_container(db, conn):
+    (access, key_passphrase) = conn.authenticate_user(db)
+
+    checksum = hashlib.sha256(conn.payload_file.read()).hexdigest()
+
+    docker_manifest_digest = 'sha256:%s' % checksum
+    docker_reference = conn.safe_outer_field('docker-reference')
+
+    # github.com/containers/image/signature/signature.go#51
+    sig_obj = {
+        'critical': {
+            'type': 'atomic container signature',
+            'image': {
+                'docker-manifest-digest': docker_manifest_digest
+            },
+            'identity': {
+                'docker-reference': docker_reference
+            }
+        },
+        'optional': {
+            'creator': 'Sigul',
+            'timestamp': int(time.time())
+        }
+    }
+
+    try:
+        signature_file = tempfile.TemporaryFile()
+        input_file = tempfile.TemporaryFile()
+        input_file.write(json.dumps(sig_obj))
+        input_file.seek(0)
+        server_common.gpg_signature(conn.config, signature_file,
+                                    input_file,
+                                    access.key.fingerprint,
+                                    key_passphrase,
+                                    armor=False)
+        logging.info('Signed container %s (%s) with key %s',
+                     docker_reference,
+                     docker_manifest_digest,
+                     access.key.name)
+        conn.send_reply_header(errors.OK, {})
+        conn.send_reply_payload_from_file(signature_file)
+    finally:
+        signature_file.close()
+
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE,
                  payload_auth_optional=True)
 def cmd_sign_rpm(db, conn):
