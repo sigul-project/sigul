@@ -199,14 +199,15 @@ class ServersConnection(object):
             raise InvalidRequestError('Required outer field %s missing' % key)
         return v
 
-    def safe_outer_field(self, key, **kwargs):
+    def safe_outer_field(self, key, filename=False, **kwargs):
         '''Return an outer field value, or None if not present.
 
         Raise InvalidRequestError if field is not a safe string.
+        Raise InvalidRequest if filename=True and path components exist.
 
         '''
         v = self.outer_field(key, **kwargs)
-        if v is not None and not utils.string_is_safe(v):
+        if v is not None and not utils.string_is_safe(v, filename):
             raise InvalidRequestError('Field %s has unsafe value' % repr(key))
         return v
 
@@ -1298,7 +1299,7 @@ def cmd_sign_ostree(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
     input_file = tempfile.TemporaryFile()
     signature_file = tempfile.TemporaryFile()
-    file_hash = conn.safe_outer_field('ostree-hash')
+    file_hash = conn.safe_outer_field('ostree-hash', filename=True)
     # Prepare the directory structure that libostree wants
     ostree_path = tempfile.mkdtemp()
     server_common.call_ostree_helper(['init-repo', ostree_path])

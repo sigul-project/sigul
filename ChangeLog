@@ -1,3 +1,10 @@
+2016-09-30  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/utils.py (string_is_safe): Add checking for filename safety.
+
+	* src/server.py (cmd_sign_ostree): Verify that ostree-hash is
+	filename-safe.
+
 2016-09-27  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/bind_methods.py (tpm): Allow providing SRK on start or in

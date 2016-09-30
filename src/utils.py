@@ -529,12 +529,28 @@ def readable_fields(fields):
     keys = sorted(fields.iterkeys())
     return ', '.join(('%s = %s' % (repr(k), repr(fields[k])) for k in keys))
 
-def string_is_safe(s):
-    '''Return True if s an allowed readable string.'''
+def string_is_safe(s, filename=False):
+    '''Return True if s an allowed readable string.
+
+    If filename is True, verifies no path components are in the string.
+    Allowable characters for filename:
+    - uppercase letter
+    - lowercase letter
+    - number
+    - period
+    '''
     # Motivated by 100% readable logs
     for c in s:
         if ord(c) < 0x20 or ord(c) > 0x7F:
             return False
+        if filename and not ((ord(c) >= 0x41 and ord(c) <= 0x5A) or
+                             (ord(c) >= 0x61 and ord(c) <= 0x7A) or
+                             (ord(c) >= 0x30 and ord(c) <= 0x39) or
+                             (ord(c) in [0x2E])):
+            return False
+    # Don't allow a period at the start, to avoid ".."
+    if filename and s[0] == '.':
+        return False
     return True
 
 _date_re = re.compile('^\d\d\d\d-\d\d-\d\d$')
