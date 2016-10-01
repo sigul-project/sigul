@@ -307,11 +307,7 @@ def nss_init(config):
 
     nss.nss.set_password_callback(_password_callback)
     try:
-        # The initialization name has changed in python-nss 0.4.
-        try:
-            nss.nss.nss_init(config.nss_dir)
-        except AttributeError:
-            nss.ssl.nssinit(config.nss_dir)
+        nss.nss.nss_init(config.nss_dir)
         # Test the password
         nss.nss.get_internal_key_slot().authenticate()
     except nss.error.NSPRError, e:

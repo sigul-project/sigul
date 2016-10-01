@@ -3,6 +3,8 @@
 	* src/utils.py (nss_init): Check whether NSS password is correct on
 	startup (RHBZ#991154)
 
+	* src/utils.py (nss_init): Remove support for python-nss 0.4 init
+
 2016-09-30  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/utils.py (string_is_safe): Add checking for filename safety.
