@@ -312,10 +312,14 @@ def nss_init(config):
             nss.nss.nss_init(config.nss_dir)
         except AttributeError:
             nss.ssl.nssinit(config.nss_dir)
+        # Test the password
+        nss.nss.get_internal_key_slot().authenticate()
     except nss.error.NSPRError, e:
         if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
             raise NSSInitError('\'%s\' does not contain a valid NSS database' %
                                (config.nss_dir,))
+        elif e.errno == nss.error.SEC_ERROR_BAD_PASSWORD:
+            raise NSSInitError('Provided NSS password is incorrect')
         raise
     nss.ssl.set_domestic_policy()
     nss.ssl.set_ssl_default_option(nss.ssl.SSL_ENABLE_SSL2, False)

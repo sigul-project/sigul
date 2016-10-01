@@ -110,10 +110,18 @@ unix-user:
 unix-group:
 [nss]
 nss-dir: $(pwd)/server
-nss-password: nss-pw
+nss-password: wrong-nss-pw
 EOF]
 
 AT_CHECK([sigul_server_create_db -c server/server.conf -v -v])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul_server_add_admin -c server/server.conf --batch -v -v \
+		-n root], 1, ,
+[Provided NSS password is incorrect
+])
+
+sed -e 's/wrong-nss-pw/nss-pw/' -i server/server.conf
+
 AT_CHECK([printf 'rootroot\0' | \
 		sigul_server_add_admin -c server/server.conf --batch -v -v \
 		-n root])
@@ -121,7 +129,6 @@ AT_CHECK([printf 'rootroot\0' | \
 AT_CHECK([sigul_server -c server/server.conf -d -v -v \
 		--internal-log-dir="$(pwd)/server" \
 		--internal-pid-dir="$(pwd)/server"])
-
 
 # Set up client
 AT_CHECK([certutil -d client -N -f nss_password_file])
