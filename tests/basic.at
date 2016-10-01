@@ -488,28 +488,6 @@ AT_CHECK([cd gitrepo;
 AT_CHECK([GNUPGHOME=gnupg git --git-dir=gitrepo/.git/ tag -v testtag 2>&1 \
         | grep "Good signature"], 0, [ignore])
 
-# sign-ostree
-AT_DATA([ostree.commit.b64], [[dmVyc2lvbgByYXdoaWRlLjQ5AABzCAAAcnBtb3N0cmVlLmlucHV0aGFzaAAAAAAAMGNkYzIwYWZl
-NjRlMjFmMWUxMDA3MDcxY2Y4MzEwNmI3ODk0NjJkMTM2YmQyOTE3YTM2ZmNiMzU4ZDI2Mjk1YwAA
-cxQWdLlg2eCf1/z9bqgNO19girPvUUE0Cp9qTqK4yaTAagaVAAAAAAAAV8RqHux+RNbCrRcnN/cq
-sSeKrqaJTVUvLdqwLA8VfxFbO2/WUHc4F+RRlin7Bhyzz+TdrgqZbBIzbQhwQkgfvqsaOAzAmJeW
-lnY=
-]])
-AT_CHECK([base64 -d ostree.commit.b64 >ostree.commit])
-AT_CHECK([printf 'root-key-pw\0' | \
-		sigul -c client/client.conf --batch -v -v \
-		sign-ostree -o data.asc key 43520b4605aca8994b4c8253ead261d18dec9eca25f82aed507204b15bb52b6a \
-        ostree.commit -o ostree.commitmeta])
-AT_CHECK([mkdir repo])
-AT_CHECK([ostree init --repo=repo --mode=archive-z2])
-AT_CHECK([mkdir repo/objects/43])
-AT_CHECK([mv ostree.commit repo/objects/43/520b4605aca8994b4c8253ead261d18dec9eca25f82aed507204b15bb52b6a.commit])
-AT_CHECK([mv ostree.commitmeta repo/objects/43/520b4605aca8994b4c8253ead261d18dec9eca25f82aed507204b15bb52b6a.commitmeta])
-AT_CHECK([ostree show --repo=repo --gpg-homedir=gnupg \
-        43520b4605aca8994b4c8253ead261d18dec9eca25f82aed507204b15bb52b6a \
-        | grep "Good signature"], 0, [ignore])
-rm ostree.commit.b64
-
 # sign-data
 AT_CHECK([printf '\0abc\1\n\2' > data])
 AT_CHECK([printf 'root-key-pw\0' | \

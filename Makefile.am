@@ -26,10 +26,12 @@ serverdatadir = $(localstatedir)/lib/sigul
 AUTOMAKE_OPTIONS = subdir-objects
 
 ## Targets
+if have_ostree
 bin_PROGRAMS = src/sigul-ostree-helper
 src_sigul_ostree_helper_SOURCES = src/sigul-ostree-helper.c
 src_sigul_ostree_helper_CFLAGS = $(libostree_CFLAGS)
 src_sigul_ostree_helper_LDFLAGS = $(libostree_LIBS)
+endif
 bin_SCRIPTS = src/sigul
 dist_bin_SCRIPTS = src/sigul_setup_client
 sbin_SCRIPTS = src/sigul_bridge src/sigul_server src/sigul_server_add_admin \
@@ -96,6 +98,7 @@ src/settings.py: src/settings.py.in Makefile
 		-e 's|@''logdir''@|$(logdir)|g' \
 		-e 's|@''piddir''@|$(piddir)|g' \
 		-e 's|@''serverdatadir''@|$(serverdatadir)|g' \
+		-e 's|@''have_ostree''@|$(have_ostree)|g' \
 		< $(srcdir)/src/settings.py.in > $@
 
 src/sigul: src/script.in Makefile

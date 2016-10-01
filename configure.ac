@@ -33,8 +33,23 @@ AC_ARG_VAR([GPG])
 AM_MISSING_PROG([AUTOM4TE], [autom4te])
 
 dnl For the OSTree helper
-AC_PROG_CC
-PKG_CHECK_MODULES([libostree], [ostree-1])
+AC_ARG_WITH([ostree],
+    AS_HELP_STRING([--without-ostree],
+                   [Ignore presence of ostree and disable support]))
+AS_IF([test "x$with_ostree" != "xno"],
+      [AC_SEARCH_LIBS([ostree_repo_new], [ostree-1], [have_ostree=yes],
+                      [have_ostree=no])],
+      [have_ostree=no])
+AS_IF([test "x$have_ostree" = "xyes"],
+      [AC_PROG_CC
+       PKG_CHECK_MODULES([libostree], [ostree-1])],
+      [
+       AS_IF([test "x$with_ostree" = "xyes"],
+             [AC_MSG_ERROR([ostree requested but not found])]
+        )
+      ])
+AC_ARG_VAR([have_ostree])
+AM_CONDITIONAL([have_ostree], [test "x$have_ostree" = "xyes"])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

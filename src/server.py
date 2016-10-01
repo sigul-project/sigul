@@ -1297,6 +1297,10 @@ def cmd_sign_git_tag(db, conn):
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_ostree(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
+
+    if settings.have_ostree != 'yes':
+        raise InvalidRequestError('OSTree support not enabled')
+
     input_file = tempfile.TemporaryFile()
     signature_file = tempfile.TemporaryFile()
     file_hash = conn.safe_outer_field('ostree-hash', filename=True)
