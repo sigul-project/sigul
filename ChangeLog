@@ -5,6 +5,8 @@
 	* Server/Bridge/Client: Implemented Container signing, using skopeo
 	scheme.
 
+	* tests/bound-passphrase-tpm.at: Added test for TPM binding.
+
 	* configure.ac: Release 0.202
 	* NEWS: Update.
 
