@@ -5,6 +5,9 @@
 	* Server/Bridge/Client: Implemented Container signing, using skopeo
 	scheme.
 
+	* configure.ac: Release 0.202
+	* NEWS: Update.
+
 2016-10-01  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/utils.py (nss_init): Check whether NSS password is correct on

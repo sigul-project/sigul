@@ -1,3 +1,12 @@
+Changes in version 0.202:
+- Batched signing errors are now properly reported.
+- Bugfixes regarding binding configuration parsing.
+- TPM SRK can now be provided on start.
+- PKCS11 PINs can now be provided on start.
+- NSS password is checked on start.
+- Support for python-nss 0.4 removed
+- Docker container signing implemented.
+
 Changes in version 0.201:
 - PKCS11 passphrase binding implemented.
 - Allow changing binding arguments later.
