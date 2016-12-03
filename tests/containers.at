@@ -17,6 +17,8 @@
 
 AT_SETUP([Container check])
 
+AT_SKIP_IF([! skopeo])
+
 mkdir ca client bridge server gnupg rpm
 chmod 700 gnupg
 

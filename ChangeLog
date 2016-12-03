@@ -2,6 +2,8 @@
 
 	* src/utils.py: Added support for koji krb_login.
 
+	* tests/containers.at: Skip test if we don't have skopeo.
+
 2016-10-03  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/server.py: Added gpg_signature for plain gpg signatures.
