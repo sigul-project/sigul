@@ -222,11 +222,23 @@ def koji_read_config(global_config, instance):
     parser = ConfigParser.ConfigParser()
     parser.read(('/etc/koji.conf', os.path.expanduser(config_path)))
     config = dict(parser.items('koji'))
-    for opt in ('server', 'cert', 'serverca', 'topurl'):
+    for opt in ('server', 'serverca', 'topurl'):
         if opt not in config:
             raise KojiError('Missing koji configuration option %s' % opt)
     for opt in ('cert', 'serverca'):
-        config[opt] = os.path.expanduser(config[opt])
+        if opt in config:
+            config[opt] = os.path.expanduser(config[opt])
+    if 'authtype' not in config:
+        # We have no explicit authtype, try to be smart
+        if 'cert' in config:
+            config['authtype'] = 'ssl'
+        elif 'principal' in config and 'keytab' in config:
+            config['authtype'] = 'kerberos'
+        else:
+            raise KojiError('Unable to determine koji Auth type')
+    elif config['authtype'] not in ('ssl', 'kerberos'):
+        raise KojiError('Unsupported authtype %s requested' %
+                        config['authtype'])
     return config
 
 def koji_connect(koji_config, authenticate, proxyuser=None):
@@ -242,8 +254,15 @@ def koji_connect(koji_config, authenticate, proxyuser=None):
 
     session = koji.ClientSession(koji_config['server'])
     if authenticate:
-        session.ssl_login(koji_config['cert'], None,
-                          koji_config['serverca'], proxyuser=proxyuser)
+        if koji_config['authtye'] == 'ssl':
+            session.ssl_login(koji_config['cert'], None,
+                              koji_config['serverca'], proxyuser=proxyuser)
+        elif koji_config['authtype'] == 'kerberos':
+            kwargs = {}
+            for opt in ('principal', 'keytab', 'ccache'):
+                if opt in koji_config:
+                    kwargs[opt] = koji_config[opt]
+            session.krb_login(proxyuser=proxyuser, **kwargs)
     try:
         version = session.getAPIVersion()
     except xmlrpclib.ProtocolError:

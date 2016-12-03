@@ -1,3 +1,7 @@
+2016-12-03  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/utils.py: Added support for koji krb_login.
+
 2016-10-03  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/server.py: Added gpg_signature for plain gpg signatures.
