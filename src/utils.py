@@ -254,7 +254,7 @@ def koji_connect(koji_config, authenticate, proxyuser=None):
 
     session = koji.ClientSession(koji_config['server'])
     if authenticate:
-        if koji_config['authtye'] == 'ssl':
+        if koji_config['authtype'] == 'ssl':
             session.ssl_login(koji_config['cert'], None,
                               koji_config['serverca'], proxyuser=proxyuser)
         elif koji_config['authtype'] == 'kerberos':
