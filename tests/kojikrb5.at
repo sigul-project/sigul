@@ -1,0 +1,229 @@
+# Copyright (C) 2016 Red Hat, Inc.  All rights reserved.
+#
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the GNU
+# General Public License v.2.  This program is distributed in the hope that it
+# will be useful, but WITHOUT ANY WARRANTY expressed or implied, including the
+# implied warranties of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.  You should have
+# received a copy of the GNU General Public License along with this program; if
+# not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth
+# Floor, Boston, MA 02110-1301, USA.  Any Red Hat trademarks that are
+# incorporated in the source code or documentation are not subject to the GNU
+# General Public License and may only be used or replicated with the express
+# permission of Red Hat, Inc.
+#
+# Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
+
+AT_SETUP([Kerberos + koji])
+
+mkdir ca sockets pgdb koji ldap kdc ccaches client bridge server gnupg
+chmod 700 gnupg
+
+# Set up env vars
+export LD_PRELOAD="libnss_wrapper.so libsocket_wrapper.so"
+export NSS_WRAPPER_HOSTS=$(pwd)/hosts
+export SOCKET_WRAPPER_DIR=$(pwd)/sockets
+export SOCKET_WRAPPER_DEFAULT_IFACE=5
+export KRB5_CONFIG=$(pwd)/krb5.conf
+export KRB5_KDC_PROFILE=$(pwd)/kdc.conf
+export PGDATA=$(pwd)/pgdb
+
+# Create config files
+AT_DATA([hosts], [[
+127.0.0.10  ldap.sigul.test
+127.0.0.11  krb5.sigul.test
+127.0.0.12  pgdb.sigul.test
+127.0.0.13  koji.sigul.test
+127.0.0.14  server.sigul.test
+127.0.0.15  bridge.sigul.test
+]])
+
+AT_DATA([ldaptree.ldif], [[
+dn: dc=sigul,dc=test
+dc: sigul
+description: sigul test tree
+objectClass: dcObject
+objectClass: organization
+o: Sigul
+]])
+
+AT_DATA([slapd.conf], [[
+include   /etc/openldap/schema/core.schema
+include   /etc/openldap/schema/cosine.schema
+include   /etc/openldap/schema/inetorgperson.schema
+include   /etc/openldap/schema/nis.schema
+include   /usr/share/doc/krb5-server-ldap/kerberos.schema
+pidfile   @TESTDIR@/ldap/slapd.pid
+attributeoptions x-hidden lang-
+logfile   @TESTDIR@/ldap/slapd.log
+loglevel  0x2ff
+database  mdb
+suffix    "dc=sigul,dc=test"
+directory @TESTDIR@/ldap
+rootdn    cn=root,dc=sigul,dc=test
+# pw: root
+rootpw    {SSHA}I9OPIS+SsizMZ/FmYgZL2GVCx63+kITj
+]])
+
+AT_DATA([krb5.conf], [[
+[libdefaults]
+  default_realm = SIGUL.TEST
+  dns_lookup_realm = false
+  dns_lookup_kdc = false
+  rdns = false
+  ticket_lifetime = 24h
+  forwardable = yes
+  default_ccache_name = FILE:@TESTDIR@/ccaches/krb5_ccache_%{uid}
+  udp_preference_limit = 0
+
+[realms]
+  SIGUL.TEST = {
+    kdc = krb5.sigul.test:88
+  }
+
+[domain_realm]
+  .sigul.test = SIGUL.TEST
+  sigul.test = SIGUL.TEST
+]])
+
+AT_DATA([kdc.conf], [[
+[kdcdefaults]
+ kdc_ports = 88
+ kdc_tcp_ports = 88
+ restrict_anonymous_to_tgt = true
+
+[realms]
+ SIGUL.TEST = {
+  master_key_type = aes256-cts
+  max_life = 7d
+  max_renewable_life = 14d
+  acl_file = @TESTDIR@/kdc/kadm5.acl
+  dict_file = /usr/share/dict/words
+  default_principal_flags = +preauth
+  admin_keytab = @TESTDIR@/kdc/kadm5.keytab
+  key_stash_file = @TESTDIR@/kdc/stash
+ }
+[logging]
+  kdc = FILE:@TESTDIR@/kdc/log
+[dbmodules]
+  SIGUL.TEST = {
+    db_library = kldap
+    disable_last_success = true
+    ldap_kerberos_container_dn = "cn=krbcontainer,dc=sigul,dc=test"
+    ldap_kdc_dn = "cn=root,dc=sigul,dc=test"
+    ldap_kadmind_dn = "cn=root,dc=sigul,dc=test"
+    ldap_service_password_file = @TESTDIR@/kdcldappass
+    ldap_servers = ldap://ldap.sigul.test:389
+    ldap_conns_per_server = 5
+  }
+]])
+
+AT_CHECK([cp "$abs_srcdir/tests/koji.httpd.conf" koji/httpd.conf])
+AT_CHECK([cp "$abs_srcdir/tests/koji.hub.conf" koji/hub.conf])
+AT_CHECK([cp "$abs_srcdir/tests/koji.client.conf" koji/client.conf])
+AT_CHECK([cp "$abs_srcdir/tests/koji.wsgi" koji/koji.wsgi])
+
+AT_CHECK([sed -ie "s^@TESTDIR@^$(pwd)^" kdc.conf krb5.conf slapd.conf koji/httpd.conf koji/koji.wsgi koji/hub.conf koji/client.conf])
+
+# Create CA we use for koji
+AT_DATA([nss_password_file], [[nss-pw
+]])
+AT_DATA([pkcs12_password_file], [[pk12-pw
+]])
+AT_CHECK([certutil -d ca -N -f nss_password_file])
+# Specify serial number (-m) explicitly because it is time-based by default,
+# and creating certificates quickly can result in a collision.
+AT_CHECK([certutil -d ca -S -f nss_password_file -z /dev/null -n my-ca \
+          -s 'CN=My CA' -t CT,, -x -v 120 -m 1], , , [ignore])
+AT_CHECK([certutil -d ca -L -n my-ca -a > ca.pem])
+AT_CHECK([certutil -d ca -S -f nss_password_file -z /dev/null \
+          -n koji-cert -s 'CN=koji.sigul.test' -c my-ca \
+          -t u,, -v 120 -m 2], , , [ignore])
+AT_CHECK([pk12util -d ca -o koji.p12 -n koji-cert \
+          -k nss_password_file -w pkcs12_password_file], , [ignore])
+AT_CHECK([openssl pkcs12 -in koji.p12 -out koji/koji.pem -nokeys -clcerts -passin pass:pk12-pw -nodes])
+AT_CHECK([openssl pkcs12 -in koji.p12 -out koji/koji.key.pem -nocerts -passin pass:pk12-pw -nodes])
+
+# Pre-prepared stashed ldap password for KDC
+AT_DATA([kdcldappass.b64], [[Y249cm9vdCxkYz1zaWd1bCxkYz10ZXN0I3tIRVh9NzI2ZjZmNzQK
+]])
+
+AT_CHECK([base64 -d kdcldappass.b64 >kdcldappass])
+
+# Prepare OpenLDAP data
+AT_CHECK([slapadd -f slapd.conf -l ldaptree.ldif], , , [ignore])
+
+# Start OpenLDAP
+AT_CHECK([SOCKET_WRAPPER_DEFAULT_IFACE=10 slapd -f slapd.conf -h ldap://ldap.sigul.test:389])
+
+# Create kdc realm
+AT_CHECK([kdb5_ldap_util -D cn=root,dc=sigul,dc=test -w root create -P masterpass -r SIGUL.TEST], ,
+[Initializing database for realm 'SIGUL.TEST'
+])
+
+# Create the users
+AT_CHECK([kadmin.local -q "addprinc -randkey -e aes256-cts-hmac-sha1-96:normal usera"], , [ignore], [ignore])
+AT_CHECK([kadmin.local -q "addprinc -randkey -e aes256-cts-hmac-sha1-96:normal userb"], , [ignore], [ignore])
+AT_CHECK([kadmin.local -q "addprinc -randkey -e aes256-cts-hmac-sha1-96:normal sigul-bridge/bridge.sigul.test"], , [ignore], [ignore])
+AT_CHECK([kadmin.local -q "addprinc -randkey -e aes256-cts-hmac-sha1-96:normal sigul-server/server.sigul.test"], , [ignore], [ignore])
+AT_CHECK([kadmin.local -q "addprinc -randkey -e aes256-cts-hmac-sha1-96:normal HTTP/koji.sigul.test"], , [ignore], [ignore])
+
+# Generate the keytabs, keytype aes256-cts-hmac-sha1-96:normal
+AT_CHECK([kadmin.local -q "ktadd -k client/usera.keytab -e aes256-cts-hmac-sha1-96:normal usera"], , [ignore])
+AT_CHECK([kadmin.local -q "ktadd -k client/userb.keytab -e aes256-cts-hmac-sha1-96:normal userb"], , [ignore])
+AT_CHECK([kadmin.local -q "ktadd -k bridge/bridge.keytab -e aes256-cts-hmac-sha1-96:normal sigul-bridge/bridge.sigul.test"], , [ignore])
+AT_CHECK([kadmin.local -q "ktadd -k server/server.keytab -e aes256-cts-hmac-sha1-96:normal sigul-server/server.sigul.test"], , [ignore])
+AT_CHECK([kadmin.local -q "ktadd -k koji/koji.keytab -e aes256-cts-hmac-sha1-96:normal HTTP/koji.sigul.test"], , [ignore])
+
+# Now authorize the delegation of sigul-bridge/bridge -> HTTP/koji
+AT_DATA([ldapdelegation.ldif], [[
+dn: krbprincipalname=sigul-bridge/bridge.sigul.test@SIGUL.TEST,cn=SIGUL.TEST,cn=krbcontainer,dc=sigul,dc=test
+changetype: modify
+add: krbAllowedToDelegateTo
+krbAllowedToDelegateTo: HTTP/koji.sigul.test@SIGUL.TEST
+]])
+AT_CHECK([ldapmodify -h ldap.sigul.test -D cn=root,dc=sigul,dc=test -w root -f ldapdelegation.ldif], , [[modifying entry "krbprincipalname=sigul-bridge/bridge.sigul.test@SIGUL.TEST,cn=SIGUL.TEST,cn=krbcontainer,dc=sigul,dc=test"
+
+]])
+
+# Now start the KDC
+AT_CHECK([SOCKET_WRAPPER_DEFAULT_IFACE=11 krb5kdc])
+
+# And perform a simple test to see if everything worked so far
+AT_CHECK([kinit -kt client/usera.keytab usera@SIGUL.TEST])
+AT_CHECK([kdestroy -A])
+
+# Set up postgres
+AT_CHECK([pg_ctl initdb -o "-E UNICODE"], , [ignore], [ignore])
+AT_DATA([pgdb/pg_hba.conf], [host all all 127.0.0.0/24 trust
+])
+
+# Start postgres
+AT_CHECK([SOCKET_WRAPPER_DEFAULT_IFACE=12 pg_ctl start -l $(pwd)/pgdb.log -w -o "-k $(pwd) -c port=5432 -c listen_addresses=127.0.0.12"], , [ignore])
+
+# Create koji pgdb user and database
+AT_CHECK([createuser -h pgdb.sigul.test -w koji])
+AT_CHECK([createdb -h pgdb.sigul.test -w -O koji koji])
+AT_CHECK([psql -h pgdb.sigul.test -U koji -w -f /usr/share/doc/koji/docs/schema.sql], , [ignore])
+
+# Create koji level database info
+AT_CHECK([psql -h pgdb.sigul.test -U koji -w -f $abs_srcdir/tests/koji.data.sql], , [ignore])
+
+# Now start up the koji hub
+AT_CHECK([SOCKET_WRAPPER_DEFAULT_IFACE=13 httpd -f $(pwd)/koji/httpd.conf])
+
+# And do a quick check
+AT_CHECK([curl https://koji.sigul.test/kojihub --cacert ca.pem], , [[Method Not Allowed
+This is an XML-RPC server. Only POST requests are accepted.]], [ignore])
+
+# And now a more rigourous check of the entire setup so far
+AT_CHECK([kinit -kt client/usera.keytab usera@SIGUL.TEST])
+AT_CHECK([KRB5_TRACE=/dev/stderr koji -c koji/client.conf hello | grep Authenticated], , [Authenticated via GSSAPI
+], [ignore])
+AT_CHECK([kdestroy -A])
+
+
+
+
+AT_CLEANUP
