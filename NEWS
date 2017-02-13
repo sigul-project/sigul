@@ -1,3 +1,6 @@
+Changes in version 0.203:
+- Added support for Koji Kerberos authmethod.
+
 Changes in version 0.202:
 - Batched signing errors are now properly reported.
 - Bugfixes regarding binding configuration parsing.
