@@ -4,6 +4,9 @@
 
 	* src/utils.py: Implement Either-Or binding.
 
+	* configure.ac: Release 0.204
+	* NEWS: Update.
+
 2017-02-13  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* configure.ac: Release 0.203

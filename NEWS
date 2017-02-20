@@ -1,3 +1,7 @@
+Changes in version 0.204:
+- Implemented PKCS11 tokens with public-only.
+- Implemented Either-Or passphrase binding.
+
 Changes in version 0.203:
 - Added support for Koji Kerberos authmethod.
 
