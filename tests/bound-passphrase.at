@@ -154,6 +154,9 @@ AT_CHECK([printf 'rootroot\0pass2\0' | \
 AT_CHECK([printf 'rootroot\0pass3\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		new-user user3])
+AT_CHECK([printf 'rootroot\0pass4\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-user user4])
 
 # Test list-binding
 AT_CHECK([printf 'rootroot\0' | \
@@ -181,12 +184,17 @@ AT_CHECK([printf 'imported-key-pw\0' | \
 		grant-key-access imported-key user3 \
         -c test,may_unbind=1 -b test,may_unbind=0 -w passphrase3.dat])
 AT_CHECK([printf 'imported-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		grant-key-access imported-key user4 \
+        -c test,may_unbind=1 -b 'test,may_unbind=0|test,may_unbind=1' -w passphrase4.dat])
+AT_CHECK([printf 'imported-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-key-users imported-key], ,
 [root
 user1
 user2
 user3
+user4
 ])
 
 # Test using an unbindable passphrase
@@ -202,7 +210,7 @@ rm data.asc
 AT_CHECK([sigul -c client/client.conf --batch -v -v \
 		-u user2 -f passphrase2.dat sign-text -o data.asc \
         imported-key data], 1, ,
-[WARNING: Failed to unbind with method test, args may_unbind=0
+[WARNING: Failed to unbind with any of the following: method: test, args: {u'may_unbind': u'0'}
 Unable to unbind the passphrase on the client
 ])
 
@@ -212,6 +220,16 @@ AT_CHECK([sigul -c client/client.conf --batch \
         imported-key data], 1, ,
 [Error: Authentication failed
 ])
+
+# Test using an Either-Or unbindable passphrase
+AT_DATA([data], [[abracadabra
+]])
+AT_CHECK([sigul -c client/client.conf --batch -v -v \
+		-u user1 -f passphrase1.dat sign-text -o data.asc \
+        imported-key data])
+AT_CHECK([gpg -q --homedir gnupg --verify data.asc], , , [ignore])
+rm data.asc
+
 
 
 # Terminate daemons
