@@ -128,6 +128,10 @@ def pkcs11_unbind(value, token):
                       % token)
         return None
 
+    if ('%s_privkey' % token) not in pkcs11_config:
+        logging.info('Unbinding attempted with pubonly token %s' % token)
+        return None
+
     privkey = pkcs11_config['%s_privkey' % token]
     pin = pkcs11_config['%s_pin' % token]
 
@@ -153,13 +157,14 @@ def pkcs11(tokens, **config):
     for token in tokens:
         # This is a lazy way of checking: it will just throw KeyError
         config['%s_pubkey' % token]
-        config['%s_privkey' % token]
         assert 'pkcs11:' not in config['%s_pubkey' % token]
-        assert 'pkcs11:' in config['%s_privkey' % token]
 
-        if ('%s_pin' % token) not in config:
-            config['%s_pin'] = getpass('PIN code for token "%s": ' % token)
-        config['%s_pin' % token]
+        if ('%s_privkey' % token) in config:
+            assert 'pkcs11:' in config['%s_privkey' % token]
+
+            if ('%s_pin' % token) not in config:
+                config['%s_pin'] = getpass('PIN code for token "%s": ' % token)
+            config['%s_pin' % token]
 
     global pkcs11_config
     # We primarily do the split here so that we fail early if required
