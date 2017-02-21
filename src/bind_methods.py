@@ -163,7 +163,8 @@ def pkcs11(tokens, **config):
             assert 'pkcs11:' in config['%s_privkey' % token]
 
             if ('%s_pin' % token) not in config:
-                config['%s_pin'] = getpass('PIN code for token "%s": ' % token)
+                config['%s_pin' % token] = getpass(
+                    'PIN code for token "%s": ' % token)
             config['%s_pin' % token]
 
     global pkcs11_config

@@ -7,6 +7,8 @@
 	* configure.ac: Release 0.204
 	* NEWS: Update.
 
+	* src/bind_methods.py: Fixed bug with pkcs11 PIN reading.
+
 2017-02-13  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* configure.ac: Release 0.203
