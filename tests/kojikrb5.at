@@ -17,6 +17,14 @@
 
 AT_SETUP([Kerberos + koji])
 
+create_rpm()
+{
+    sed "s/@N@/$1"/g < "$abs_srcdir/tests/testrpm.spec" > "testrpm$1".spec
+    rpmbuild --quiet --define "_specdir $(pwd)" --define "_rpmdir $(pwd)" \
+        --define "_srcrpmdir $(pwd)" --clean --rmspec \
+        -ba "testrpm$1.spec"
+}
+
 mkdir ca sockets pgdb koji ldap kdc ccaches client bridge server gnupg
 chmod 700 gnupg
 
@@ -221,6 +229,21 @@ This is an XML-RPC server. Only POST requests are accepted.]], [ignore])
 AT_CHECK([kinit -kt client/usera.keytab usera@SIGUL.TEST])
 AT_CHECK([KRB5_TRACE=/dev/stderr koji -c koji/client.conf hello | grep Authenticated], , [Authenticated via GSSAPI
 ], [ignore])
+
+# Add some basic builds to the koji setup to test with
+AT_CHECK([create_rpm 0], 0, [ignore], [ignore])
+AT_CHECK([create_rpm 1], 0, [ignore], [ignore])
+AT_CHECK([koji -c koji/client.conf import --create-build $(find | grep rpm)], , [uploading ./testrpm0-1-1.src.rpm... done
+importing ./testrpm0-1-1.src.rpm... done
+uploading ./x86_64/testrpm0-1-1.x86_64.rpm... done
+importing ./x86_64/testrpm0-1-1.x86_64.rpm... done
+uploading ./testrpm1-1-1.src.rpm... done
+importing ./testrpm1-1-1.src.rpm... done
+uploading ./x86_64/testrpm1-1-1.x86_64.rpm... done
+importing ./x86_64/testrpm1-1-1.x86_64.rpm... done
+], [])
+
+# And now get ready to start the sigul tests
 AT_CHECK([kdestroy -A])
 
 
