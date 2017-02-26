@@ -152,97 +152,34 @@ rm public.asc
 # sign-container
 [cat > manifest.json <<EOF
 {
-   "schemaVersion": 1,
-   "name": "fedora",
-   "tag": "25",
-   "architecture": "amd64",
-   "fsLayers": [
-      {
-         "blobSum": "sha256:be44cf43edd14914da818cc051cda96b95ac3ac939f4f8719d4cb8e61a334805"
-      },
-      {
-         "blobSum": "sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4"
-      },
-      {
-         "blobSum": "sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4"
-      }
-   ],
-   "history": [
-      {
-         "v1Compatibility": "{\"architecture\":\"amd64\",\"author\":\"[Adam Miller \\u003cmaxamillion@fedoraproject.org\\u003e] [Patrick Uiterwijk \\u003cpatrick@puiterwijk.org\\u003e]\",\"config\":{\"Hostname\":\"bdcf92595a02\",\"Domainname\":\"\",\"User\":\"\",\"AttachStdin\":false,\"AttachStdout\":false,\"AttachStderr\":false,\"Tty\":false,\"OpenStdin\":false,\"StdinOnce\":false,\"Env\":[\"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\"DISTTAG=f25docker\",\"FGC=f25\",\"FBR=f25\"],\"Cmd\":null,\"Image\":\"sha256:9f6038869900269a17c196510012c19ac30c0f4e73cf8c4aab2218a73b2a2ce5\",\"Volumes\":null,\"WorkingDir\":\"\",\"Entrypoint\":null,\"OnBuild\":null,\"Labels\":{}},\"container\":\"ec656b173a28e42fc890e05ac57f82250f9def310c6c930605c38234ac550734\",\"container_config\":{\"Hostname\":\"bdcf92595a02\",\"Domainname\":\"\",\"User\":\"\",\"AttachStdin\":false,\"AttachStdout\":false,\"AttachStderr\":false,\"Tty\":false,\"OpenStdin\":false,\"StdinOnce\":false,\"Env\":[\"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\"DISTTAG=f25docker\",\"FGC=f25\",\"FBR=f25\"],\"Cmd\":[\"/bin/sh\",\"-c\",\"#(nop) ADD file:0099a3bf2430ffb5bbfdee48fb5b131f9f67427a2c7f78f23aba062f902666b8 in / \"],\"Image\":\"sha256:9f6038869900269a17c196510012c19ac30c0f4e73cf8c4aab2218a73b2a2ce5\",\"Volumes\":null,\"WorkingDir\":\"\",\"Entrypoint\":null,\"OnBuild\":null,\"Labels\":{}},\"created\":\"2017-02-16T18:36:55.213572136Z\",\"docker_version\":\"1.12.6\",\"id\":\"2aed838309c49cff631e44f034d6140c530e5907676ae1bbd407b7222c75d362\",\"os\":\"linux\",\"parent\":\"8e9880e2f2f433621c34c94d346eecaf8e8e500e3e55f52a6c322d2f747ae137\"}"
-      },
-      {
-         "v1Compatibility": "{\"id\":\"8e9880e2f2f433621c34c94d346eecaf8e8e500e3e55f52a6c322d2f747ae137\",\"parent\":\"3690474eb5b4b26fdfbd89c6e159e8cc376ca76ef48032a30fa6aafd56337880\",\"created\":\"2017-02-16T18:36:37.533508569Z\",\"container_config\":{\"Cmd\":[\"/bin/sh -c #(nop)  ENV DISTTAG=f25docker FGC=f25 FBR=f25\"]},\"author\":\"[Adam Miller \\u003cmaxamillion@fedoraproject.org\\u003e] [Patrick Uiterwijk \\u003cpatrick@puiterwijk.org\\u003e]\",\"throwaway\":true}"
-      },
-      {
-         "v1Compatibility": "{\"id\":\"3690474eb5b4b26fdfbd89c6e159e8cc376ca76ef48032a30fa6aafd56337880\",\"created\":\"2017-02-16T18:36:36.200746321Z\",\"container_config\":{\"Cmd\":[\"/bin/sh -c #(nop)  MAINTAINER [Adam Miller \\u003cmaxamillion@fedoraproject.org\\u003e] [Patrick Uiterwijk \\u003cpatrick@puiterwijk.org\\u003e]\"]},\"author\":\"[Adam Miller \\u003cmaxamillion@fedoraproject.org\\u003e] [Patrick Uiterwijk \\u003cpatrick@puiterwijk.org\\u003e]\",\"throwaway\":true}"
-      }
-   ],
-   "signatures": [
-      {
-         "header": {
-            "jwk": {
-               "crv": "P-256",
-               "kid": "HNIR:XPMB:QFKH:RGD7:TYIW:XYFZ:WG2W:7YIP:F4J4:UO4T:26LK:IBXX",
-               "kty": "EC",
-               "x": "VUN1gUvxZkrnyPxLl1pxReQhsfQkHNb1SsMH_UfAvTY",
-               "y": "bfGBViOwxAPt3Uxk7KjwDENVLhiFM3OyoshesX--xHM"
-            },
-            "alg": "ES256"
-         },
-         "signature": "NSeAN7q8wiNO-iCMG_NUVOgjyXtSsWjfWbMyTZDVGmV8WehMTbaRvWGZc5-FN6CQDMYr-righQFksphvVtWEgA",
-         "protected": "eyJmb3JtYXRMZW5ndGgiOjMxNDIsImZvcm1hdFRhaWwiOiJDbjAiLCJ0aW1lIjoiMjAxNy0wMi0yMVQwMjoyMzoxMVoifQ"
-      }
-   ]
+    "schemaVersion": 2,
+    "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+    "config": {
+        "mediaType": "application/vnd.docker.container.image.v1+json",
+        "size": 7023,
+        "digest": "sha256:b5b2b2c507a0944348e0303114d8d93aaaa081732b86451d9bce1f432a537bc7"
+    },
+    "layers": [
+        {
+            "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+            "size": 32654,
+            "digest": "sha256:e692418e4cbaf90ca69d05a66403747baa33ee08806650b51fab815ad7fc331f"
+        },
+        {
+            "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+            "size": 16724,
+            "digest": "sha256:3c3a4604a545cdc127456d94e421cd355bca5b528f4a9c1905b15da2eb4a4c6b"
+        },
+        {
+            "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+            "size": 73109,
+            "digest": "sha256:ec4b8955958665577945c89419d1af06b5f7636b4ac3da7f12184802ad867736"
+        }
+    ],
 }
 EOF]
+# hash: 0e4e6e9922795fbbf9c3a1be37d468c6d744a8bdabd42dd7686d471a83fe9339
 
-[cat > manifest2.json <<EOF
-{
-   "schemaVersion": 1,
-   "name": "fedora",
-   "tag": "25",
-   "architecture": "amd64",
-   "fsLayers": [
-      {
-         "blobSum": "sha256:be44cf43edd14914da818cc051cda96b95ac3ac939f4f8719d4cb8e61a334805"
-      },
-      {
-         "blobSum": "sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4"
-      },
-      {
-         "blobSum": "sha256:a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4"
-      }
-   ],
-   "history": [
-      {
-         "v1Compatibility": "{\"architecture\":\"amd64\",\"author\":\"[Adam Miller \\u003cmaxamillion@fedoraproject.org\\u003e] [Patrick Uiterwijk \\u003cpatrick@puiterwijk.org\\u003e]\",\"config\":{\"Hostname\":\"bdcf92595a02\",\"Domainname\":\"\",\"User\":\"\",\"AttachStdin\":false,\"AttachStdout\":false,\"AttachStderr\":false,\"Tty\":false,\"OpenStdin\":false,\"StdinOnce\":false,\"Env\":[\"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\"DISTTAG=f25docker\",\"FGC=f25\",\"FBR=f25\"],\"Cmd\":null,\"Image\":\"sha256:9f6038869900269a17c196510012c19ac30c0f4e73cf8c4aab2218a73b2a2ce5\",\"Volumes\":null,\"WorkingDir\":\"\",\"Entrypoint\":null,\"OnBuild\":null,\"Labels\":{}},\"container\":\"ec656b173a28e42fc890e05ac57f82250f9def310c6c930605c38234ac550734\",\"container_config\":{\"Hostname\":\"bdcf92595a02\",\"Domainname\":\"\",\"User\":\"\",\"AttachStdin\":false,\"AttachStdout\":false,\"AttachStderr\":false,\"Tty\":false,\"OpenStdin\":false,\"StdinOnce\":false,\"Env\":[\"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\"DISTTAG=f25docker\",\"FGC=f25\",\"FBR=f25\"],\"Cmd\":[\"/bin/sh\",\"-c\",\"#(nop) ADD file:0099a3bf2430ffb5bbfdee48fb5b131f9f67427a2c7f78f23aba062f902666b8 in / \"],\"Image\":\"sha256:9f6038869900269a17c196510012c19ac30c0f4e73cf8c4aab2218a73b2a2ce5\",\"Volumes\":null,\"WorkingDir\":\"\",\"Entrypoint\":null,\"OnBuild\":null,\"Labels\":{}},\"created\":\"2017-02-16T18:36:55.213572136Z\",\"docker_version\":\"1.12.6\",\"id\":\"2aed838309c49cff631e44f034d6140c530e5907676ae1bbd407b7222c75d362\",\"os\":\"linux\",\"parent\":\"8e9880e2f2f433621c34c94d346eecaf8e8e500e3e55f52a6c322d2f747ae137\"}"
-      },
-      {
-         "v1Compatibility": "{\"id\":\"8e9880e2f2f433621c34c94d346eecaf8e8e500e3e55f52a6c322d2f747ae137\",\"parent\":\"3690474eb5b4b26fdfbd89c6e159e8cc376ca76ef48032a30fa6aafd56337880\",\"created\":\"2017-02-16T18:36:37.533508569Z\",\"container_config\":{\"Cmd\":[\"/bin/sh -c #(nop)  ENV DISTTAG=f25docker FGC=f25 FBR=f25\"]},\"author\":\"[Adam Miller \\u003cmaxamillion@fedoraproject.org\\u003e] [Patrick Uiterwijk \\u003cpatrick@puiterwijk.org\\u003e]\",\"throwaway\":true}"
-      },
-      {
-         "v1Compatibility": "{\"id\":\"3690474eb5b4b26fdfbd89c6e159e8cc376ca76ef48032a30fa6aafd56337880\",\"created\":\"2017-02-16T18:36:36.200746321Z\",\"container_config\":{\"Cmd\":[\"/bin/sh -c #(nop)  MAINTAINER [Adam Miller \\u003cmaxamillion@fedoraproject.org\\u003e] [Patrick Uiterwijk \\u003cpatrick@puiterwijk.org\\u003e]\"]},\"author\":\"[Adam Miller \\u003cmaxamillion@fedoraproject.org\\u003e] [Patrick Uiterwijk \\u003cpatrick@puiterwijk.org\\u003e]\",\"throwaway\":true}"
-      }
-   ],
-   "signatures": [
-      {
-         "header": {
-            "jwk": {
-               "crv": "P-256",
-               "kid": "HNIR:XPMB:QFKH:RGD7:TYIW:XYFZ:WG2W:7YIP:F4J4:UO4T:26LK:IBXX",
-               "kty": "EC",
-               "x": "VUN1gUvxZkrnyPxLl1pxReQhsfQkHNb1SsMH_UfAvTY",
-               "y": "bfGBViOwxAPt3Uxk7KjwDENVLhiFM3OyoshesX--xHM"
-            },
-            "alg": "ES256"
-         },
-         "signature": "R0-iL5hx5HjJlt6rhcL-XtBC4dOqHPc3qMbVhcm5fmd8rHQtn8xUgoxkd-hEVvIdPOGQrKfSL5MflmVxJvkXzQ",
-         "protected": "eyJmb3JtYXRMZW5ndGgiOjMxNDIsImZvcm1hdFRhaWwiOiJDbjAiLCJ0aW1lIjoiMjAxNy0wMi0yMFQyMDo0MTo1OVoifQ"
-      }
-   ]
-}
-EOF]
 
 
 # sign-container
@@ -250,10 +187,10 @@ AT_CHECK([printf 'imported-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		sign-container -o signature.asc imported-key manifest.json testimage])
 
-AT_CHECK([GNUPGHOME=gnupg skopeo standalone-verify manifest2.json testimage \
+AT_CHECK([GNUPGHOME=gnupg skopeo standalone-verify manifest.json testimage \
           "E521C6FD707E651BD295D6BA54B69BA6868C1849" signature.asc], ,
-         [Signature verified, digest sha256:bb702816c9c10d60494edd610d1263357c5d047d98ea974d4c66e40bcc44246c
-], [])
+         [Signature verified, digest sha256:0e4e6e9922795fbbf9c3a1be37d468c6d744a8bdabd42dd7686d471a83fe9339
+])
 
 # Terminate daemons
 AT_CHECK([kill "$(cat server/sigul_server.pid)"])

@@ -9,8 +9,6 @@
 
 	* src/bind_methods.py: Fixed bug with pkcs11 PIN reading.
 
-	* src/server.py: Use skopeo to retrieve the correct manifest digest.
-
 2017-02-13  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* configure.ac: Release 0.203

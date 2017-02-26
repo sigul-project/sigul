@@ -1346,16 +1346,9 @@ def cmd_sign_ostree(db, conn):
 def cmd_sign_container(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
 
-    res = subprocess.Popen(['/usr/bin/skopeo', 'manifest-digest',
-                            conn.payload_path],
-                           stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                           stderr=subprocess.STDOUT, close_fds=True)
-    docker_manifest_digest, err = res.communicate()
-    if res.wait() != 0:
-        logging.error('Unable to compute digest: %s' % err)
-        raise InvalidRequestError('Unable to compute digest')
-    docker_manifest_digest = docker_manifest_digest.strip()
+    checksum = hashlib.sha256(conn.payload_file.read()).hexdigest()
 
+    docker_manifest_digest = 'sha256:%s' % checksum
     docker_reference = conn.safe_outer_field('docker-reference')
 
     # github.com/containers/image/signature/signature.go#51
