@@ -823,6 +823,34 @@ def cmd_grant_key_access(conn, args):
         with open(o2.passphrase_file, 'w') as ppfile:
             ppfile.write(bound_passphrase)
 
+def cmd_change_key_expiration(conn, args):
+    p2 = optparse.OptionParser(usage='%prog change-key-expiration key',
+                               description='Change key expiration date')
+    p2.add_option('--expire-date', metavar='YYYY-MM-DD',
+                  help='Key expiration date')
+    p2.add_option('--subkey', help='Subkey identifier')
+    (o2, args) = p2.parse_args(args)
+    if len(args) != 1:
+        p2.error('key name expected')
+    if o2.expire_date is not None:
+        if not utils.yyyy_mm_dd_is_valid(o2.expire_date):
+            p2.error('invalid --expire-date')
+    if o2.subkey is not None:
+        if not utils.is_int(o2.subkey):
+            p2.error('invalid subkey identifier')
+
+    passphrase = read_key_passphrase(conn.config)
+
+    args = {'key': safe_string(args[0])}
+    if o2.expire_date is not None:
+        args['expire-date'] = o2.expire_date
+    if o2.subkey is not None:
+        args['subkey'] = o2.subkey
+    conn.connect('change-key-expiration', args)
+    conn.empty_payload()
+    conn.send_inner({'passphrase': passphrase})
+    conn.read_response(no_payload=True)
+
 def cmd_revoke_key_access(conn, args):
     p2 = optparse.OptionParser(usage='%prog revoke-key-access [options] key '
                                'user',
@@ -1451,6 +1479,8 @@ command_handlers = {
     'modify-key': (cmd_modify_key, 'Modify a key'),
     'list-key-users': (cmd_list_key_users, 'List users that can access a key'),
     'grant-key-access': (cmd_grant_key_access, 'Grant key access to a user'),
+    'change-key-expiration': (cmd_change_key_expiration,
+                              'Change key expiration date'),
     'revoke-key-access': (cmd_revoke_key_access,
                           'Revoke key acess from a user'),
     'get-public-key': (cmd_get_public_key, 'Output public part of the key'),

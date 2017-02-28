@@ -583,6 +583,14 @@ def yyyy_mm_dd_is_valid(s):
         return False
     return True
 
+def is_int(s):
+    '''Return True if s is a valid int.'''
+    try:
+        int(s)
+        return True
+    except:
+        return False
+
 # Threading utilities
 
 class WorkerQueueOrphanedError(Exception):

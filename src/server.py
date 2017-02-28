@@ -1194,6 +1194,35 @@ def cmd_get_public_key(db, conn):
     conn.send_reply_payload(payload)
 
 @request_handler()
+def cmd_change_key_expiration(db, conn):
+    (access, passphrase) = conn.authenticate_key_admin(db)
+    expire = conn.safe_outer_field('expire-date')
+    if expire is None:
+        # This means to mark the key as non-expiring
+        expire = ''
+    subkey = conn.safe_outer_field('subkey')
+    states = []
+    if subkey is not None:
+        keyarg = 'KEY %d' % int(subkey)
+        states.extend([(gpgme.STATUS_GET_LINE, 'keyedit.prompt', keyarg),
+                       (gpgme.STATUS_GOT_IT, None, None)])
+    states.extend([(gpgme.STATUS_GET_LINE, 'keyedit.prompt', 'EXPIRE'),
+                   (gpgme.STATUS_GOT_IT, None, None),
+                   (gpgme.STATUS_GET_LINE, 'keygen.valid', expire),
+                   (gpgme.STATUS_GOT_IT, None, None),
+                   (gpgme.STATUS_USERID_HINT, None, None),
+                   (gpgme.STATUS_NEED_PASSPHRASE, None, None),
+                   (gpgme.STATUS_GET_HIDDEN, 'passphrase.enter', passphrase),
+                   (gpgme.STATUS_GOT_IT, None, None),
+                   (gpgme.STATUS_GOOD_PASSPHRASE, None, None),
+                   (gpgme.STATUS_GET_LINE, 'keyedit.prompt', 'SAVE'),
+                   (gpgme.STATUS_GOT_IT, None, None),
+                   (gpgme.STATUS_EOF, None, None)])
+    server_common.gpg_edit_key(conn.config, access.key.fingerprint, states)
+    db.commit()
+    conn.send_reply_ok_only()
+
+@request_handler()
 def cmd_change_passphrase(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
     new_passphrase = conn.inner_field('new-passphrase', required=True)

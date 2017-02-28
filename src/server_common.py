@@ -17,6 +17,7 @@
 # Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
 
 import cStringIO
+import copy
 import crypt
 import json
 import logging
@@ -218,6 +219,18 @@ class GPGError(Exception):
     '''Error performing a GPG operation.'''
     pass
 
+class GPGEditError(GPGError):
+    '''Error performing a GPG edit operation.'''
+    def __init__(self, msg, expected_state, actual_state, expected_arg,
+                 actual_arg, *args):
+        self.message = msg
+        self.expected_state = expected_state
+        self.actual_state = actual_state
+        self.expected_arg = expected_arg
+        self.actual_arg = actual_arg
+        super(GPGEditError, self).__init__(msg, *args)
+
+
 class GPGConfiguration(utils.Configuration):
 
     def _add_defaults(self, defaults):
@@ -275,6 +288,76 @@ def gpg_delete_key(config, fingerprint):
     ctx = _gpg_open(config)
     key = ctx.get_key(fingerprint, True)
     ctx.delete(key, True)
+
+
+def gpg_edit_key(config, fingerprint, input_states):
+    '''Edit a GPG key
+
+    This uses pygpgme.Context.edit, and implements a state machine to perform
+    the full conversation.
+
+    This code is insane, but it is what it is due to insanity at (py)gpg(me).
+
+    input_states is a list of three-tuples, describing the expected state and
+    argument at every point in the conversation, and the answer we are going to
+    send.
+
+    example: [(gpgme.STATUS_GET_LINE, 'keyedit.prompt', 'KEY 1')]
+    '''
+    errors = []
+    states = copy.copy(input_states)
+    replies = []
+    out_fd = cStringIO.StringIO()
+
+    def update_out():
+        out_fd.seek(0)
+        replies.append(out_fd.read())
+        out_fd.seek(0)
+        out_fd.truncate()
+
+    def edit_callback(status, arg, in_fd):
+        update_out()
+
+        if len(states) == 0:
+            error = GPGEditError('More states expected',
+                                 None, status, None, arg)
+            errors.append(error)
+            raise error
+        expected_status, expected_arg, answer = states.pop(0)
+        if expected_status != status:
+            error = GPGEditError('Mismatched status',
+                                 expected_status, status, expected_arg, arg)
+            errors.append(error)
+            raise error
+        if expected_arg is not None and arg != expected_arg:
+            error = GPGEditError('Mismatched argument',
+                                 expected_status, status, expected_arg, arg)
+            errors.append(error)
+            raise error
+        if answer is not None:
+            if in_fd == -1:
+                error = GPGEditError('No input fd when trying to answer',
+                                     expected_status, status, expected_arg,
+                                     arg)
+                errors.append(error)
+                raise error
+            else:
+                os.write(in_fd, '%s\n' % answer)
+
+    # We are done setting everything up... Now let's do this
+    ctx = _gpg_open(config)
+    key = ctx.get_key(fingerprint, True)
+    try:
+        ctx.edit(key, edit_callback, out_fd)
+    except gpgme.GpgmeError as ex:
+        # This is because gpgme hides all errors: every error we throw gets
+        # thrown up to the edit call as gpgme.GpgmeError('General error')
+        if len(errors) != 0:
+            raise errors[0]
+        else:
+            raise ex
+    return replies
+
 
 def _restore_gnupg_home(config, backup_dir):
     '''Restore config.gnupg_home from a backup in backup_dir.'''

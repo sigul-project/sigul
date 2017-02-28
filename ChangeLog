@@ -1,3 +1,13 @@
+2017-02-28  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/server.py: Implement change-key-expiration
+
+	* src/server_common.py: Implement GPG key edit
+
+	* src/bridge.py: Implement change-key-expiration
+
+	* src/client.py: Implement change-key-expiration
+
 2017-02-20  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/bind_methods.py: Added option for public-only PKCS11 tokens.
