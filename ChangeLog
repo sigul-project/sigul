@@ -8,6 +8,9 @@
 
 	* src/client.py: Implement change-key-expiration
 
+	* configure.ac: Release 0.205
+	* NEWS: Update.
+
 2017-02-20  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/bind_methods.py: Added option for public-only PKCS11 tokens.
