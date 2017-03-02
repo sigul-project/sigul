@@ -133,60 +133,63 @@ EOF]
 # Import test key
 AT_CHECK([printf 'rootroot\0imported\0imported-key-pw\0' | \
  		sigul -c client/client.conf --batch -v -v \
-		import-key imported-key \
-		"$abs_srcdir/tests/imported-secret-key.asc"])
+		import-key expired-key \
+		"$abs_srcdir/tests/expired-key.asc"])
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
-[imported-key
+[expired-key
 ])
 AT_CHECK([printf 'imported-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
-		get-public-key imported-key > public.asc])
+		get-public-key expired-key > public.asc])
 AT_CHECK([gpg -q --homedir gnupg --import public.asc])
 rm public.asc
 
-# First make sure neither of the keys have expiration dates to start with
-AT_CHECK([GNUPGHOME=server/gnupg gpg --list-keys | grep expires], 1, [], [ignore])
+# First make sure the key is expired
+# Note: the importance of the chosen expiration date is left as an excersise to
+# the reader.
+AT_CHECK([GNUPGHOME=server/gnupg gpg --list-keys | grep "expired:"], 0,
+         [pub   1024R/97CDF37F 2017-02-26 [[expired: 2017-02-27]]
+], [ignore])
 
 # Set expiration for primary key
 AT_CHECK([printf 'imported-key-pw\0' | \
         sigul -c client/client.conf --batch -v -v \
-        change-key-expiration imported-key --expire-date 2030-01-01], 0, [], [])
+        change-key-expiration expired-key --expire-date 2030-01-01], 0, [], [])
 
 AT_CHECK([GNUPGHOME=server/gnupg gpg --list-keys | grep expires], 0,
-         [pub   2048R/868C1849 2011-05-19 [[expires: 2030-01-01]]
+         [pub   1024R/97CDF37F 2017-02-26 [[expires: 2030-01-01]]
 ], [ignore])
 
 # Set expiration for subkey
 AT_CHECK([printf 'imported-key-pw\0' | \
         sigul -c client/client.conf --batch -v -v \
-        change-key-expiration imported-key --expire-date 2030-01-01 --subkey 1],
+        change-key-expiration expired-key --expire-date 2030-01-01 --subkey 1],
         0, [], [])
 
 AT_CHECK([GNUPGHOME=server/gnupg gpg --list-keys | grep expires], 0,
-         [pub   2048R/868C1849 2011-05-19 [[expires: 2030-01-01]]
-sub   2048R/6011BFFA 2011-05-19 [[expires: 2030-01-01]]
+         [pub   1024R/97CDF37F 2017-02-26 [[expires: 2030-01-01]]
+sub   1024R/D35479F8 2017-02-26 [[expires: 2030-01-01]]
 ], [ignore])
 
 # Clear expiration for primary key
 AT_CHECK([printf 'imported-key-pw\0' | \
         sigul -c client/client.conf --batch -v -v \
-        change-key-expiration imported-key],
+        change-key-expiration expired-key],
         0, [], [])
 
 AT_CHECK([GNUPGHOME=server/gnupg gpg --list-keys | grep expires], 0,
-         [sub   2048R/6011BFFA 2011-05-19 [[expires: 2030-01-01]]
+         [sub   1024R/D35479F8 2017-02-26 [[expires: 2030-01-01]]
 ], [ignore])
 
 # Clear expiration for subkey
 AT_CHECK([printf 'imported-key-pw\0' | \
         sigul -c client/client.conf --batch -v -v \
-        change-key-expiration imported-key --subkey 1],
+        change-key-expiration expired-key --subkey 1],
         0, [], [])
 
 AT_CHECK([GNUPGHOME=server/gnupg gpg --list-keys | grep expires], 1, [], [ignore])
-
 
 # Terminate daemons
 AT_CHECK([kill "$(cat server/sigul_server.pid)"])

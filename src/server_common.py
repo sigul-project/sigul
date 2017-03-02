@@ -230,6 +230,14 @@ class GPGEditError(GPGError):
         self.actual_arg = actual_arg
         super(GPGEditError, self).__init__(msg, *args)
 
+    def __str__(self):
+        return ('<GPGEditError, msg: %s, expected state: %s, actual state: %s,'
+                ' expected arg: %s, actual arg: %s>' % (self.message,
+                                                        self.expected_state,
+                                                        self.actual_state,
+                                                        self.expected_arg,
+                                                        self.actual_arg))
+
 
 class GPGConfiguration(utils.Configuration):
 
@@ -290,7 +298,7 @@ def gpg_delete_key(config, fingerprint):
     ctx.delete(key, True)
 
 
-def gpg_edit_key(config, fingerprint, input_states):
+def gpg_edit_key(config, fingerprint, input_states, ignored_states):
     '''Edit a GPG key
 
     This uses pygpgme.Context.edit, and implements a state machine to perform
@@ -301,8 +309,10 @@ def gpg_edit_key(config, fingerprint, input_states):
     input_states is a list of three-tuples, describing the expected state and
     argument at every point in the conversation, and the answer we are going to
     send.
-
     example: [(gpgme.STATUS_GET_LINE, 'keyedit.prompt', 'KEY 1')]
+
+    ignored_states is a list of gpgme states that we ignore when they come up.
+    This means we don't handle them at all.
     '''
     errors = []
     states = copy.copy(input_states)
@@ -316,6 +326,9 @@ def gpg_edit_key(config, fingerprint, input_states):
         out_fd.truncate()
 
     def edit_callback(status, arg, in_fd):
+        if status in ignored_states:
+            return
+
         update_out()
 
         if len(states) == 0:

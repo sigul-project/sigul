@@ -1,3 +1,9 @@
+2017-03-02  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/server_common.py: Allow certain states to be ignored in gpg_edit
+
+	* src/server.py: Ignore KEYEXPIRED and SIGEXPIRED so we can unexpire
+
 2017-02-28  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/server.py: Implement change-key-expiration

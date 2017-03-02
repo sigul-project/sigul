@@ -1218,7 +1218,11 @@ def cmd_change_key_expiration(db, conn):
                    (gpgme.STATUS_GET_LINE, 'keyedit.prompt', 'SAVE'),
                    (gpgme.STATUS_GOT_IT, None, None),
                    (gpgme.STATUS_EOF, None, None)])
-    server_common.gpg_edit_key(conn.config, access.key.fingerprint, states)
+    server_common.gpg_edit_key(conn.config,
+                               access.key.fingerprint,
+                               states,
+                               [gpgme.STATUS_KEYEXPIRED,
+                                gpgme.STATUS_SIGEXPIRED])
     db.commit()
     conn.send_reply_ok_only()
 
