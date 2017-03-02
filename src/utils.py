@@ -222,7 +222,7 @@ def koji_read_config(global_config, instance):
     parser = ConfigParser.ConfigParser()
     parser.read(('/etc/koji.conf', os.path.expanduser(config_path)))
     config = dict(parser.items('koji'))
-    for opt in ('server', 'serverca', 'topurl'):
+    for opt in ('server', 'topurl'):
         if opt not in config:
             raise KojiError('Missing koji configuration option %s' % opt)
     for opt in ('cert', 'serverca'):
@@ -256,7 +256,7 @@ def koji_connect(koji_config, authenticate, proxyuser=None):
     if authenticate:
         if koji_config['authtype'] == 'ssl':
             session.ssl_login(koji_config['cert'], None,
-                              koji_config['serverca'], proxyuser=proxyuser)
+                              koji_config.get('serverca'), proxyuser=proxyuser)
         elif koji_config['authtype'] == 'kerberos':
             kwargs = {}
             for opt in ('principal', 'keytab', 'ccache'):
