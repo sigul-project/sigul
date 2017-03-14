@@ -1396,7 +1396,7 @@ def cmd_sign_container(db, conn):
             }
         },
         'optional': {
-            'creator': 'Sigul',
+            'creator': 'Sigul %s' % settings.version,
             'timestamp': int(time.time())
         }
     }

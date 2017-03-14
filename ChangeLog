@@ -1,3 +1,7 @@
+2017-03-14  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/server.py: Add version to generated container signatures
+
 2017-03-02  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/server_common.py: Allow certain states to be ignored in gpg_edit
