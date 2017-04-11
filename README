@@ -5,7 +5,7 @@ Required packages
 -----------------
 pexpect
 python-fedora
-python-urlgrabber
+python-requests
 python-sqlalchemy >= 0.5
 
 python-nss >= 0.11

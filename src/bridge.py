@@ -38,7 +38,7 @@ import nss.error
 import nss.io
 import nss.nss
 import nss.ssl
-import urlgrabber.grabber
+import requests
 
 import double_tls
 import settings
@@ -154,26 +154,19 @@ def fas_user_is_in_group(config, user_name, group_name):
             fedora.client.FedoraServiceError), e:
         raise BridgeError('Error communicating with FAS: %s' % str(e))
 
-def urlgrabber_open(url):
+def urlopen(url):
     '''Open url.
 
     Return (file, file size).  Raise ForwardingError.
 
     '''
-    fd = urlgrabber.grabber.urlopen(url)
+    r = requests.get(url, stream=True)
     try:
-        try:
-            size = fd.size # urlgrabber using pycurl
-        except AttributeError:
-            try:
-                size = int(fd.hdr['Content-Length']) # Older urlgrabber
-            except KeyError:
-                raise ForwardingError('Content-Length not returned for %s' %
-                                      url)
-    except:
-        fd.close()
-        raise
-    return (fd, size)
+        size = int(r.headers['content-length'])
+    except KeyError:
+        raise ForwardingError('Content-Length not returned for %s' %
+                              url)
+    return (r, size)
 
 class RPMObject(object):
     '''Data about a single 'sign-rpms' subrequest.'''
@@ -467,13 +460,14 @@ class SignRPMRequestHandler(RequestHandler):
         self.__rpm.compute_payload_url(self.__koji_client)
         url = self.__rpm.request_payload_url
         try:
-            (src, payload_size) = urlgrabber_open(url)
+            (src, payload_size) = urlopen(url)
             try:
                 conn.server_buf.write(utils.u32_pack(payload_size))
-                copy_file_data(conn.server_buf, src, payload_size)
+                utils.copy_data(conn.server_buff.write, src.iter_content(4096),
+                                payload_size)
             finally:
                 src.close()
-        except urlgrabber.grabber.URLGrabError, e:
+        except requests.RequestException, e:
             raise ForwardingError('Error reading %s: %s' % (url, str(e)))
 
     def forward_reply_payload(self, conn):
@@ -711,14 +705,16 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
         try:
             if payload_size != 0:
                 src = open(rpm.tmp_path, 'rb')
+                readfn = src.read
             else:
-                (src, payload_size) = urlgrabber_open(rpm.request_payload_url)
+                (src, payload_size) = urlopen(rpm.request_payload_url)
+                readfn = src.iter_content(4096)
             try:
                 self.__server_buf.write(utils.u32_pack(payload_size))
-                copy_file_data(self.__server_buf, src, payload_size)
+                utils.copy_data(self.__server_buf.write, readfn, payload_size)
             finally:
                 src.close()
-        except urlgrabber.grabber.URLGrabError, e:
+        except requests.RequestException, e:
             if payload_size != 0:
                 # This exception was not expected, let the default handling
                 # handle it

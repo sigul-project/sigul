@@ -36,6 +36,7 @@ import string
 import sys
 import tempfile
 import threading
+import types
 import xmlrpclib
 
 import nss.error
@@ -845,10 +846,14 @@ def sigterm_handler(*unused_args):
 
 def copy_data(write_fn, read_fn, size):
     '''Copy size bytes using write_fn and read_fn.'''
-    while size > 0:
-        data = read_fn(min(size, 4096))
-        write_fn(data)
-        size -= len(data)
+    if type(read_fn) is types.GeneratorType:
+        for data in read_fn:
+            write_fn(data)
+    else:
+        while size > 0:
+            data = read_fn(min(size, 4096))
+            write_fn(data)
+            size -= len(data)
 
 def file_size_in_blocks(fd):
     '''Return size of fd, taking into account block sizes.'''

@@ -1,3 +1,7 @@
+2017-04-11  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/bridge.py: Use requests instead of urlgrabber
+
 2017-03-14  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/server.py: Add version to generated container signatures
