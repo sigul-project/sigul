@@ -1,3 +1,7 @@
+Changes in version 0.205:
+- Fix with PKCS11 PIN reading
+- Added method to change key expiration date
+
 Changes in version 0.204:
 - Implemented PKCS11 tokens with public-only.
 - Implemented Either-Or passphrase binding.
