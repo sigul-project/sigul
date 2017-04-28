@@ -463,7 +463,7 @@ class SignRPMRequestHandler(RequestHandler):
             (src, payload_size) = urlopen(url)
             try:
                 conn.server_buf.write(utils.u32_pack(payload_size))
-                utils.copy_data(conn.server_buff.write, src.iter_content(4096),
+                utils.copy_data(conn.server_buf.write, src.iter_content(4096),
                                 payload_size)
             finally:
                 src.close()
