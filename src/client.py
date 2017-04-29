@@ -475,7 +475,7 @@ class SignRPMArgumentExaminer(object):
             fields['rpm-arch'] = safe_string(rpm['arch'])
             fields['rpm-sigmd5'] = binascii.a2b_hex(rpm['payloadhash'])
             rpm_file = None
-            size = rpm['size']
+            size = int(rpm['size'])
         return (rpm_file, size)
 
     def close(self):

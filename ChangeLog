@@ -1,3 +1,8 @@
+2017-04-30  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/bridge.py: Typecast the koji rpm size info to int
+	* src/client.py: Typecast the koji rpm size info to int
+
 2017-04-11  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/bridge.py: Use requests instead of urlgrabber

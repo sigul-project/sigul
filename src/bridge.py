@@ -662,7 +662,7 @@ class SignRPMsKojiRequestThread(utils.WorkerThread):
         if rpm.request_payload_size == 0:
             rpm.compute_payload_url(koji_client)
             rpm_info = rpm.get_rpm_info(koji_client)
-            size = rpm_info['size']
+            size = int(rpm_info['size'])
         else:
             # Count whole blocks to avoid millions of 1-byte files
             # filling the hard drive due to internal fragmentation.
