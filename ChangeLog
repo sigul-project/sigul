@@ -3,6 +3,9 @@
 	* src/utils.py: Add workaround for Koji inconsistency with proxyuser
 	* src/utils.py: Add support for koji krb_rdns configuration
 
+	* configure.ac: Release 0.206
+	* NEWS: Update
+
 2017-04-30  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/bridge.py: Typecast the koji rpm size info to int

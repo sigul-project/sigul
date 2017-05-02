@@ -1,3 +1,11 @@
+Changes in version 0.206:
+- Removed requirement for koji serverca option
+- Added version to generated container signature
+- Use python-requests streaming for RPM downloads
+- Typecast koji RPM sizes to int
+- Added workaround for koji proxyuser inconsistency
+- Fixed using koji krb_rdns option
+
 Changes in version 0.205:
 - Fix with PKCS11 PIN reading
 - Added method to change key expiration date
