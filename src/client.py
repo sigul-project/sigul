@@ -1012,8 +1012,9 @@ def cmd_sign_data(conn, args):
         raise ClientError('Error writing to %s: %s' % (o2.output, e.strerror))
 
 def call_git(args, stdin=None, ignore_error=False, strip_newline=False):
-    args = ['git'] + args
-    proc = subprocess.Popen(args,
+    cmd = ['git']
+    cmd.extend(args)
+    proc = subprocess.Popen(cmd,
                             stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
