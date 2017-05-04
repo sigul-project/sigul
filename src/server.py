@@ -583,7 +583,9 @@ class ServersConnection(object):
                                                    user_passphrase)
             if not key_passphrase:
                 self.auth_fail('passphrase does not match')
-            assert user is not None and key is not None and access is not None
+            assert user is not None
+            assert key is not None
+            assert access is not None
         return (user, key, access) # OK
 
     def authenticate_admin_or_user(self, db):
