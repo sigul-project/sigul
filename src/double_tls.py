@@ -762,7 +762,7 @@ class DoubleTLSClient(object):
                 try:
                     socket_fd.connect(net_addr)
                 except Exception, e:
-                    if first_error == None:
+                    if first_error is None:
                         first_error = e
             if first_error is not None:
                 if (isinstance(first_error, nss.error.NSPRError) and
