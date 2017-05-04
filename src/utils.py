@@ -75,14 +75,14 @@ class Configuration(object):
                         os.path.expanduser(config_file))
         files = parser.read(config_paths)
         if len(files) == 0:
-            raise ConfigurationError('No configuration file found (tried %s)' %
-                                     ', '.join("'%s'" % p
-                                               for p in config_paths))
+            raise ConfigurationError('No configuration file found (tried {0!s})'.format(
+                                     ', '.join("'{0!s}'".format(p)
+                                               for p in config_paths)))
         try:
             self._read_configuration(parser)
         # ValueError is not handled by parser.getint()
         except (ConfigParser.Error, ValueError), e:
-            raise ConfigurationError('Error reading configuration: %s' % str(e))
+            raise ConfigurationError('Error reading configuration: {0!s}'.format(str(e)))
 
     def _add_defaults(self, defaults):
         '''Add more default values to defaults.'''
@@ -129,7 +129,7 @@ def logging_level_from_options(options):
 def create_basic_parser(description, default_config_file):
     '''Create a basic optparse parser for a bridge/server component.'''
     parser = optparse.OptionParser(usage='%prog [options]',
-                                   version='%%prog %s' % (settings.version),
+                                   version='%prog {0!s}'.format((settings.version)),
                                    description=description)
     optparse_add_config_file_option(parser, default_config_file)
     optparse_add_verbosity_option(parser)
@@ -216,8 +216,8 @@ def koji_read_config(global_config, instance):
         try:
             config_path = global_config.koji_instances[instance]
         except KeyError:
-            raise KojiError('Koji configuration instance %s not defined' %
-                            instance)
+            raise KojiError('Koji configuration instance {0!s} not defined'.format(
+                            instance))
     else:
         config_path = global_config.koji_config
     parser = ConfigParser.ConfigParser()
@@ -225,7 +225,7 @@ def koji_read_config(global_config, instance):
     config = dict(parser.items('koji'))
     for opt in ('server', 'topurl'):
         if opt not in config:
-            raise KojiError('Missing koji configuration option %s' % opt)
+            raise KojiError('Missing koji configuration option {0!s}'.format(opt))
     for opt in ('cert', 'serverca'):
         if opt in config:
             config[opt] = os.path.expanduser(config[opt])
@@ -238,8 +238,8 @@ def koji_read_config(global_config, instance):
         else:
             raise KojiError('Unable to determine koji Auth type')
     elif config['authtype'] not in ('ssl', 'kerberos'):
-        raise KojiError('Unsupported authtype %s requested' %
-                        config['authtype'])
+        raise KojiError('Unsupported authtype {0!s} requested'.format(
+                        config['authtype']))
     return config
 
 def koji_connect(koji_config, authenticate, proxyuser=None):
@@ -274,8 +274,7 @@ def koji_connect(koji_config, authenticate, proxyuser=None):
     except xmlrpclib.ProtocolError:
         raise KojiError('Cannot connect to Koji')
     if version != koji.API_VERSION:
-        raise KojiError('Koji API version mismatch (server %d, client %d)' %
-                        (version, koji.API_VERSION))
+        raise KojiError('Koji API version mismatch (server {0:d}, client {1:d})'.format(version, koji.API_VERSION))
     return session
 
 def koji_disconnect(session):
@@ -303,8 +302,8 @@ class NSSConfiguration(Configuration):
         super(NSSConfiguration, self)._read_configuration(parser)
         self.nss_dir = os.path.expanduser(parser.get('nss', 'nss-dir'))
         if not os.path.isdir(self.nss_dir):
-            raise ConfigurationError('[nss] nss-dir \'%s\' is not a directory' %
-                                     self.nss_dir)
+            raise ConfigurationError('[nss] nss-dir \'{0!s}\' is not a directory'.format(
+                                     self.nss_dir))
         self.nss_password = parser.get('nss', 'nss-password')
         if self.nss_password is None:
             self.nss_password = getpass.getpass('NSS database password: ')
@@ -337,8 +336,7 @@ def nss_init(config):
         nss.nss.get_internal_key_slot().authenticate()
     except nss.error.NSPRError, e:
         if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
-            raise NSSInitError('\'%s\' does not contain a valid NSS database' %
-                               (config.nss_dir,))
+            raise NSSInitError('\'{0!s}\' does not contain a valid NSS database'.format(config.nss_dir))
         elif e.errno == nss.error.SEC_ERROR_BAD_PASSWORD:
             raise NSSInitError('Provided NSS password is incorrect')
         raise
@@ -531,7 +529,7 @@ def format_fields(fields):
     data = u8_pack(len(fields))
     for (key, value) in fields.iteritems():
         if len(key) > 255:
-            raise ValueError('Key name %s too long' % key)
+            raise ValueError('Key name {0!s} too long'.format(key))
         data += u8_pack(len(key))
         data += key
         if isinstance(value, int):
@@ -542,9 +540,9 @@ def format_fields(fields):
             else:
                 value = u32_pack(0)
         elif not isinstance(value, str):
-            raise ValueError('Unknown value type of %s' % repr(value))
+            raise ValueError('Unknown value type of {0!s}'.format(repr(value)))
         if len(value) > 255:
-            raise ValueError('Value %s too long' % repr(value))
+            raise ValueError('Value {0!s} too long'.format(repr(value)))
         data += u8_pack(len(value))
         data += value
     return data
@@ -552,7 +550,7 @@ def format_fields(fields):
 def readable_fields(fields):
     '''Return a string representing fields.'''
     keys = sorted(fields.iterkeys())
-    return ', '.join(('%s = %s' % (repr(k), repr(fields[k])) for k in keys))
+    return ', '.join(('{0!s} = {1!s}'.format(repr(k), repr(fields[k])) for k in keys))
 
 def string_is_safe(s, filename=False):
     '''Return True if s an allowed readable string.
@@ -691,7 +689,7 @@ class WorkerThread(threading.Thread):
             self.exc_info = sys.exc_info()
             if not isinstance(self.exc_info[1], self.ignored_exception_types):
                 log_exception(self.name, self.exc_info,
-                              ('Unexpected error in %s' % self.description))
+                              ('Unexpected error in {0!s}'.format(self.description)))
             else:
                 logging.debug('%s: Terminated by an exception',
                               self.name, exc_info=True)
@@ -832,7 +830,7 @@ def create_pid_file(options, daemon_name):
     '''
     f = open(os.path.join(options.pid_dir, daemon_name + '.pid'), 'w')
     try:
-        f.write('%s\n' % os.getpid())
+        f.write('{0!s}\n'.format(os.getpid()))
     finally:
         f.close()
 
@@ -883,7 +881,7 @@ def log_exception(thread_name, exc_info, default_msg):
         prefix = ''
     e = exc_info[1]
     if isinstance(e, (IOError, EOFError, socket.error)):
-        logging.error(prefix + 'I/O error: %s' % repr(e))
+        logging.error(prefix + 'I/O error: {0!s}'.format(repr(e)))
     elif isinstance(e, nss.error.NSPRError):
         if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
             logging.error(prefix + 'I/O error: NSPR connection reset')
@@ -970,7 +968,7 @@ class MethodRegistry(object):
         if method in cls._method_registry:
             return cls._method_registry[method]
         else:
-            raise KeyError('Method %s not registered in %s' % (method,
+            raise KeyError('Method {0!s} not registered in {1!s}'.format(method,
                                                                cls.__name__))
 
 
@@ -1058,7 +1056,7 @@ def bind_list_to_object(bind_list):
             for arg in args.split(','):
                 if arg != '':
                     if '=' not in arg:
-                        raise ValueError('Argument %s is not key=value' % arg)
+                        raise ValueError('Argument {0!s} is not key=value'.format(arg))
                     key, _, value = arg.partition('=')
                     binding[key] = value
             methods.append(binding)
@@ -1096,9 +1094,9 @@ def unbind_passphrase(bound_passphrase):
         if unbound_passphrase is None:
             # This unbinding failed
             logging.warning(
-                'Failed to unbind with any of the following: %s' %
-                ', '.join(['method: %s, args: %s' % (entry[0], entry[1])
-                           for entry in attempted]))
+                'Failed to unbind with any of the following: {0!s}'.format(
+                ', '.join(['method: {0!s}, args: {1!s}'.format(entry[0], entry[1])
+                           for entry in attempted])))
             return None
         bound_passphrase = unbound_passphrase
 

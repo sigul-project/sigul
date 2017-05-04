@@ -53,4 +53,4 @@ def message(error_code):
     '''Return an error message for error_code.'''
     if error_code in _messages:
         return _messages[error_code]
-    return 'Error %d' % error_code
+    return 'Error {0:d}'.format(error_code)

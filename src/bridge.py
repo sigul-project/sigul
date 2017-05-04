@@ -106,8 +106,8 @@ def create_listen_sock(config, port):
         cert = nss.nss.find_cert_from_nickname(config.bridge_cert_nickname)
     except nss.error.NSPRError, e:
         if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
-            raise BridgeError('Certificate \'%s\' is not available' %
-                              config.bridge_cert_nickname)
+            raise BridgeError('Certificate \'{0!s}\' is not available'.format(
+                              config.bridge_cert_nickname))
         raise
     sock.config_secure_server(cert, nss.nss.find_key_by_any_cert(cert),
                               cert.find_kea_type())
@@ -152,7 +152,7 @@ def fas_user_is_in_group(config, user_name, group_name):
         return False
     except (fedora.client.FedoraClientError,
             fedora.client.FedoraServiceError), e:
-        raise BridgeError('Error communicating with FAS: %s' % str(e))
+        raise BridgeError('Error communicating with FAS: {0!s}'.format(str(e)))
 
 def urlopen(url):
     '''Open url.
@@ -164,8 +164,8 @@ def urlopen(url):
     try:
         size = int(r.headers['content-length'])
     except KeyError:
-        raise ForwardingError('Content-Length not returned for %s' %
-                              url)
+        raise ForwardingError('Content-Length not returned for {0!s}'.format(
+                              url))
     return (r, size)
 
 class RPMObject(object):
@@ -223,7 +223,7 @@ class Field(object):
 
         '''
         if not self.__optional and value is None:
-            raise InvalidRequestError('Required field %s missing' % self.name)
+            raise InvalidRequestError('Required field {0!s} missing'.format(self.name))
 
 class StringField(Field):
     '''A string field.'''
@@ -231,7 +231,7 @@ class StringField(Field):
     def validate(self, value):
         super(StringField, self).validate(value)
         if value is not None and not utils.string_is_safe(value):
-            raise InvalidRequestError('Field %s is not printable' % self.name)
+            raise InvalidRequestError('Field {0!s} is not printable'.format(self.name))
 
 class BoolField(Field):
     '''A bool field.'''
@@ -240,7 +240,7 @@ class BoolField(Field):
         super(BoolField, self).validate(value)
         if value is not None and (len(value) != utils.u32_size or
                                   utils.u32_unpack(value) not in (0, 1)):
-            raise InvalidRequestError('Field %s is not a boolean' % self.name)
+            raise InvalidRequestError('Field {0!s} is not a boolean'.format(self.name))
 
 class YYYYMMDDField(Field):
     '''A date field, using the yyyy-mm-dd format.'''
@@ -248,8 +248,8 @@ class YYYYMMDDField(Field):
     def validate(self, value):
         super(YYYYMMDDField, self).validate(value)
         if value is not None and not utils.yyyy_mm_dd_is_valid(value):
-            raise InvalidRequestError('Field %s is not a valid date' %
-                                      self.name)
+            raise InvalidRequestError('Field {0!s} is not a valid date'.format(
+                                      self.name))
 
 class RequestValidator(object):
     '''A validator of header fields and payload size.'''
@@ -265,7 +265,7 @@ class RequestValidator(object):
         '''Validate fiels and payload_size.'''
         for key in fields.iterkeys():
             if key not in self.__known_fields:
-                raise InvalidRequestError('Unexpected field %s' % repr(key))
+                raise InvalidRequestError('Unexpected field {0!s}'.format(repr(key)))
         for f in self.__fields:
             f.validate(fields.get(f.name))
         if payload_size > self.__max_payload:
@@ -331,8 +331,8 @@ class KojiClient(object):
                 self.__koji_config = utils.koji_read_config(self.__conn.config,
                                                             instance)
             except utils.KojiError, e:
-                raise ForwardingError('Error preparing Koji configuration: %s' %
-                                      str(e))
+                raise ForwardingError('Error preparing Koji configuration: {0!s}'.format(
+                                      str(e)))
             self.__koji_pathinfo = koji.PathInfo(self.__koji_config['topurl'])
         if self.__koji_session is None:
             try:
@@ -344,7 +344,7 @@ class KojiClient(object):
                     self.__koji_session = utils.koji_connect(self.__koji_config,
                                                              authenticate=True)
             except (utils.KojiError, koji.GenericError), e:
-                raise ForwardingError('Koji connection failed: %s' % str(e))
+                raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
         return self.__koji_session
 
     __rpm_info_map = {'name': StringField('rpm-name'),
@@ -371,7 +371,7 @@ class KojiClient(object):
         try:
             info = session.getRPM(d)
         except (utils.KojiError, koji.GenericError), e:
-            raise ForwardingError('Koji connection failed: %s' % str(e))
+            raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
         if info is None:
             raise ForwardingError('RPM not found')
         return info
@@ -393,7 +393,7 @@ class KojiClient(object):
             if build is None:
                 raise ForwardingError('RPM has no build')
         except (utils.KojiError, koji.GenericError), e:
-            raise ForwardingError('Koji connection failed: %s' % str(e))
+            raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
         return (self.__koji_pathinfo.build(build) + '/' +
                 self.__koji_pathinfo.rpm(rpm_info))
 
@@ -433,7 +433,7 @@ class KojiClient(object):
             if len(sigs) == 0:
                 session.addRPMSig(rpm_info['id'], base64.encodestring(sighdr))
         except (utils.KojiError, koji.GenericError), e:
-            raise ForwardingError('Koji connection failed: %s' % str(e))
+            raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
 
     def close(self):
         '''Disconnect from koji.'''
@@ -468,7 +468,7 @@ class SignRPMRequestHandler(RequestHandler):
             finally:
                 src.close()
         except requests.RequestException, e:
-            raise ForwardingError('Error reading %s: %s' % (url, str(e)))
+            raise ForwardingError('Error reading {0!s}: {1!s}'.format(url, str(e)))
 
     def forward_reply_payload(self, conn):
         # Zero-length response should happen only on error.
@@ -719,8 +719,7 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
                 # This exception was not expected, let the default handling
                 # handle it
                 raise
-            raise ForwardingError('Error reading %s: %s' %
-                                  (rpm.request_payload_url, str(e)))
+            raise ForwardingError('Error reading {0!s}: {1!s}'.format(rpm.request_payload_url, str(e)))
         self.__server_buf.write(rpm.request_payload_digest)
 
         rpm.remove_tmp_path()
@@ -808,8 +807,8 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
         try:
             rpm = self.__subrequest_map.get(fields['id'])
         except KeyError:
-            raise InvalidReplyError('Invalid subreply ID %s' %
-                                    repr(fields['id']))
+            raise InvalidReplyError('Invalid subreply ID {0!s}'.format(
+                                    repr(fields['id'])))
 
         try:
             buf = fields['status']
@@ -1082,8 +1081,7 @@ class BridgeConnection(object):
         if (config.required_fas_group is not None and
             not fas_user_is_in_group(config, user_name,
                                      config.required_fas_group)):
-            raise InvalidRequestError('User %s not allowed to connect'
-                                      % repr(user_name))
+            raise InvalidRequestError('User {0!s} not allowed to connect'.format(repr(user_name)))
 
         client_buf = double_tls.OuterBuffer(client_sock)
         server_buf = double_tls.OuterBuffer(server_sock)
@@ -1128,8 +1126,8 @@ class BridgeConnection(object):
         buf = proxy.stored_read(utils.u32_size)
         client_version = utils.u32_unpack(buf)
         if client_version != utils.protocol_version:
-            raise InvalidRequestError('Unknown protocol version %d' %
-                                      client_version)
+            raise InvalidRequestError('Unknown protocol version {0:d}'.format(
+                                      client_version))
         try:
             self.request_fields = utils.read_fields(proxy.stored_read)
         except utils.InvalidFieldsError, e:
@@ -1323,7 +1321,7 @@ def main():
                 client_listen_sock = \
                     create_listen_sock(config, config.client_listen_port)
             except nss.error.NSPRError, e:
-                logging.error('NSPR error: %s' % str(e))
+                logging.error('NSPR error: {0!s}'.format(str(e)))
                 sys.exit(1)
             except BridgeError, e:
                 logging.error(str(e))

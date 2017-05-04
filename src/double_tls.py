@@ -159,10 +159,10 @@ class _ForwardingBuffer(object):
             buf_2._prepare_poll(poll_descs)
 
             _debug('Poll: %s',
-                   ', '.join(['%s:%s' % (_id(o), v)
+                   ', '.join(['{0!s}:{1!s}'.format(_id(o), v)
                               for (o, v) in poll_descs.iteritems()]))
             _nspr_poll(poll_descs, nss.io.PR_INTERVAL_NO_TIMEOUT)
-            _debug('-> %s', ', '.join(['%s:%s' % (_id(o), v)
+            _debug('-> %s', ', '.join(['{0!s}:{1!s}'.format(_id(o), v)
                                        for (o, v) in poll_descs.iteritems()]))
 
             # Handle I/O errors.
@@ -675,7 +675,7 @@ class DoubleTLSClient(object):
             self.__inner.force_handshake()
             self.peercert = self.__inner.get_peer_certificate()
             assert self.peercert is not None
-            logging.info('Connection from %s' % repr(self.peercert.subject))
+            logging.info('Connection from {0!s}'.format(repr(self.peercert.subject)))
         except:
             self.__inner.close()
             self.__inner = None

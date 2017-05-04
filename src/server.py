@@ -195,7 +195,7 @@ class ServersConnection(object):
         '''
         v = self.__outer_fields.get(key)
         if required and v is None:
-            raise InvalidRequestError('Required outer field %s missing' % key)
+            raise InvalidRequestError('Required outer field {0!s} missing'.format(key))
         return v
 
     def safe_outer_field(self, key, filename=False, **kwargs):
@@ -207,7 +207,7 @@ class ServersConnection(object):
         '''
         v = self.outer_field(key, **kwargs)
         if v is not None and not utils.string_is_safe(v, filename):
-            raise InvalidRequestError('Field %s has unsafe value' % repr(key))
+            raise InvalidRequestError('Field {0!s} has unsafe value'.format(repr(key)))
         return v
 
     def outer_field_bool(self, key):
@@ -236,7 +236,7 @@ class ServersConnection(object):
         '''
         v = self.__inner_fields.get(key)
         if required and v is None:
-            raise InvalidRequestError('Required inner field %s missing.' % key)
+            raise InvalidRequestError('Required inner field {0!s} missing.'.format(key))
         return v
 
     def safe_inner_field(self, key, **kwargs):
@@ -247,7 +247,7 @@ class ServersConnection(object):
         '''
         v = self.inner_field(key, **kwargs)
         if v is not None and not utils.string_is_safe(v):
-            raise InvalidRequestError('Field %s has unsafe value' % repr(key))
+            raise InvalidRequestError('Field {0!s} has unsafe value'.format(repr(key)))
         return v
 
     def read_request(self):
@@ -426,7 +426,7 @@ class ServersConnection(object):
         try:
             fields = utils.read_fields(reader.read)
         except utils.InvalidFieldsError, e:
-            raise InvalidRequestError('Invalid response format: %s' % str(e))
+            raise InvalidRequestError('Invalid response format: {0!s}'.format(str(e)))
         if not reader.verify_64B_hmac_authenticator():
             raise InvalidRequestError('Subrequest header authentication failed')
         return fields
@@ -750,7 +750,7 @@ class RPMFile(object):
             self.__header = ts.hdrFromFdno(fd.fileno())
         except rpm.error, e:
             self.status = errors.CORRUPT_RPM
-            raise RPMFileError('Error reading RPM header: %s' % str(e))
+            raise RPMFileError('Error reading RPM header: {0!s}'.format(str(e)))
 
         rpm_id = (self.__header[rpm.RPMTAG_NAME],
                   self.__header[rpm.RPMTAG_EPOCH],
@@ -782,8 +782,8 @@ class RPMFile(object):
             if field_value is None:
                 continue
             if not utils.string_is_safe(field_value):
-                raise InvalidRequestError('Field %s has unsafe value' %
-                                          repr(field))
+                raise InvalidRequestError('Field {0!s} has unsafe value'.format(
+                                          repr(field)))
             if (tag == rpm.RPMTAG_ARCH and
                 self.__header[rpm.RPMTAG_SOURCEPACKAGE] == 1):
                 rpm_value = 'src'
@@ -831,8 +831,8 @@ class SigningContext(object):
         self.__key = key
         self.__key_passphrase = key_passphrase
         self.__argv = ['--define', '_signature gpg',
-                       '--define', '_gpg_name %s' % key.fingerprint,
-                       '--define', '__gpg %s' % settings.gnupg_bin]
+                       '--define', '_gpg_name {0!s}'.format(key.fingerprint),
+                       '--define', '__gpg {0!s}'.format(settings.gnupg_bin)]
         field_value = conn.outer_field_bool('v3-signature')
         if field_value is not None and field_value:
             # Add --force-v3-sigs to the value in redhat-rpm-config-9.0.3-3.fc10
@@ -880,13 +880,11 @@ class SigningContext(object):
         except pexpect.ExceptionPexpect, e:
             msg = str(e).splitlines()[0] # We don't want all of the pexpect dump
             rpm.status = errors.UNKNOWN_ERROR
-            raise RPMFileError('Error signing %s: %s, output %s' %
-                               (rpm.rpm_id, msg, child.before))
+            raise RPMFileError('Error signing {0!s}: {1!s}, output {2!s}'.format(rpm.rpm_id, msg, child.before))
         if (not os.WIFEXITED(child.status) or
             os.WEXITSTATUS(child.status) != 0 or answer not in [0, 1]):
             rpm.status = errors.UNKNOWN_ERROR
-            raise RPMFileError('Error signing %s: status %d, output %s'
-                               % (rpm.rpm_id, child.status, child.before))
+            raise RPMFileError('Error signing {0!s}: status {1:d}, output {2!s}'.format(rpm.rpm_id, child.status, child.before))
         logging.info('Signed RPM %s with key %s', rpm.rpm_id, self.__key.name)
 
  # Request handlers
@@ -995,29 +993,29 @@ def cmd_new_key(db, conn):
     admin = db.query(User).filter_by(name=admin_name).first()
     if admin is None:
         conn.send_error(errors.USER_NOT_FOUND)
-    key_attrs = ('Key-Type: %s\n' % conn.config.gnupg_key_type +
-                 'Key-Length: %d\n' % conn.config.gnupg_key_length +
-                 'Key-Usage: %s\n' % conn.config.gnupg_key_usage)
+    key_attrs = ('Key-Type: {0!s}\n'.format(conn.config.gnupg_key_type) +
+                 'Key-Length: {0:d}\n'.format(conn.config.gnupg_key_length) +
+                 'Key-Usage: {0!s}\n'.format(conn.config.gnupg_key_usage))
     if conn.config.gnupg_subkey_type is not None:
-        key_attrs += ('Subkey-Type: %s\n' % conn.config.gnupg_subkey_type +
-                      'Subkey-Length: %d\n' % conn.config.gnupg_subkey_length)
+        key_attrs += ('Subkey-Type: {0!s}\n'.format(conn.config.gnupg_subkey_type) +
+                      'Subkey-Length: {0:d}\n'.format(conn.config.gnupg_subkey_length))
     key_passphrase = utils.random_passphrase(conn.config.passphrase_length)
-    key_attrs += 'Passphrase: %s\n' % key_passphrase
+    key_attrs += 'Passphrase: {0!s}\n'.format(key_passphrase)
     name = conn.safe_outer_field('name-real')
     if name is None:
         name = key_name
-    key_attrs += 'Name-Real: %s\n' % name
+    key_attrs += 'Name-Real: {0!s}\n'.format(name)
     name = conn.safe_outer_field('name-comment')
     if name is not None:
-        key_attrs += 'Name-Comment: %s\n' % name
+        key_attrs += 'Name-Comment: {0!s}\n'.format(name)
     name = conn.safe_outer_field('name-email')
     if name is not None:
-        key_attrs += 'Name-Email: %s\n' % name
+        key_attrs += 'Name-Email: {0!s}\n'.format(name)
     expire = conn.safe_outer_field('expire-date')
     if expire is not None:
         if not utils.yyyy_mm_dd_is_valid(expire):
             raise InvalidRequestError('Invalid expiration date')
-        key_attrs += 'Expire-Date: %s\n' % expire
+        key_attrs += 'Expire-Date: {0!s}\n'.format(expire)
     user_passphrase = conn.inner_field('passphrase', required=True)
 
     env = dict(os.environ) # Shallow copy, uses our $GNUPGHOME
@@ -1157,12 +1155,12 @@ def cmd_grant_key_access(db, conn):
     try:
         if server_binding is not None:
             server_binding = json.loads(server_binding)
-            logging.info('Server binding requested: %s' % server_binding)
+            logging.info('Server binding requested: {0!s}'.format(server_binding))
         if client_binding is not None:
             client_binding = json.loads(client_binding)
-            logging.info('Client binding used: %s' % client_binding)
+            logging.info('Client binding used: {0!s}'.format(client_binding))
     except Exception as ex:
-        raise InvalidRequestError('Unable to decode binding args: %s' % ex)
+        raise InvalidRequestError('Unable to decode binding args: {0!s}'.format(ex))
     a2 = KeyAccess(access.key, user, key_admin=False)
     try:
         a2.set_passphrase(conn.config, key_passphrase=key_passphrase,
@@ -1204,7 +1202,7 @@ def cmd_change_key_expiration(db, conn):
     subkey = conn.safe_outer_field('subkey')
     states = []
     if subkey is not None:
-        keyarg = 'KEY %d' % int(subkey)
+        keyarg = 'KEY {0:d}'.format(int(subkey))
         states.extend([(gpgme.STATUS_GET_LINE, 'keyedit.prompt', keyarg),
                        (gpgme.STATUS_GOT_IT, None, None)])
     states.extend([(gpgme.STATUS_GET_LINE, 'keyedit.prompt', 'EXPIRE'),
@@ -1236,12 +1234,12 @@ def cmd_change_passphrase(db, conn):
     try:
         if server_binding is not None:
             server_binding = json.loads(server_binding)
-            logging.info('Server binding requested: %s' % server_binding)
+            logging.info('Server binding requested: {0!s}'.format(server_binding))
         if client_binding is not None:
             client_binding = json.loads(client_binding)
-            logging.info('Client binding used: %s' % client_binding)
+            logging.info('Client binding used: {0!s}'.format(client_binding))
     except Exception as ex:
-        raise InvalidRequestError('Unable to decode binding args: %s' % ex)
+        raise InvalidRequestError('Unable to decode binding args: {0!s}'.format(ex))
     access.set_passphrase(conn.config, key_passphrase=key_passphrase,
                           user_passphrase=new_passphrase,
                           bind_params=server_binding)
@@ -1344,7 +1342,7 @@ def cmd_sign_ostree(db, conn):
     os.mkdir(os.path.join(ostree_path, 'objects', file_hash[:2]))
     shutil.copyfile(conn.payload_file.name,
                     os.path.join(ostree_path, 'objects', file_hash[:2],
-                                 '%s.commit' % file_hash[2:]))
+                                 '{0!s}.commit'.format(file_hash[2:])))
     try:
         data = server_common.call_ostree_helper(['get-data', ostree_path,
                                                  file_hash])
@@ -1368,7 +1366,7 @@ def cmd_sign_ostree(db, conn):
                                           file_hash],
                                          stdin=base64.b64encode(signature_file.read()))
         with open(os.path.join(ostree_path, 'objects', file_hash[:2],
-                               '%s.commitmeta' % file_hash[2:])) as metafile:
+                               '{0!s}.commitmeta'.format(file_hash[2:]))) as metafile:
             conn.send_reply_header(errors.OK, {})
             conn.send_reply_payload_from_file(metafile)
     finally:
@@ -1382,7 +1380,7 @@ def cmd_sign_container(db, conn):
 
     checksum = hashlib.sha256(conn.payload_file.read()).hexdigest()
 
-    docker_manifest_digest = 'sha256:%s' % checksum
+    docker_manifest_digest = 'sha256:{0!s}'.format(checksum)
     docker_reference = conn.safe_outer_field('docker-reference')
 
     # github.com/containers/image/signature/signature.go#51
@@ -1397,7 +1395,7 @@ def cmd_sign_container(db, conn):
             }
         },
         'optional': {
-            'creator': 'Sigul %s' % settings.version,
+            'creator': 'Sigul {0!s}'.format(settings.version),
             'timestamp': int(time.time())
         }
     }

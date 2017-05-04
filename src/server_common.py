@@ -356,7 +356,7 @@ def gpg_edit_key(config, fingerprint, input_states, ignored_states):
                 errors.append(error)
                 raise error
             else:
-                os.write(in_fd, '%s\n' % answer)
+                os.write(in_fd, '{0!s}\n'.format(answer))
 
     # We are done setting everything up... Now let's do this
     ctx = _gpg_open(config)

@@ -76,8 +76,7 @@ class ClientConfiguration(utils.KojiConfiguration, utils.NSSConfiguration,
 def safe_string(s):
     '''Raise ClientError if s is not a safe string, otherwise return s.'''
     if not utils.string_is_safe(s):
-        raise ClientError('\'%s\' (%s) contains prohibited characters' %
-                          (s, repr(s)))
+        raise ClientError('\'{0!s}\' ({1!s}) contains prohibited characters'.format(s, repr(s)))
     return s
 
 class ClientsConnection(object):
@@ -201,16 +200,15 @@ class ClientsConnection(object):
             self.__response_fields = \
                 utils.read_fields(self.__reply_header_reader.read)
         except utils.InvalidFieldsError, e:
-            raise InvalidResponseError('Invalid response format: %s' % str(e))
+            raise InvalidResponseError('Invalid response format: {0!s}'.format(str(e)))
         if not self.__reply_header_reader.verify_64B_hmac_authenticator():
             raise InvalidResponseError('Header authentication failed')
         if error_code != errors.OK and error_code not in expected_errors:
             message = self.response_field('message')
             if message is not None:
-                raise ClientError('Error: %s: %s' %
-                                  (errors.message(error_code), message))
+                raise ClientError('Error: {0!s}: {1!s}'.format(errors.message(error_code), message))
             else:
-                raise ClientError('Error: %s' % (errors.message(error_code)))
+                raise ClientError('Error: {0!s}'.format((errors.message(error_code))))
         buf = self.__client.outer_read(utils.u32_size)
         self.__payload_size = utils.u32_unpack(buf)
         if no_payload:
@@ -303,7 +301,7 @@ class ClientsConnection(object):
         try:
             fields = utils.read_fields(reader.read)
         except utils.InvalidFieldsError, e:
-            raise InvalidResponseError('Invalid response format: %s' % str(e))
+            raise InvalidResponseError('Invalid response format: {0!s}'.format(str(e)))
         if not reader.verify_64B_hmac_authenticator():
             raise InvalidResponseError('Subreply header authentication failed')
         return fields
@@ -441,11 +439,10 @@ class SignRPMArgumentExaminer(object):
             try:
                 rpm_file = open(arg, 'rb')
             except IOError, e:
-                raise ClientError('Error opening %s: %s' % (arg, e.strerror))
+                raise ClientError('Error opening {0!s}: {1!s}'.format(arg, e.strerror))
             # Count whole blocks, that's what the bridge and server do.
             if os.fstat(rpm_file.fileno()).st_size == 0:
-                raise ClientError('Error: Cannot sign zero-length RPM file %s'
-                                  % arg)
+                raise ClientError('Error: Cannot sign zero-length RPM file {0!s}'.format(arg))
             size = utils.file_size_in_blocks(rpm_file)
         else:
             # Don't import koji before initializing ClientsConnection!  The rpm
@@ -464,7 +461,7 @@ class SignRPMArgumentExaminer(object):
             except (utils.KojiError, koji.GenericError), e:
                 raise ClientError(str(e))
             if rpm is None:
-                raise ClientError('%s does not exist in Koji' % arg)
+                raise ClientError('{0!s} does not exist in Koji'.format(arg))
             fields['rpm-name'] = safe_string(rpm['name'])
             epoch = rpm['epoch']
             if epoch is None:
@@ -553,8 +550,8 @@ def cmd_user_info(conn, args):
     conn.send_inner({'password': password})
     conn.read_response(no_payload=True)
 
-    print ('Administrator: %s' %
-           bool_to_text(conn.response_field_bool('admin')))
+    print ('Administrator: {0!s}'.format(
+           bool_to_text(conn.response_field_bool('admin'))))
 
     # FIXME: list accessible keys?
 
@@ -609,8 +606,8 @@ def cmd_key_user_info(conn, args):
     if error_code == errors.KEY_USER_NOT_FOUND:
         print 'No access defined'
     else:
-        print ('Access defined, key administrator: %s' %
-               bool_to_text(conn.response_field_bool('key-admin')))
+        print ('Access defined, key administrator: {0!s}'.format(
+               bool_to_text(conn.response_field_bool('key-admin'))))
 
 def cmd_modify_key_user(conn, args):
     p2 = optparse.OptionParser(usage='%prog modify-key-user [options] user key',
@@ -701,7 +698,7 @@ def cmd_import_key(conn, args):
     try:
         f = open(args[1], 'rb')
     except IOError, e:
-        raise ClientError('Error opening %s: %s' % (args[1], e.strerror))
+        raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
 
     try:
         fields = {'key': safe_string(args[0])}
@@ -791,11 +788,11 @@ def cmd_grant_key_access(conn, args):
     try:
         client_binding = utils.bind_list_to_object(o2.client_binding_methods)
     except ValueError as ex:
-        p2.error('Error in client binding config: %s' % ex)
+        p2.error('Error in client binding config: {0!s}'.format(ex))
     try:
         server_binding = utils.bind_list_to_object(o2.server_binding_methods)
     except ValueError as ex:
-        p2.error('Error in server binding config: %s' % ex)
+        p2.error('Error in server binding config: {0!s}'.format(ex))
 
     passphrase = read_key_passphrase(conn.config)
     if o2.passphrase_file:
@@ -914,11 +911,11 @@ def cmd_change_passphrase(conn, args):
     try:
         client_binding = utils.bind_list_to_object(o2.client_binding_methods)
     except ValueError as ex:
-        p2.error('Error in client binding config: %s' % ex)
+        p2.error('Error in client binding config: {0!s}'.format(ex))
     try:
         server_binding = utils.bind_list_to_object(o2.server_binding_methods)
     except ValueError as ex:
-        p2.error('Error in server binding config: %s' % ex)
+        p2.error('Error in server binding config: {0!s}'.format(ex))
 
     passphrase = read_key_passphrase(conn.config)
     if o2.passphrase_file:
@@ -959,7 +956,7 @@ def cmd_sign_text(conn, args):
     try:
         f = open(args[1])
     except IOError, e:
-        raise ClientError('Error opening %s: %s' % (args[1], e.strerror))
+        raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
 
     try:
         conn.connect('sign-text', {'key': safe_string(args[0])})
@@ -974,7 +971,7 @@ def cmd_sign_text(conn, args):
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError, e:
-        raise ClientError('Error writing to %s: %s' % (o2.output, e.strerror))
+        raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
 
 def cmd_sign_data(conn, args):
     p2 = optparse.OptionParser(usage='%prog sign-data [options] input_file',
@@ -993,7 +990,7 @@ def cmd_sign_data(conn, args):
     try:
         f = open(args[1], 'rb')
     except IOError, e:
-        raise ClientError('Error opening %s: %s' % (args[1], e.strerror))
+        raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
 
     try:
         conn.connect('sign-data', {'key': safe_string(args[0]),
@@ -1009,7 +1006,7 @@ def cmd_sign_data(conn, args):
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError, e:
-        raise ClientError('Error writing to %s: %s' % (o2.output, e.strerror))
+        raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
 
 def call_git(args, stdin=None, ignore_error=False, strip_newline=False):
     cmd = ['git']
@@ -1043,7 +1040,7 @@ def cmd_sign_git_tag(conn, args):
 
     passphrase = read_key_passphrase(conn.config)
 
-    unsigned_oid = call_git(['show-ref', '-s', 'refs/tags/%s' % args[1]],
+    unsigned_oid = call_git(['show-ref', '-s', 'refs/tags/{0!s}'.format(args[1])],
                             strip_newline=True)
     unsigned_obj = call_git(['cat-file', '-p', unsigned_oid])
 
@@ -1056,7 +1053,7 @@ def cmd_sign_git_tag(conn, args):
     signed_obj = unsigned_obj + signature
     signed_oid = call_git(['hash-object', '-t', 'tag', '-w', '--stdin'],
                           stdin=signed_obj, strip_newline=True)
-    call_git(['update-ref', 'refs/tags/%s' % args[1], signed_oid,
+    call_git(['update-ref', 'refs/tags/{0!s}'.format(args[1]), signed_oid,
               unsigned_oid])
 
 def cmd_sign_container(conn, args):
@@ -1075,7 +1072,7 @@ def cmd_sign_container(conn, args):
     try:
         f = open(args[1], 'r')
     except IOError, e:
-        raise ClientError('Error opening %s: %s' % (args[1], e.strerror))
+        raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
 
     try:
         conn.connect('sign-container', {'key': safe_string(args[0]),
@@ -1091,7 +1088,7 @@ def cmd_sign_container(conn, args):
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError, e:
-        raise ClientError('Error writing to %s: %s' % (o2.output, e.strerror))
+        raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
 
 def cmd_sign_ostree(conn, args):
     p2 = optparse.OptionParser(usage='%prog sign-ostree [options] key hash input_file',
@@ -1108,7 +1105,7 @@ def cmd_sign_ostree(conn, args):
     try:
         f = open(args[2], 'rb')
     except IOError, e:
-        raise ClientError('Error opening %s: %s' % (args[1], e.strerror))
+        raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
 
     try:
         conn.connect('sign-ostree', {'key': safe_string(args[0]),
@@ -1124,7 +1121,7 @@ def cmd_sign_ostree(conn, args):
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError, e:
-        raise ClientError('Error writing to %s: %s' % (o2.output, e.strerror))
+        raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
 
 def cmd_sign_rpm(conn, args):
     p2 = optparse.OptionParser(usage='%prog sign-rpm [options] '
@@ -1191,8 +1188,7 @@ def cmd_sign_rpm(conn, args):
         try:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
         except IOError, e:
-            raise ClientError('Error writing to %s: %s' %
-                              (o2.output, e.strerror))
+            raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
     else:
         conn.read_empty_unauthenticated_payload()
 
@@ -1238,7 +1234,7 @@ class SignRPMsRequestThread(utils.WorkerThread):
                 # Round up to 32k for good measure.
                 size = (size + 32767) / 32768 * 32768
                 if size > MAX_SIGN_RPMS_PAYLOAD_SIZE:
-                    raise ClientError('%s is too large' % arg)
+                    raise ClientError('{0!s} is too large'.format(arg))
             except ClientError, e:
                 self.results[arg_idx] = str(e)
                 continue
@@ -1302,7 +1298,7 @@ class SignRPMsReplyThread(utils.WorkerThread):
             if arg_idx > len(self.__args):
                 raise InvalidResponseError('Invalid subreply id')
             if arg_idx in self.results:
-                raise InvalidResponseError('Duplicate subreply id %d' % arg_idx)
+                raise InvalidResponseError('Duplicate subreply id {0:d}'.format(arg_idx))
 
             try:
                 buf = fields['status']
@@ -1317,7 +1313,7 @@ class SignRPMsReplyThread(utils.WorkerThread):
             if error_code != errors.OK:
                 message = fields.get('message')
                 if message is not None:
-                    msg = '%s: %s' % (errors.message(error_code), message)
+                    msg = '{0!s}: {1!s}'.format(errors.message(error_code), message)
                 else:
                     msg = errors.message(error_code)
                 self.results[arg_idx] = msg
@@ -1335,8 +1331,7 @@ class SignRPMsReplyThread(utils.WorkerThread):
                         self.__conn.write_subpayload_to_file(nss_key, f)
                     utils.write_new_file(output_path, writer)
                 except IOError, e:
-                    raise ClientError('Error writing to %s: %s' %
-                                      (output_path, e.strerror))
+                    raise ClientError('Error writing to {0!s}: {1!s}'.format(output_path, e.strerror))
             else:
                 self.__conn.read_empty_subpayload(nss_key, ignore_auth=True)
             self.results[arg_idx] = None # Mark arg_idx as succesful
@@ -1374,8 +1369,7 @@ def cmd_sign_rpms(conn, args):
             os.mkdir(o2.output)
         except OSError, e:
             if e.errno != errno.EEXIST or not os.path.isdir(o2.output):
-                raise ClientError('Error creating %s: %s' %
-                                  (o2.output, e.strerror))
+                raise ClientError('Error creating {0!s}: {1!s}'.format(o2.output, e.strerror))
     elif not o2.koji_only:
         p2.error('--output is mandatory without --koji-only')
 
@@ -1506,7 +1500,7 @@ def handle_global_options():
     '''
     parser = optparse.OptionParser(usage='%prog [options] command '
                                    '[command-args...]',
-                                   version='%%prog %s' % (settings.version),
+                                   version='%prog {0!s}'.format((settings.version)),
                                    description='A signing server client')
     parser.add_option('--help-commands', action='store_true',
                       help='List supported commands')
@@ -1525,12 +1519,12 @@ def handle_global_options():
     if options.help_commands:
         # FIXME: order of the commands
         for (name, (_, help_string)) in command_handlers.iteritems():
-            print '%-20s%s' % (name, help_string)
+            print '{0:<20!s}{1!s}'.format(name, help_string)
         sys.exit()
     if len(args) < 1:
         parser.error('missing command, see --help-commands')
     if args[0] not in command_handlers:
-        parser.error('unknown command %s' % args[0])
+        parser.error('unknown command {0!s}'.format(args[0]))
 
     logging.basicConfig(format='%(levelname)s: %(message)s',
                         level=utils.logging_level_from_options(options))

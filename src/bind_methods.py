@@ -47,8 +47,7 @@ def tpm_bind(value, pcrs=None):
                             stderr=subprocess.PIPE)
     (stdout, stderr) = proc.communicate(value)
     if proc.returncode != 0:
-        logging.error('Unable to seal with TPM. RC: %i, stdout: %s, stderr: %s'
-                      % (proc.returncode, stdout, stderr))
+        logging.error('Unable to seal with TPM. RC: {0:d}, stdout: {1!s}, stderr: {2!s}'.format(proc.returncode, stdout, stderr))
         return None, None
     return stdout, None
 
@@ -98,10 +97,10 @@ def pkcs11_bind(value, token):
     global pkcs11_config
 
     if token not in pkcs11_config['tokens']:
-        logging.error('Binding attempted with unknown pkcs11 token %s' % token)
+        logging.error('Binding attempted with unknown pkcs11 token {0!s}'.format(token))
         return None, None
 
-    pubkey = pkcs11_config['%s_pubkey' % token]
+    pubkey = pkcs11_config['{0!s}_pubkey'.format(token)]
 
     cmd = ['openssl', 'smime', '-encrypt', '-aes-256-cbc', pubkey]
     proc = subprocess.Popen(cmd,
@@ -124,16 +123,15 @@ def pkcs11_unbind(value, token):
     global pkcs11_config
 
     if token not in pkcs11_config['tokens']:
-        logging.error('Unbinding attempted with unknown pkcs11 token %s'
-                      % token)
+        logging.error('Unbinding attempted with unknown pkcs11 token {0!s}'.format(token))
         return None
 
-    if ('%s_privkey' % token) not in pkcs11_config:
-        logging.info('Unbinding attempted with pubonly token %s' % token)
+    if ('{0!s}_privkey'.format(token)) not in pkcs11_config:
+        logging.info('Unbinding attempted with pubonly token {0!s}'.format(token))
         return None
 
-    privkey = pkcs11_config['%s_privkey' % token]
-    pin = pkcs11_config['%s_pin' % token]
+    privkey = pkcs11_config['{0!s}_privkey'.format(token)]
+    pin = pkcs11_config['{0!s}_pin'.format(token)]
 
     value = pin + '\n' + value
 
@@ -156,16 +154,16 @@ def pkcs11(tokens, **config):
     tokens = map(str.strip, tokens.split(','))
     for token in tokens:
         # This is a lazy way of checking: it will just throw KeyError
-        config['%s_pubkey' % token]
-        assert 'pkcs11:' not in config['%s_pubkey' % token]
+        config['{0!s}_pubkey'.format(token)]
+        assert 'pkcs11:' not in config['{0!s}_pubkey'.format(token)]
 
-        if ('%s_privkey' % token) in config:
-            assert 'pkcs11:' in config['%s_privkey' % token]
+        if ('{0!s}_privkey'.format(token)) in config:
+            assert 'pkcs11:' in config['{0!s}_privkey'.format(token)]
 
-            if ('%s_pin' % token) not in config:
-                config['%s_pin' % token] = getpass(
-                    'PIN code for token "%s": ' % token)
-            config['%s_pin' % token]
+            if ('{0!s}_pin'.format(token)) not in config:
+                config['{0!s}_pin'.format(token)] = getpass(
+                    'PIN code for token "{0!s}": '.format(token))
+            config['{0!s}_pin'.format(token)]
 
     global pkcs11_config
     # We primarily do the split here so that we fail early if required
