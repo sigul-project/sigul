@@ -253,28 +253,20 @@ def koji_connect(koji_config, authenticate, proxyuser=None):
     # initialize nss with our certificate database.
     import koji
 
-    kwargs = {}
-    kwargs['krb_rdns'] = koji_config.get('krb_rdns', 'no').lower() in ('yes',
-                                                                       'true')
+    opts = {}
+    opts['krb_rdns'] = koji_config.get('krb_rdns', 'no').lower() in ('yes',
+                                                                     'true')
 
-    session = koji.ClientSession(koji_config['server'], **kwargs)
+    session = koji.ClientSession(koji_config['server'], opts=opts)
     if authenticate:
         if koji_config['authtype'] == 'ssl':
             session.ssl_login(koji_config['cert'], None,
                               koji_config.get('serverca'), proxyuser=proxyuser)
         elif koji_config['authtype'] == 'kerberos':
             kwargs = {}
-            if 'realm' not in config:
-                raise KojiError('Missing realm option in koji config for ' +
-                                'instance %s' % instance)
-
             for opt in ('principal', 'keytab', 'ccache'):
                 if opt in koji_config:
                     kwargs[opt] = koji_config[opt]
-
-            # Workaround for Koji's inconsistency with proxyuser
-            # (Needs to be adjusted when sigul gets krb5 itself)
-            proxyuser = '%s@%s' % (proxyuser, koji_config['realm'])
 
             session.krb_login(proxyuser=proxyuser, **kwargs)
     try:
