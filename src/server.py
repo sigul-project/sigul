@@ -25,7 +25,6 @@ import json
 import hashlib
 import logging
 import os
-import shutil
 import signal
 import socket
 import struct
