@@ -1,3 +1,6 @@
+Changes in version 0.207:
+- Removed workaround for koji proxyuser inconsistency
+
 Changes in version 0.206:
 - Removed requirement for koji serverca option
 - Added version to generated container signature

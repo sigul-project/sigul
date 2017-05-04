@@ -2,6 +2,9 @@
 
 	* src/utils.py: Remove workaround for koji inconsistency
 
+	* config.ac: Release 0.207
+	* NEWS: Update
+
 2017-05-03  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/utils.py: Add workaround for Koji inconsistency with proxyuser
