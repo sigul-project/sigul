@@ -1472,7 +1472,6 @@ command_handlers = {
                       'access'),
     'modify-key-user': (cmd_modify_key_user, 'Modify user\'s key access'),
     'list-keys': (cmd_list_keys, 'List keys'),
-    'modify-key': (cmd_modify_key, 'Modify a key'),
     'new-key': (cmd_new_key, 'Add a key'),
     'import-key': (cmd_import_key, 'Import a key'),
     'delete-key': (cmd_delete_key, 'Delete a key'),
