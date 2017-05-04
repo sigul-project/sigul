@@ -1428,7 +1428,7 @@ def cmd_sign_rpms(conn, args):
         for idx in xrange(len(args)):
             if idx not in results:
                 results[idx] = 'No reply from server received'
-    if any([v is not None for v in results.itervalues()]):
+    if any(v is not None for v in results.itervalues()):
         for i in sorted(results.keys()):
             if results[i] is not None:
                 logging.error('Error signing %s: %s', args[i], results[i])
