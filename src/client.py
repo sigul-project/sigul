@@ -1331,7 +1331,7 @@ class SignRPMsReplyThread(utils.WorkerThread):
                 output_path = os.path.join(self.__o2.output,
                                            os.path.basename(arg))
                 try:
-                    writer = lambda f: \
+                    def writer(f):
                         self.__conn.write_subpayload_to_file(nss_key, f)
                     utils.write_new_file(output_path, writer)
                 except IOError, e:
