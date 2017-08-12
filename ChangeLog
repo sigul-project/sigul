@@ -1,3 +1,8 @@
+2017-08-12  Patrick Uiterwijk  <puiterwijk@redhat.com>
+
+	* src/server.py: Abort request if RPMs could not be parsed
+
+
 2017-05-04  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/utils.py: Remove workaround for koji inconsistency
