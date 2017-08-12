@@ -347,6 +347,9 @@ def nss_init(config):
     nss.ssl.set_ssl_default_option(nss.ssl.SSL_V2_COMPATIBLE_HELLO, False)
     min_tls = nss.ssl.ssl_library_version_from_name(config.nss_min_tls)
     max_tls = nss.ssl.ssl_library_version_from_name(config.nss_max_tls)
+    tls12 = nss.ssl.ssl_library_version_from_name('tls1.2')
+    if min_tls < tls12:
+        raise ValueError('Min version of TLS must be at least TLS1.2')
     nss.ssl.set_default_ssl_version_range(min_tls, max_tls)
     nss.ssl.config_server_session_id_cache()
 
