@@ -222,7 +222,7 @@ AT_CHECK([psql -h pgdb.sigul.test -U koji -w -f $abs_srcdir/tests/koji.data.sql]
 AT_CHECK([SOCKET_WRAPPER_DEFAULT_IFACE=13 httpd -f $(pwd)/koji/httpd.conf])
 
 # And do a quick check
-AT_CHECK([curl https://koji.sigul.test/kojihub --cacert ca.pem], , [[Method Not Allowed
+AT_CHECK([curl https://koji.sigul.test/kojihub --insecure --cacert ca.pem], , [[Method Not Allowed
 This is an XML-RPC server. Only POST requests are accepted.]], [ignore])
 
 # And now a more rigourous check of the entire setup so far
