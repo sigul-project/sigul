@@ -1,4 +1,6 @@
 2017-08-21  Patrick Uiterwijk  <puiterwijk@redhat.com>
+	* src/utils: Centralize logging setup
+
 	* doc/protocol-design.txt: Update payload size representations to u64
 	* src/server.py: Implement server-side payload size bump
 	* src/bridge.py: Implement bridge-side payload size bump

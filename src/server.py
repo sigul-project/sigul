@@ -1763,10 +1763,7 @@ def request_handling_child(config):
 def main():
     options = utils.get_daemon_options('A signing server',
                                        '~/.sigul/server.conf')
-    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
-                        level=utils.logging_level_from_options(options),
-                        filename=os.path.join(options.log_dir,
-                                              'sigul_server.log'))
+    utils.setup_logging(options, 'server')
     try:
         config = ServerConfiguration(options.config_file)
     except utils.ConfigurationError, e:

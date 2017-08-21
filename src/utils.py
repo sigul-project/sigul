@@ -126,6 +126,12 @@ def logging_level_from_options(options):
     else: # options.verbose >= 2
         return logging.DEBUG
 
+def setup_logging(options, component):
+    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
+                        level=logging_level_from_options(options),
+                        filename=os.path.join(options.log_dir,
+                                              'sigul_%s.log' % component))
+
 def create_basic_parser(description, default_config_file):
     '''Create a basic optparse parser for a bridge/server component.'''
     parser = optparse.OptionParser(usage='%prog [options]',

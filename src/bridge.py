@@ -1275,10 +1275,7 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
 def main():
     options = utils.get_daemon_options('A signing server bridge',
                                        '~/.sigul/bridge.conf')
-    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
-                        level=utils.logging_level_from_options(options),
-                        filename=os.path.join(options.log_dir,
-                                              'sigul_bridge.log'))
+    utils.setup_logging(options, 'bridge')
     try:
         config = BridgeConfiguration(options.config_file)
     except utils.ConfigurationError, e:
