@@ -1,3 +1,10 @@
+2017-08-21  Patrick Uiterwijk  <puiterwijk@redhat.com>
+	* doc/protocol-design.txt: Update payload size representations to u64
+	* src/server.py: Implement server-side payload size bump
+	* src/bridge.py: Implement bridge-side payload size bump
+	* src/client.py: Implement client-side payload size bump
+	* src/utils.py: Implement generic payload size bump
+
 2017-08-12  Patrick Uiterwijk  <puiterwijk@redhat.com>
 
 	* src/utils.py: Do not allow min-tls to be less than 1.2
