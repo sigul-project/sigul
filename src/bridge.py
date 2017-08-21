@@ -551,7 +551,7 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
                           StringField('rpm-release', optional=True),
                           StringField('rpm-arch', optional=True),
                           Field('rpm-sigmd5', optional=True)),
-                         max_payload=1024*1024*1024)
+                         max_payload=1024*1024*1024*1024)
 
     def __init__(self, conn, dest_queue, subrequest_map, tmp_dir):
         super(SignRPMsReadRequestThread, self). \
@@ -1011,7 +1011,7 @@ request_types = {
     'sign-text': RT((SF('key'),), max_payload=1024*1024*1024),
     'sign-data': RT((SF('key'),
                      BoolField('armor', optional=True)),
-                    max_payload=1024*1024*1024),
+                    max_payload=1024*1024*1024*1024),
     'sign-git-tag': RT((SF('key'),),
                        max_payload=1024*1024*1024),
     'sign-container': RT((SF('key'),
