@@ -205,6 +205,15 @@ def u32_unpack(data):
 
 u32_size = struct.calcsize(_u32_format)
 
+_u64_format = '!Q'
+def u64_pack(v):
+    return struct.pack(_u64_format, v)
+
+def u64_unpack(data):
+    return struct.unpack(_u64_format, data)[0]
+
+u64_size = struct.calcsize(_u64_format)
+
 def koji_read_config(global_config, instance):
     '''Read koji's configuration and verify it, using global_config.
 
@@ -535,13 +544,13 @@ def format_fields(fields):
             raise ValueError('Key name {0!s} too long'.format(key))
         data += u8_pack(len(key))
         data += key
-        if isinstance(value, int):
-            value = u32_pack(value)
-        elif isinstance(value, bool):
+        if isinstance(value, bool):
             if value:
-                value = u32_pack(1)
+                value = u8_pack(1)
             else:
-                value = u32_pack(0)
+                value = u8_pack(0)
+        elif isinstance(value, int):
+            value = u32_pack(value)
         elif not isinstance(value, str):
             raise ValueError('Unknown value type of {0!s}'.format(repr(value)))
         if len(value) > 255:

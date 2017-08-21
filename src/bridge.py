@@ -238,8 +238,8 @@ class BoolField(Field):
 
     def validate(self, value):
         super(BoolField, self).validate(value)
-        if value is not None and (len(value) != utils.u32_size or
-                                  utils.u32_unpack(value) not in (0, 1)):
+        if value is not None and (len(value) != utils.u8_size or
+                                  utils.u8_unpack(value) not in (0, 1)):
             raise InvalidRequestError('Field {0!s} is not a boolean'.format(self.name))
 
 class YYYYMMDDField(Field):
@@ -278,13 +278,13 @@ class RequestHandler(object):
 
     def forward_request_payload(self, conn):
         '''Forward (optionally modify) request payload in conn.'''
-        conn.server_buf.write(utils.u32_pack(conn.request_payload_size))
+        conn.server_buf.write(utils.u64_pack(conn.request_payload_size))
         copy_file_data(conn.server_buf, conn.client_buf,
                        conn.request_payload_size)
 
     def forward_reply_payload(self, conn):
         '''Forward (optionally modify) reply payload in conn.'''
-        conn.client_buf.write(utils.u32_pack(conn.reply_payload_size))
+        conn.client_buf.write(utils.u64_pack(conn.reply_payload_size))
         copy_file_data(conn.client_buf, conn.server_buf,
                        conn.reply_payload_size)
 
@@ -462,7 +462,7 @@ class SignRPMRequestHandler(RequestHandler):
         try:
             (src, payload_size) = urlopen(url)
             try:
-                conn.server_buf.write(utils.u32_pack(payload_size))
+                conn.server_buf.write(utils.u64_pack(payload_size))
                 utils.copy_data(conn.server_buf.write, src.iter_content(4096),
                                 payload_size)
             finally:
@@ -473,7 +473,7 @@ class SignRPMRequestHandler(RequestHandler):
     def forward_reply_payload(self, conn):
         # Zero-length response should happen only on error.
         if (conn.reply_payload_size != 0 and
-            conn.request_fields.get('import-signature') == utils.u32_pack(1)):
+            conn.request_fields.get('import-signature') == utils.u8_pack(1)):
             (fd, self.__rpm.tmp_path) = tempfile.mkstemp(text=False)
             try:
                 tmp_file = os.fdopen(fd, 'w+')
@@ -485,14 +485,14 @@ class SignRPMRequestHandler(RequestHandler):
 
                 self.__rpm.add_signature_to_koji(self.__koji_client)
 
-                if conn.request_fields.get('return-data') != utils.u32_pack(0):
+                if conn.request_fields.get('return-data') != utils.u8_pack(0):
                     payload_size = conn.reply_payload_size
                     src = open(self.__rpm.tmp_path, 'rb')
                 else:
                     payload_size = 0
                     src = None
                 try:
-                    conn.client_buf.write(utils.u32_pack(payload_size))
+                    conn.client_buf.write(utils.u64_pack(payload_size))
                     if src is not None:
                         copy_file_data(conn.client_buf, src, payload_size)
                 finally:
@@ -500,10 +500,10 @@ class SignRPMRequestHandler(RequestHandler):
                         src.close()
             finally:
                 self.__rpm.remove_tmp_path()
-        elif conn.request_fields.get('return-data') != utils.u32_pack(0):
+        elif conn.request_fields.get('return-data') != utils.u8_pack(0):
             super(SignRPMRequestHandler, self).forward_reply_payload(conn)
         else:
-            conn.client_buf.write(utils.u32_pack(0))
+            conn.client_buf.write(utils.u8_pack(0))
 
     def close(self):
         super(SignRPMRequestHandler, self).close()
@@ -593,8 +593,8 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
         logging.info('Subrequest: %s', s)
         client_proxy.stored_read(64) # Ignore value
 
-        buf = self.__conn.client_buf.read(utils.u32_size)
-        payload_size = utils.u32_unpack(buf)
+        buf = self.__conn.client_buf.read(utils.u64_size)
+        payload_size = utils.u64_unpack(buf)
 
         self.__subheader_validator.validate(fields, payload_size)
         rpm = RPMObject(fields, client_proxy.stored_data(), payload_size)
@@ -710,7 +710,7 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
                 (src, payload_size) = urlopen(rpm.request_payload_url)
                 readfn = src.iter_content(4096)
             try:
-                self.__server_buf.write(utils.u32_pack(payload_size))
+                self.__server_buf.write(utils.u64_pack(payload_size))
                 utils.copy_data(self.__server_buf.write, readfn, payload_size)
             finally:
                 src.close()
@@ -831,8 +831,8 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
         server_proxy.stored_read(64) # Ignore value
         rpm.reply_header_data = server_proxy.stored_data()
 
-        buf = self.__server_buf.read(utils.u32_size)
-        rpm.reply_payload_size = utils.u32_unpack(buf)
+        buf = self.__server_buf.read(utils.u64_size)
+        rpm.reply_payload_size = utils.u64_unpack(buf)
         assert rpm.tmp_path is None
         (fd, rpm.tmp_path) = tempfile.mkstemp(text=False, dir=self.__tmp_dir)
         dst = os.fdopen(fd, 'w+')
@@ -884,7 +884,7 @@ class SignRPMsKojiReplyThread(utils.WorkerThread):
         # Zero-length response should happen only on error.
         if (rpm.reply_payload_size != 0 and
             (self.__conn.request_fields.get('import-signature') ==
-             utils.u32_pack(1))):
+             utils.u8_pack(1))):
             rpm.add_signature_to_koji(koji_client)
 
 class SignRPMsSendReplyThread(utils.WorkerThread):
@@ -915,14 +915,14 @@ class SignRPMsSendReplyThread(utils.WorkerThread):
                       utils.readable_fields(rpm.reply_fields))
         self.__conn.client_buf.write(rpm.reply_header_data)
 
-        if self.__conn.request_fields.get('return-data') != utils.u32_pack(0):
+        if self.__conn.request_fields.get('return-data') != utils.u8_pack(0):
             payload_size = rpm.reply_payload_size
             src = open(rpm.tmp_path, 'rb')
         else:
             payload_size = 0
             src = None
         try:
-            self.__conn.client_buf.write(utils.u32_pack(payload_size))
+            self.__conn.client_buf.write(utils.u64_pack(payload_size))
             if src is not None:
                 copy_file_data(self.__conn.client_buf, src, payload_size)
         finally:
@@ -1144,8 +1144,8 @@ class BridgeConnection(object):
             raise InvalidRequestError('Unknown op value')
         self.__handler = rt.handler()
 
-        buf = self.client_buf.read(utils.u32_size) # Not using proxy
-        self.request_payload_size = utils.u32_unpack(buf)
+        buf = self.client_buf.read(utils.u64_size) # Not using proxy
+        self.request_payload_size = utils.u64_unpack(buf)
 
         rt.validator.validate(self.request_fields, self.request_payload_size)
         self.__check_koji_instance_access()
@@ -1190,8 +1190,8 @@ class BridgeConnection(object):
 
     def __forward_reply_payload(self):
         '''Read and forward reply payload, including related metadata.'''
-        buf = self.server_buf.read(utils.u32_size)
-        self.reply_payload_size = utils.u32_unpack(buf)
+        buf = self.server_buf.read(utils.u64_size)
+        self.reply_payload_size = utils.u64_unpack(buf)
         self.__handler.forward_reply_payload(self)
         buf = self.server_buf.read(64)
         self.client_buf.write(buf)

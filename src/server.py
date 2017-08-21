@@ -219,7 +219,7 @@ class ServersConnection(object):
         v = self.__outer_fields.get(key)
         if v is not None:
             try:
-                v = utils.u32_unpack(v)
+                v = utils.u8_unpack(v)
             except struct.error:
                 raise InvalidRequestError('Integer field has incorrect length')
             try:
@@ -273,8 +273,8 @@ class ServersConnection(object):
             raise InvalidRequestError(str(e))
         logging.info('Request: %s', utils.readable_fields(self.__outer_fields))
         header_data = proxy.stored_data()
-        buf = self.__client.outer_read(utils.u32_size)
-        payload_size = utils.u32_unpack(buf)
+        buf = self.__client.outer_read(utils.u64_size)
+        payload_size = utils.u64_unpack(buf)
 
         request_op = self.safe_outer_field('op', required=True)
         if request_op not in request_handlers:
@@ -359,7 +359,7 @@ class ServersConnection(object):
         Valid both for the primary payload and for subreply payloads.
 
         '''
-        self.__client.outer_write(utils.u32_pack(payload_size))
+        self.__client.outer_write(utils.u64_pack(payload_size))
 
     def __send_payload_from_file(self, writer, fd):
         '''Send contents of fd to the client as payload, using writer.
@@ -438,8 +438,8 @@ class ServersConnection(object):
         size to max_size.  Create the temporary file in tmp_dir.
 
         '''
-        buf = self.__client.outer_read(utils.u32_size)
-        payload_size = utils.u32_unpack(buf)
+        buf = self.__client.outer_read(utils.u64_size)
+        payload_size = utils.u64_unpack(buf)
         if payload_size > self.config.max_file_payload_size:
             raise InvalidRequestError('Payload too large')
         if payload_size > max_size:

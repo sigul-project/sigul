@@ -8,7 +8,7 @@ authenticators) also requires a protocol defined at the byte level.
 CONVENTIONS
 -----------
 * All numbers are in network byte order.
-* bool == u32, only 0 and 1 allowed
+* bool == u8, only 0 and 1 allowed
 * strings do not have a trailing NUL unless specified otherwise
   bytes \x00..\x1F, \x7F.. are prohibited
 
@@ -52,11 +52,10 @@ A "header" uses the following format:
 ** u8[L] value
 
 * request: TLS to bridge / from bridge
-** u32 version ID == 0
+** u32 version ID == 1
 ** "header"
-** u32 L payload length
+** u64 L payload length
    The payload length limit is request-specific.
-   FIXME: should be u64?
 ** u8[L] payload
 ** client sends EOF on the outer stream at this point
 ** |TLS: client - server initialized
@@ -67,8 +66,7 @@ A "header" uses the following format:
 ** "header"
 ** u8[64] header auth
    hmac-sha512 of header (including error code), using |header-auth-key
-** u32 L payload length
-   FIXME: should be u64?
+** u64 L payload length
 ** u8[L] payload
 ** u8[64] payload auth
    hmac-sha512 of payload, using |payload-auth-key
@@ -282,8 +280,7 @@ format:
     hmac-sha512 of header, using
     sha-512('\0\0\0\1' || |subrequest-header-auth-key || subrequest number) as
     key
-*** u32 L payload length
-    FIXME: should be u64?
+*** u64 L payload length
 *** u8[L] payload: complete RPM, added by bridge if empty
 *** u8[64] payload auth
     hmac-sha512 of payload, using
@@ -300,8 +297,7 @@ Each subreply has the following format:
 *** u8[64] header auth
     hmac-sha512 of header, using
     sha-512(|subreply-header-auth-key || subrequest number) as key
-*** u32 L payload length
-    FIXME: should be u64?
+*** u64 L payload length
 *** u8[L] payload: signed RPM
     imported into koji by bridge if import-signature
     dropped by bridge if !return-package

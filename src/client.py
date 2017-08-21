@@ -119,7 +119,7 @@ class ClientsConnection(object):
         Valid both for the primary payload and for subrequest payloads.
 
         '''
-        self.__client.outer_write(utils.u32_pack(payload_size))
+        self.__client.outer_write(utils.u64_pack(payload_size))
 
     def __send_payload_from_file(self, writer, fd):
         '''Send contents of fd to the server as payload, using writer.
@@ -209,8 +209,8 @@ class ClientsConnection(object):
                 raise ClientError('Error: {0!s}: {1!s}'.format(errors.message(error_code), message))
             else:
                 raise ClientError('Error: {0!s}'.format((errors.message(error_code))))
-        buf = self.__client.outer_read(utils.u32_size)
-        self.__payload_size = utils.u32_unpack(buf)
+        buf = self.__client.outer_read(utils.u64_size)
+        self.__payload_size = utils.u64_unpack(buf)
         if no_payload:
             if self.__payload_size != 0:
                 raise InvalidResponseError('Unexpected payload in response')
@@ -269,12 +269,15 @@ class ClientsConnection(object):
         Raise InvalidResponseError.
 
         '''
-        v = self.response_field_int(key)
+        v = self.__response_fields.get(key)
         if v is not None:
             try:
+                v = utils.u8_unpack(v)
                 v = { 0: False, 1: True }[v]
             except KeyError:
                 raise InvalidResponseError('Boolean field has invalid value')
+            except struct.error:
+                raise InvalidResponseError('Boolean field has incorrect length')
         return v
 
     def send_subheader(self, fields, nss_key):
@@ -308,8 +311,8 @@ class ClientsConnection(object):
 
     def read_empty_subpayload(self, nss_key, ignore_auth=False):
         '''Read an empty subreply payload authenticated using nss_key.'''
-        buf = self.__client.outer_read(utils.u32_size)
-        if utils.u32_unpack(buf) != 0:
+        buf = self.__client.outer_read(utils.u64_size)
+        if utils.u64_unpack(buf) != 0:
             raise InvalidResponseError('Unexpected payload in subreply')
         if not ignore_auth:
             reader = utils.SHA512HMACReader(self.__client.outer_read, nss_key)
@@ -321,8 +324,8 @@ class ClientsConnection(object):
 
     def write_subpayload_to_file(self, nss_key, f):
         '''Write server's payload to f, authenticate using nss_key.'''
-        buf = self.__client.outer_read(utils.u32_size)
-        payload_size = utils.u32_unpack(buf)
+        buf = self.__client.outer_read(utils.u64_size)
+        payload_size = utils.u64_unpack(buf)
         reader = utils.SHA512HMACReader(self.__client.outer_read, nss_key)
         utils.copy_data(f.write, reader.read, payload_size)
         if not reader.verify_64B_hmac_authenticator():
