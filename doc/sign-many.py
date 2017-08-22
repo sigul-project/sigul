@@ -15,13 +15,13 @@ def sign_rpm(list_file, args, passphrase):
         ret = child.wait()
         if ret != 0:
             sys.exit('Exit status {0:d}'.format(ret))
-        print '{0!s} done'.format(rpm_id)
+        print('{0!s} done'.format(rpm_id))
 
 def sign_rpms(list_file, args, passphrase):
     rpms = [line.rstrip('\n') for line in open(list_file)]
     try:
         os.mkdir('signed')
-    except OSError, e:
+    except OSError as e:
         if e.errno != errno.EEXIST:
             raise
     child = subprocess.Popen(['sigul', '-v', '-v', '--batch', 'sign-rpms',
@@ -31,7 +31,7 @@ def sign_rpms(list_file, args, passphrase):
     ret = child.wait()
     if ret != 0:
         sys.exit('Exit status {0:d}'.format(ret))
-    print 'All done'
+    print('All done')
 
 def main():
     if len(sys.argv) < 2:
