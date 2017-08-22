@@ -1606,6 +1606,8 @@ def handle_global_options():
         version='%prog {0!s}'.format(
             (settings.version)),
         description='A signing server client')
+    parser.add_option('--internal-protocol-version',
+                      help=optparse.SUPPRESS_HELP)
     parser.add_option('--help-commands', action='store_true',
                       help='List supported commands')
     utils.optparse_add_batch_option(parser)
@@ -1619,6 +1621,10 @@ def handle_global_options():
     parser.set_defaults(help_commands=False)
     parser.disable_interspersed_args()
     (options, args) = parser.parse_args()
+
+    if options.internal_protocol_version:
+        # This is only for the test suite. It's a bad idea to use this.
+        utils.protocol_version = int(options.internal_protocol_version)
 
     if options.help_commands:
         # FIXME: order of the commands

@@ -1,0 +1,33 @@
+# Copyright (C) 2017 Red Hat, Inc.  All rights reserved.
+#
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the GNU
+# General Public License v.2.  This program is distributed in the hope that it
+# will be useful, but WITHOUT ANY WARRANTY expressed or implied, including the
+# implied warranties of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.  You should have
+# received a copy of the GNU General Public License along with this program; if
+# not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth
+# Floor, Boston, MA 02110-1301, USA.  Any Red Hat trademarks that are
+# incorporated in the source code or documentation are not subject to the GNU
+# General Public License and may only be used or replicated with the express
+# permission of Red Hat, Inc.
+#
+# Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
+
+m4_define([S_NUM_RPMS], [100])
+
+AT_SETUP([Sign-rpms check])
+
+m4_include([include_setup.at])
+m4_include([include_start.at])
+m4_include([include_importedkey.at])
+
+
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		--internal-protocol-version=0 \
+		list-users], 1, [], [ignore])
+
+
+m4_include([include_cleanup.at])

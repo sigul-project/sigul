@@ -177,6 +177,8 @@ def get_daemon_options(description, default_config_file):
 
     '''
     parser = create_basic_parser(description, default_config_file)
+    parser.add_option('--internal-protocol-vers', help=optparse.SUPPRESS_HELP,
+                      dest='protocol_version')
     parser.add_option('--internal-log-dir', help=optparse.SUPPRESS_HELP,
                       dest='log_dir')
     parser.add_option('--internal-pid-dir', help=optparse.SUPPRESS_HELP,
@@ -187,9 +189,8 @@ def get_daemon_options(description, default_config_file):
                         daemonize=False)
     return optparse_parse_options_only(parser)
 
+
 # Koji utilities
-
-
 class KojiConfiguration(Configuration):
 
     def _add_defaults(self, defaults):
