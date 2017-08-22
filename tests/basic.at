@@ -185,6 +185,19 @@ key
 ])
 
 
+# failed import-key
+AT_CHECK([printf 'rootroot\0imported\0imported-key-pw\0' | \
+ 		sigul -c client/client.conf --batch -v -v \
+		import-key imported-key-failed \
+		"$abs_srcdir/tests/imported-public-key.asc"], 1,, [ignore])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-keys], ,
+[imported-key
+key
+])
+
+
 # modify-key
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \

@@ -377,11 +377,13 @@ def _restore_gnupg_home(config, backup_dir):
     '''Restore config.gnupg_home from a backup in backup_dir.'''
     tmp_dir = tempfile.mkdtemp(prefix=os.path.basename(config.gnupg_home),
                                dir=os.path.dirname(config.gnupg_home))
+    os.rmdir(tmp_dir)
     shutil.copytree(backup_dir, tmp_dir)
     # This is racy.  In the worst case manual recovery is necessary anyway,
     # and backup_dir will be left around if we fail.
     shutil.rmtree(config.gnupg_home)
     os.rename(tmp_dir, config.gnupg_home)
+
 
 def gpg_import_key(config, key_file):
     '''Import a public and secret key from key_file.
