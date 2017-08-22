@@ -1,3 +1,6 @@
+2017-08-22  Patrick Uiterwijk  <puiterwijk@redhat.com>
+	* various: Made python3 compatible
+
 2017-08-21  Patrick Uiterwijk  <puiterwijk@redhat.com>
 	* src/utils: Centralize logging setup
 
