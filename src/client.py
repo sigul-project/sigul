@@ -16,6 +16,8 @@
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 # Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
 
+from __future__ import print_function
+
 import binascii
 import errno
 import json
@@ -386,7 +388,7 @@ def print_list_in_payload(conn, num_field_name):
         if not utils.string_is_safe(e):
             raise InvalidResponseError('Unprintable string in reply from '
                                        'server')
-        print e
+        print(e)
 
 def key_user_add_password_option(p2):
     '''Add options for authenticating an administrator instead of key user.'''
@@ -553,8 +555,8 @@ def cmd_user_info(conn, args):
     conn.send_inner({'password': password})
     conn.read_response(no_payload=True)
 
-    print ('Administrator: {0!s}'.format(
-           bool_to_text(conn.response_field_bool('admin'))))
+    print('Administrator: {0!s}'.format(
+          bool_to_text(conn.response_field_bool('admin'))))
 
     # FIXME: list accessible keys?
 
@@ -607,10 +609,10 @@ def cmd_key_user_info(conn, args):
     error_code = conn.read_response((errors.KEY_USER_NOT_FOUND,),
                                     no_payload=True)
     if error_code == errors.KEY_USER_NOT_FOUND:
-        print 'No access defined'
+        print('No access defined')
     else:
-        print ('Access defined, key administrator: {0!s}'.format(
-               bool_to_text(conn.response_field_bool('key-admin'))))
+        print('Access defined, key administrator: {0!s}'.format(
+              bool_to_text(conn.response_field_bool('key-admin'))))
 
 def cmd_modify_key_user(conn, args):
     p2 = optparse.OptionParser(usage='%prog modify-key-user [options] user key',
@@ -684,7 +686,7 @@ def cmd_new_key(conn, args):
     pubkey = conn.read_payload()
     if not utils.string_is_safe(pubkey.replace('\n', '')):
         raise InvalidResponseError('Public key is not safely printable')
-    print pubkey,
+    print(pubkey, end='')
 
 def cmd_import_key(conn, args):
     p2 = optparse.OptionParser(usage='%prog import-key [options] key file',
@@ -883,7 +885,7 @@ def cmd_get_public_key(conn, args):
     pubkey = conn.read_payload()
     if not utils.string_is_safe(pubkey.replace('\n', '')):
         raise InvalidResponseError('Public key is not safely printable')
-    print pubkey,
+    print(pubkey, end='')
 
 def cmd_change_passphrase(conn, args):
     p2 = optparse.OptionParser(usage='%prog change-passphrase key',
@@ -1441,7 +1443,7 @@ def cmd_list_binding_methods(conn, args):
     if len(args) != 0:
         p2.error('unexpected arguments')
     for method in utils.BindingMethodRegistry.get_registered_methods():
-        print method
+        print(method)
 
 def cmd_list_server_binding_methods(conn, args):
     p2 = optparse.OptionParser(usage='%prog list-server-binding-methods',
@@ -1522,7 +1524,7 @@ def handle_global_options():
     if options.help_commands:
         # FIXME: order of the commands
         for (name, (_, help_string)) in command_handlers.iteritems():
-            print '{0:<20!s}{1!s}'.format(name, help_string)
+            print('{0:<20!s}{1!s}'.format(name, help_string))
         sys.exit()
     if len(args) < 1:
         parser.error('missing command, see --help-commands')
