@@ -16,12 +16,12 @@
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 # Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
 
-import cStringIO
 import copy
 import crypt
 import json
 import logging
 import os
+from six import StringIO
 import shutil
 import subprocess
 import tempfile
@@ -82,7 +82,7 @@ class User(object):
     def __set_clear_password(self, clear_password):
         random = nss.nss.generate_random(self.__salt_length)
         salt = '$6$'
-        for i in xrange(self.__salt_length):
+        for i in range(self.__salt_length):
             salt += self.__salt_characters[ord(random[i]) %
                                            len(self.__salt_characters)]
         self.sha512_password = crypt.crypt(clear_password, salt)
@@ -288,7 +288,7 @@ def gpg_public_key(config, fingerprint):
     '''Return an ascii-armored public key.'''
     ctx = _gpg_open(config)
     ctx.armor = 1
-    data = cStringIO.StringIO()
+    data = StringIO()
     ctx.export(fingerprint, data)
     return data.getvalue()
 
@@ -318,7 +318,7 @@ def gpg_edit_key(config, fingerprint, input_states, ignored_states):
     errors = []
     states = copy.copy(input_states)
     replies = []
-    out_fd = cStringIO.StringIO()
+    out_fd = StringIO()
 
     def update_out():
         out_fd.seek(0)
@@ -474,7 +474,7 @@ def gpg_change_password(config, fingerprint, old_passphrase, new_passphrase):
     key = ctx.get_key(fingerprint, True)
     responder = _ChangePasswordResponder(old_passphrase, new_passphrase)
     try:
-        ctx.edit(key, responder.callback, cStringIO.StringIO())
+        ctx.edit(key, responder.callback, StringIO())
     except gpgme.GpgmeError:
         if responder.exception is not None:
             raise responder.exception
@@ -488,8 +488,8 @@ def gpg_encrypt_symmetric(config, cleartext, passphrase):
     '''Return cleartext encrypted using passphrase.'''
     ctx = _gpg_open(config)
     _gpg_set_passphrase(ctx, passphrase)
-    data = cStringIO.StringIO()
-    ctx.encrypt(None, 0, cStringIO.StringIO(cleartext),
+    data = StringIO()
+    ctx.encrypt(None, 0, StringIO(cleartext),
                 data)
     return data.getvalue()
 
@@ -497,8 +497,8 @@ def gpg_decrypt(config, ciphertext, passphrase):
     '''Return ciphertext encrypted using passphrase.'''
     ctx = _gpg_open(config)
     _gpg_set_passphrase(ctx, passphrase)
-    data = cStringIO.StringIO()
-    ctx.decrypt(cStringIO.StringIO(ciphertext), data)
+    data = StringIO()
+    ctx.decrypt(StringIO(ciphertext), data)
     return data.getvalue()
 
 def gpg_signature(config, signature_file, cleartext_file, fingerprint,

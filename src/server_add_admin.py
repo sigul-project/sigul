@@ -61,7 +61,7 @@ def main():
         # readline import makes raw_input more usable.  Import only here to
         # avoid sending escape sequences to stdout when not interactive.
         import readline
-        name = raw_input('Administrator user name: ')
+        name = utils.input('Administrator user name: ')
 
     password = utils.read_password(config, 'Administrator password: ')
     if not config.batch_mode:

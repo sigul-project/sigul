@@ -151,7 +151,7 @@ def pkcs11_unbind(value, token):
 
 def pkcs11(tokens, **config):
     # Check config
-    tokens = map(str.strip, tokens.split(','))
+    tokens = list(map(str.strip, tokens.split(',')))
     for token in tokens:
         # This is a lazy way of checking: it will just throw KeyError
         config['{0!s}_pubkey'.format(token)]

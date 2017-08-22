@@ -16,8 +16,6 @@
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 # Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
 
-import ConfigParser
-import Queue
 import base64
 import datetime
 import errno
@@ -29,6 +27,10 @@ import optparse
 import os
 import pwd
 import re
+import six
+import six.moves.configparser as configparser
+import six.moves.queue as queue
+import six.moves.xmlrpc_client as xmlrpc_client
 import socket
 import stat
 import struct
@@ -37,7 +39,6 @@ import sys
 import tempfile
 import threading
 import types
-import xmlrpclib
 
 import nss.error
 import nss.nss
@@ -65,7 +66,7 @@ class Configuration(object):
         '''
         defaults = {}
         self._add_defaults(defaults)
-        parser = ConfigParser.RawConfigParser(defaults)
+        parser = configparser.RawConfigParser(defaults)
         sections = set()
         self._add_sections(sections)
         for s in sections:
@@ -81,7 +82,7 @@ class Configuration(object):
         try:
             self._read_configuration(parser)
         # ValueError is not handled by parser.getint()
-        except (ConfigParser.Error, ValueError) as e:
+        except (configparser.Error, ValueError) as e:
             raise ConfigurationError('Error reading configuration: {0!s}'.format(str(e)))
 
     def _add_defaults(self, defaults):
@@ -235,7 +236,7 @@ def koji_read_config(global_config, instance):
                             instance))
     else:
         config_path = global_config.koji_config
-    parser = ConfigParser.ConfigParser()
+    parser = configparser.ConfigParser()
     parser.read(('/etc/koji.conf', os.path.expanduser(config_path)))
     config = dict(parser.items('koji'))
     for opt in ('server', 'topurl'):
@@ -286,7 +287,7 @@ def koji_connect(koji_config, authenticate, proxyuser=None):
             session.krb_login(proxyuser=proxyuser, **kwargs)
     try:
         version = session.getAPIVersion()
-    except xmlrpclib.ProtocolError:
+    except xmlrpc_client.ProtocolError:
         raise KojiError('Cannot connect to Koji')
     if version != koji.API_VERSION:
         raise KojiError('Koji API version mismatch (server {0:d}, client {1:d})'.format(version, koji.API_VERSION))
@@ -520,7 +521,7 @@ def read_fields(read_fn):
     if num_fields > 255:
         raise InvalidFieldsError('Too many fields')
     fields = {}
-    for _ in xrange(num_fields):
+    for _ in range(num_fields):
         buf = read_fn(u8_size)
         size = u8_unpack(buf)
         if size == 0 or size > 255:
@@ -545,7 +546,7 @@ def format_fields(fields):
     if len(fields) > 255:
         raise ValueError('Too many fields')
     data = u8_pack(len(fields))
-    for (key, value) in fields.iteritems():
+    for (key, value) in six.iteritems(fields):
         if len(key) > 255:
             raise ValueError('Key name {0!s} too long'.format(key))
         data += u8_pack(len(key))
@@ -567,7 +568,7 @@ def format_fields(fields):
 
 def readable_fields(fields):
     '''Return a string representing fields.'''
-    keys = sorted(fields.iterkeys())
+    keys = sorted(fields.keys())
     return ', '.join(('{0!s} = {1!s}'.format(repr(k), repr(fields[k])) for k in keys))
 
 def string_is_safe(s, filename=False):
@@ -631,7 +632,7 @@ class WorkerQueue(object):
 
     def __init__(self, maxsize=0):
         '''Create a FIFO queue.  See Queue.Queue.'''
-        self.__queue = Queue.Queue(maxsize)
+        self.__queue = queue.Queue(maxsize)
         self.__orphaned = threading.Event() # Used as a thread-safe boolean.
 
     def get(self):
@@ -651,7 +652,7 @@ class WorkerQueue(object):
                 raise WorkerQueueOrphanedError('Work queue orphaned by consumer')
             try:
                 self.__queue.put(item, True, timeout)
-            except Queue.Full:
+            except queue.Full:
                 pass
             else:
                 break
@@ -979,7 +980,7 @@ class MethodRegistry(object):
 
     @classmethod
     def get_registered_methods(cls):
-        return cls._method_registry.keys()
+        return list(cls._method_registry.keys())
 
     @classmethod
     def get_method(cls, method):
@@ -1181,3 +1182,9 @@ def bind_passphrase(passphrase, bind_params):
         passphrase = json.dumps(targets)
 
     return str(passphrase)
+
+
+if six.PY2:
+    input = raw_input
+elif six.PY3:
+    input = input

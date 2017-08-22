@@ -18,8 +18,6 @@
 
 import base64
 import binascii
-import cStringIO
-import ConfigParser
 import crypt
 import json
 import hashlib
@@ -30,6 +28,8 @@ import socket
 import struct
 import subprocess
 import shutil
+from six import StringIO
+import six.moves.configparser as configparser
 import sys
 import tempfile
 import time
@@ -288,7 +288,7 @@ class ServersConnection(object):
         elif handler.payload_storage == RequestHandler.PAYLOAD_MEMORY:
             if payload_size > self.config.max_memory_payload_size:
                 raise InvalidRequestError('Payload too large')
-            f = cStringIO.StringIO()
+            f = StringIO()
             utils.copy_data(f.write, reader.read, payload_size)
             self.__payload = f.getvalue()
         else:

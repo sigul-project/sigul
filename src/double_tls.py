@@ -18,6 +18,7 @@
 
 import logging
 import os
+import six
 import socket
 
 import nss.error
@@ -76,7 +77,7 @@ def _nspr_poll(descs, timeout):
 
     '''
     # FIXME: implement this in nss-python instead?
-    flat = descs.items()
+    flat = list(descs.items())
     res = nss.io.Socket.poll(flat, timeout)
     for (i, desc) in enumerate(flat):
         descs[desc[0]] = res[i]
@@ -160,10 +161,11 @@ class _ForwardingBuffer(object):
 
             _debug('Poll: %s',
                    ', '.join(['{0!s}:{1!s}'.format(_id(o), v)
-                              for (o, v) in poll_descs.iteritems()]))
+                              for (o, v) in six.iteritems(poll_descs)]))
             _nspr_poll(poll_descs, nss.io.PR_INTERVAL_NO_TIMEOUT)
             _debug('-> %s', ', '.join(['{0!s}:{1!s}'.format(_id(o), v)
-                                       for (o, v) in poll_descs.iteritems()]))
+                                       for (o, v) in
+                                       six.iteritems(poll_descs)]))
 
             # Handle I/O errors.
             buf_1._handle_errors(poll_descs)

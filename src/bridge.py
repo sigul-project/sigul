@@ -16,7 +16,6 @@
 # Red Hat Author: Miloslav Trmac <mitr@redhat.com>
 # Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
 
-import ConfigParser
 import base64
 import binascii
 import errors
@@ -24,6 +23,8 @@ import logging
 import os
 import signal
 import shutil
+import six
+import six.moves.configparser as configparser
 import socket
 import sys
 import tempfile
@@ -86,13 +87,13 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.KojiConfiguration,
         self.server_listen_port = parser.getint('bridge', 'server-listen-port')
 
         self.koji_fas_groups = {}
-        for v in self.koji_instances.iterkeys():
+        for v in six.iterkeys(self.koji_instances):
             name = 'required-fas-group-' + v
             try:
                 group = parser.get('koji', name)
                 if group == '':
                     group = None
-            except ConfigParser.NoOptionError:
+            except configparser.NoOptionError:
                 group = None
             self.koji_fas_groups[v] = group
 
@@ -263,7 +264,7 @@ class RequestValidator(object):
 
     def validate(self, fields, payload_size):
         '''Validate fiels and payload_size.'''
-        for key in fields.iterkeys():
+        for key in fields.keys():
             if key not in self.__known_fields:
                 raise InvalidRequestError('Unexpected field {0!s}'.format(repr(key)))
         for f in self.__fields:
@@ -364,7 +365,7 @@ class KojiClient(object):
 
         session = self.__get_session()
         d = {}
-        for (key, field) in self.__rpm_info_map.iteritems():
+        for (key, field) in six.iteritems(self.__rpm_info_map):
             v = fields.get(field.name)
             field.validate(v)
             d[key] = v

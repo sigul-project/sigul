@@ -25,6 +25,7 @@ import getpass
 import logging
 import optparse
 import os
+import six
 import socket
 import struct
 import subprocess
@@ -378,7 +379,7 @@ def print_list_in_payload(conn, num_field_name):
     '''Read payload from conn and print is as a list of strings.'''
     payload = conn.read_payload()
     start = 0
-    for _ in xrange(conn.response_field_int(num_field_name)):
+    for _ in range(conn.response_field_int(num_field_name)):
         try:
             i = payload.index('\x00', start)
         except ValueError:
@@ -1416,7 +1417,7 @@ def cmd_sign_rpms(conn, args):
     (ok, _) = utils.run_worker_threads((request_thread, reply_thread))
 
     results = request_thread.results.copy()
-    for (k, v) in reply_thread.results.iteritems():
+    for (k, v) in six.iteritems(reply_thread.results):
         # If the result was set by request_thread, server never saw the request
         # and there should be no reply.
         assert k not in results
@@ -1424,10 +1425,10 @@ def cmd_sign_rpms(conn, args):
 
     if ok:
         # Don't bother if exception in one of the threads was the primary cause
-        for idx in xrange(len(args)):
+        for idx in range(len(args)):
             if idx not in results:
                 results[idx] = 'No reply from server received'
-    if any(v is not None for v in results.itervalues()):
+    if any(v is not None for v in six.itervalues(results)):
         for i in sorted(results.keys()):
             if results[i] is not None:
                 logging.error('Error signing %s: %s', args[i], results[i])
@@ -1523,7 +1524,7 @@ def handle_global_options():
 
     if options.help_commands:
         # FIXME: order of the commands
-        for (name, (_, help_string)) in command_handlers.iteritems():
+        for (name, (_, help_string)) in six.iteritems(command_handlers):
             print('{0:<20!s}{1!s}'.format(name, help_string))
         sys.exit()
     if len(args) < 1:
