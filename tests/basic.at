@@ -15,8 +15,6 @@
 #
 # Red Hat Author: Miloslav Trmač <mitr@redhat.com>
 
-m4_define([S_NUM_RPMS], [100])
-
 # Can we split this into groups?
 AT_SETUP([Basic functionality])
 
@@ -527,31 +525,6 @@ AT_CHECK([printf 'root-key-pw\0' | \
 [Error: Cannot sign zero-length RPM file empty.rpm
 ])
 rm empty.rpm
-
-
-# sign-rpms
-mkdir unsigned signed
-AT_CHECK([cd unsigned; \
-	  for i in $(seq 1 ]S_NUM_RPMS[); do create_rpm "$i"; done; \
-	  cd ..])
-AT_CHECK([printf 'root-key-pw\0' | \
-		sigul -c client/client.conf --batch \
-		sign-rpms -o signed key unsigned/*])
-for i in $(seq 1 S_NUM_RPMS); do
-    echo "signed/testrpm$i.rpm: rsa sha1 (md5) pgp md5 OK"
-done | LC_ALL=C sort > expected
-AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed/* | LC_ALL=C sort > output])
-AT_CHECK([diff -u expected output])
-rm -r expected output signed unsigned
-mkdir unsigned signed
-touch unsigned/empty.rpm
-AT_CHECK([printf 'root-key-pw\0' | \
-		sigul -c client/client.conf --batch \
-		sign-rpms -o signed key unsigned/*], 1, ,
-[ERROR: Error signing unsigned/empty.rpm: Error: Cannot sign zero-length RPM file unsigned/empty.rpm
-])
-AT_CHECK([ls signed])
-rm -r signed unsigned
 
 
 # Terminate daemons
