@@ -15,9 +15,7 @@
 #
 # Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
 
-m4_define([S_NUM_RPMS], [100])
-
-AT_SETUP([Sign-rpms check])
+AT_SETUP([Old version refusal])
 
 m4_include([include_setup.at])
 m4_include([include_start.at])
