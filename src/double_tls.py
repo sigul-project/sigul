@@ -835,7 +835,7 @@ class OuterBuffer(object):
         while len(res) < buf_size:
             run = self.__socket.recv(buf_size - len(res))
             if len(run) == 0:
-                raise EOFError, 'Unexpected EOF on _DoubleTLS'
+                raise EOFError('Unexpected EOF on _DoubleTLS')
             res += run
         return res
 
@@ -865,7 +865,7 @@ class OuterBuffer(object):
                        v & ~_chunk_inner_mask, len(self.__inner_packets))
             else:
                 if v == 0:
-                    raise EOFError, 'Unexpected EOF on outer stream'
+                    raise EOFError('Unexpected EOF on outer stream')
                 self.__outer_data += self.__recv_exact(v)
                 _debug('o%s: received %d outer data bytes', _id(self), v)
         return res

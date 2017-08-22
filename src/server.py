@@ -1675,7 +1675,7 @@ def cmd_sign_rpms(db, conn):
     finally:
         shutil.rmtree(tmp_dir)
     if exception is not None:
-        raise exception[0], exception[1], exception[2]
+        raise exception[0](exception[1]).with_traceback(exception[2])
 
 @request_handler()
 def cmd_list_binding_methods(db, conn):

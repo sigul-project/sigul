@@ -926,7 +926,7 @@ def read_password(config, prompt):
         if c == '\x00':
             break;
         if c == '':
-            raise EOFError, 'Unexpected EOF when reading a batch mode password'
+            raise EOFError('Unexpected EOF when reading a batch mode password')
         password += c
     return password
 

@@ -969,7 +969,7 @@ class SignRPMsRequestHandler(RequestHandler):
             conn.client_buf.set_full_duplex(False)
             conn.server_buf.set_full_duplex(False)
         if exception is not None:
-            raise exception[0], exception[1], exception[2]
+            raise exception[0](exception[1]).with_traceback(exception[2])
 
 class RT(object):
     '''Request type description.'''
