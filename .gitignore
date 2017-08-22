@@ -6,6 +6,7 @@
 /tests/package.m4
 /tests/testsuite
 /testsuite.dir
+/testsuite.log
 /Makefile
 /admin/compile
 /admin/depcomp
@@ -20,6 +21,8 @@
 /src/sigul_server_add_admin
 /src/sigul_server_create_db
 /src/sigul-ostree-helper
+/doc/*.1
+/doc/*.8
 Makefile.in
 *.pyc
 *.o
