@@ -3,6 +3,7 @@
 /autom4te.cache
 /build
 /configure
+/config.log
 /tests/package.m4
 /tests/testsuite
 /testsuite.dir
