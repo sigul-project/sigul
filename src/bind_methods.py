@@ -177,7 +177,8 @@ def pkcs11(tokens, **config):
             if ('{0!s}_pin'.format(token)) not in config:
                 config['{0!s}_pin'.format(token)] = getpass(
                     'PIN code for token "{0!s}": '.format(token))
-            config['{0!s}_pin'.format(token)]
+            if '{0!s}_pin'.format(token) not in config:
+                raise ValueError('No PIN configured for {0!s}'.format(token))
 
     global pkcs11_config
     # We primarily do the split here so that we fail early if required
