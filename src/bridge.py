@@ -1184,7 +1184,6 @@ class BridgeConnection(object):
                              errors.message(error_code), msg)
             else:
                 logging.info('Request error: %s', errors.message(error_code))
-        # print repr(fields)
         proxy.stored_read(64) # Ignore value
         self.client_buf.write(proxy.stored_data())
 
