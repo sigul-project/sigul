@@ -19,6 +19,7 @@ AT_INIT
 AT_TESTED([sigul sigul_bridge sigul_server sigul_server_create_db] dnl
 	[sigul_server_add_admin])
 
+m4_include([analysis.at])
 m4_include([basic.at])
 m4_include([sign-rpms.at])
 m4_include([ostree.at])
