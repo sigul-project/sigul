@@ -375,8 +375,8 @@ def gpg_edit_key(config, fingerprint, input_states, ignored_states):
 
 def _restore_gnupg_home(config, backup_dir):
     '''Restore config.gnupg_home from a backup in backup_dir.'''
-    tmp_dir = tempfile.mktemp(prefix=os.path.basename(config.gnupg_home),
-                              dir=os.path.dirname(config.gnupg_home))
+    tmp_dir = tempfile.mkdtemp(prefix=os.path.basename(config.gnupg_home),
+                               dir=os.path.dirname(config.gnupg_home))
     shutil.copytree(backup_dir, tmp_dir)
     # This is racy.  In the worst case manual recovery is necessary anyway,
     # and backup_dir will be left around if we fail.
