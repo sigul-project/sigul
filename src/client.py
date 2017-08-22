@@ -95,7 +95,7 @@ class ClientsConnection(object):
                                                    client_cert_nickname)
         try:
             utils.nss_init(self.config)
-        except utils.NSSInitError, e:
+        except utils.NSSInitError as e:
             raise ClientError(str(e))
         self.__request_header_writer = \
             utils.SHA512Writer(self.__client.outer_write)
@@ -179,7 +179,7 @@ class ClientsConnection(object):
         try:
             self.__client.inner_open_client(self.config.server_hostname,
                                             self.config.client_cert_nickname)
-        except double_tls.InnerCertificateNotFound, e:
+        except double_tls.InnerCertificateNotFound as e:
             raise ClientError(str(e))
         try:
             self.__client.inner_write(utils.format_fields(fields))
@@ -199,7 +199,7 @@ class ClientsConnection(object):
         try:
             self.__response_fields = \
                 utils.read_fields(self.__reply_header_reader.read)
-        except utils.InvalidFieldsError, e:
+        except utils.InvalidFieldsError as e:
             raise InvalidResponseError('Invalid response format: {0!s}'.format(str(e)))
         if not self.__reply_header_reader.verify_64B_hmac_authenticator():
             raise InvalidResponseError('Header authentication failed')
@@ -303,7 +303,7 @@ class ClientsConnection(object):
         reader = utils.SHA512HMACReader(self.__client.outer_read, nss_key)
         try:
             fields = utils.read_fields(reader.read)
-        except utils.InvalidFieldsError, e:
+        except utils.InvalidFieldsError as e:
             raise InvalidResponseError('Invalid response format: {0!s}'.format(str(e)))
         if not reader.verify_64B_hmac_authenticator():
             raise InvalidResponseError('Subreply header authentication failed')
@@ -441,7 +441,7 @@ class SignRPMArgumentExaminer(object):
         if os.path.exists(arg):
             try:
                 rpm_file = open(arg, 'rb')
-            except IOError, e:
+            except IOError as e:
                 raise ClientError('Error opening {0!s}: {1!s}'.format(arg, e.strerror))
             # Count whole blocks, that's what the bridge and server do.
             if os.fstat(rpm_file.fileno()).st_size == 0:
@@ -461,7 +461,7 @@ class SignRPMArgumentExaminer(object):
                     self.__koji_session = utils.koji_connect(kc,
                                                              authenticate=False)
                 rpm = self.__koji_session.getRPM(arg)
-            except (utils.KojiError, koji.GenericError), e:
+            except (utils.KojiError, koji.GenericError) as e:
                 raise ClientError(str(e))
             if rpm is None:
                 raise ClientError('{0!s} does not exist in Koji'.format(arg))
@@ -700,7 +700,7 @@ def cmd_import_key(conn, args):
                                        'New key passphrase (again): ')
     try:
         f = open(args[1], 'rb')
-    except IOError, e:
+    except IOError as e:
         raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
 
     try:
@@ -958,7 +958,7 @@ def cmd_sign_text(conn, args):
     passphrase = read_key_passphrase(conn.config)
     try:
         f = open(args[1])
-    except IOError, e:
+    except IOError as e:
         raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
 
     try:
@@ -973,7 +973,7 @@ def cmd_sign_text(conn, args):
             conn.write_payload_to_file(sys.stdout)
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
-    except IOError, e:
+    except IOError as e:
         raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
 
 def cmd_sign_data(conn, args):
@@ -992,7 +992,7 @@ def cmd_sign_data(conn, args):
     passphrase = read_key_passphrase(conn.config)
     try:
         f = open(args[1], 'rb')
-    except IOError, e:
+    except IOError as e:
         raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
 
     try:
@@ -1008,7 +1008,7 @@ def cmd_sign_data(conn, args):
             conn.write_payload_to_file(sys.stdout)
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
-    except IOError, e:
+    except IOError as e:
         raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
 
 def call_git(args, stdin=None, ignore_error=False, strip_newline=False):
@@ -1074,7 +1074,7 @@ def cmd_sign_container(conn, args):
 
     try:
         f = open(args[1], 'r')
-    except IOError, e:
+    except IOError as e:
         raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
 
     try:
@@ -1090,7 +1090,7 @@ def cmd_sign_container(conn, args):
             conn.write_payload_to_file(sys.stdout)
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
-    except IOError, e:
+    except IOError as e:
         raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
 
 def cmd_sign_ostree(conn, args):
@@ -1107,7 +1107,7 @@ def cmd_sign_ostree(conn, args):
     passphrase = read_key_passphrase(conn.config)
     try:
         f = open(args[2], 'rb')
-    except IOError, e:
+    except IOError as e:
         raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
 
     try:
@@ -1123,7 +1123,7 @@ def cmd_sign_ostree(conn, args):
             conn.write_payload_to_file(sys.stdout)
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
-    except IOError, e:
+    except IOError as e:
         raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
 
 def cmd_sign_rpm(conn, args):
@@ -1190,7 +1190,7 @@ def cmd_sign_rpm(conn, args):
             o2.output = args[1]
         try:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
-        except IOError, e:
+        except IOError as e:
             raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
     else:
         conn.read_empty_unauthenticated_payload()
@@ -1238,7 +1238,7 @@ class SignRPMsRequestThread(utils.WorkerThread):
                 size = (size + 32767) / 32768 * 32768
                 if size > MAX_SIGN_RPMS_PAYLOAD_SIZE:
                     raise ClientError('{0!s} is too large'.format(arg))
-            except ClientError, e:
+            except ClientError as e:
                 self.results[arg_idx] = str(e)
                 continue
 
@@ -1333,7 +1333,7 @@ class SignRPMsReplyThread(utils.WorkerThread):
                     def writer(f):
                         self.__conn.write_subpayload_to_file(nss_key, f)
                     utils.write_new_file(output_path, writer)
-                except IOError, e:
+                except IOError as e:
                     raise ClientError('Error writing to {0!s}: {1!s}'.format(output_path, e.strerror))
             else:
                 self.__conn.read_empty_subpayload(nss_key, ignore_auth=True)
@@ -1370,7 +1370,7 @@ def cmd_sign_rpms(conn, args):
     if o2.output is not None:
         try:
             os.mkdir(o2.output)
-        except OSError, e:
+        except OSError as e:
             if e.errno != errno.EEXIST or not os.path.isdir(o2.output):
                 raise ClientError('Error creating {0!s}: {1!s}'.format(o2.output, e.strerror))
     elif not o2.koji_only:
@@ -1533,7 +1533,7 @@ def handle_global_options():
                         level=utils.logging_level_from_options(options))
     try:
         config = ClientConfiguration(options.config_file)
-    except utils.ConfigurationError, e:
+    except utils.ConfigurationError as e:
         raise ClientError(str(e))
     config.batch_mode = options.batch
     if options.user_name:
@@ -1559,17 +1559,17 @@ def main():
             try:
                 conn.close()
             except (double_tls.ChildConnectionRefusedError,
-                    double_tls.ChildUnrecoverableError), e:
+                    double_tls.ChildUnrecoverableError) as e:
                 child_exception = e
-    except ClientError, e:
+    except ClientError as e:
         if str(e) != '':
             sys.exit(str(e))
         else:
             sys.exit(1)
-    except (IOError, EOFError, socket.error), e:
+    except (IOError, EOFError, socket.error) as e:
         logging.error('I/O error: %s', repr(e))
         sys.exit(1)
-    except nss.error.NSPRError, e:
+    except nss.error.NSPRError as e:
         if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
             if child_exception is not None:
                 if isinstance(child_exception,

@@ -39,7 +39,7 @@ def main():
                         level=utils.logging_level_from_options(options))
     try:
         config = AddAdminConfiguration(options.config_file)
-    except utils.ConfigurationError, e:
+    except utils.ConfigurationError as e:
         sys.exit(str(e))
     config.batch_mode = options.batch
     try:
@@ -52,7 +52,7 @@ def main():
 
     try:
         utils.nss_init(config)
-    except utils.NSSInitError, e:
+    except utils.NSSInitError as e:
         sys.exit(str(e))
 
     if options.name is not None:

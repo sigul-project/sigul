@@ -460,7 +460,7 @@ class _ChangePasswordResponder(object):
                 self.exception = NotImplementedError()
                 return gpgme.ERR_GENERAL
             return gpgme.ERR_NO_ERROR
-        except Exception, e:
+        except Exception as e:
             self.exception = e
             raise # Will return gpgme.ERR_GENERAL
 

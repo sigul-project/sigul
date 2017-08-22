@@ -81,7 +81,7 @@ class Configuration(object):
         try:
             self._read_configuration(parser)
         # ValueError is not handled by parser.getint()
-        except (ConfigParser.Error, ValueError), e:
+        except (ConfigParser.Error, ValueError) as e:
             raise ConfigurationError('Error reading configuration: {0!s}'.format(str(e)))
 
     def _add_defaults(self, defaults):
@@ -349,7 +349,7 @@ def nss_init(config):
         nss.nss.nss_init(config.nss_dir)
         # Test the password
         nss.nss.get_internal_key_slot().authenticate()
-    except nss.error.NSPRError, e:
+    except nss.error.NSPRError as e:
         if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
             raise NSSInitError('\'{0!s}\' does not contain a valid NSS database'.format(config.nss_dir))
         elif e.errno == nss.error.SEC_ERROR_BAD_PASSWORD:
@@ -941,7 +941,7 @@ def write_new_file(path, write_fn):
         write_fn(f)
         try:
             st = os.stat(path)
-        except OSError, e:
+        except OSError as e:
             if e.errno != errno.ENOENT:
                 raise
         else:
@@ -957,7 +957,7 @@ def write_new_file(path, write_fn):
             pass
         try:
             os.link(path, backup_path)
-        except OSError, e:
+        except OSError as e:
             if e.errno != errno.ENOENT:
                 raise
         os.rename(tmp_path, path)

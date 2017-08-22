@@ -32,7 +32,7 @@ def main():
         config = server_common. \
             ServerBaseConfiguration(options.config_file,
                                     allow_missing_database_path=True)
-    except utils.ConfigurationError, e:
+    except utils.ConfigurationError as e:
         sys.exit(str(e))
 
     try:

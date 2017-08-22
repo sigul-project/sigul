@@ -269,7 +269,7 @@ class ServersConnection(object):
             raise RequestHandled()
         try:
             self.__outer_fields = utils.read_fields(proxy.stored_outer_read)
-        except utils.InvalidFieldsError, e:
+        except utils.InvalidFieldsError as e:
             raise InvalidRequestError(str(e))
         logging.info('Request: %s', utils.readable_fields(self.__outer_fields))
         header_data = proxy.stored_data()
@@ -311,7 +311,7 @@ class ServersConnection(object):
             try:
                 self.__inner_fields = utils.read_fields(self.__client.
                                                         inner_read)
-            except utils.InvalidFieldsError, e:
+            except utils.InvalidFieldsError as e:
                 raise InvalidRequestError(str(e))
         finally:
             self.__client.inner_close()
@@ -425,7 +425,7 @@ class ServersConnection(object):
         reader = utils.SHA512HMACReader(self.__client.outer_read, nss_key)
         try:
             fields = utils.read_fields(reader.read)
-        except utils.InvalidFieldsError, e:
+        except utils.InvalidFieldsError as e:
             raise InvalidRequestError('Invalid response format: {0!s}'.format(str(e)))
         if not reader.verify_64B_hmac_authenticator():
             raise InvalidRequestError('Subrequest header authentication failed')
@@ -748,7 +748,7 @@ class RPMFile(object):
         ts.setVSFlags(rpm._RPMVSF_NOSIGNATURES)
         try:
             self.__header = ts.hdrFromFdno(fd.fileno())
-        except rpm.error, e:
+        except rpm.error as e:
             self.status = errors.CORRUPT_RPM
             raise RPMFileError('Error reading RPM header: {0!s}'.format(str(e)))
 
@@ -877,7 +877,7 @@ class SigningContext(object):
 
             child.expect(pexpect.EOF)
             child.close()
-        except pexpect.ExceptionPexpect, e:
+        except pexpect.ExceptionPexpect as e:
             msg = str(e).splitlines()[0] # We don't want all of the pexpect dump
             rpm.status = errors.UNKNOWN_ERROR
             raise RPMFileError('Error signing {0!s}: {1!s}, output {2!s}'.format(rpm.rpm_id, msg, child.before))
@@ -1082,7 +1082,7 @@ def cmd_import_key(db, conn):
 
     try:
         fingerprint = server_common.gpg_import_key(conn.config, conn.payload_file)
-    except server_common.GPGError, e:
+    except server_common.GPGError as e:
         conn.send_error(errors.INVALID_IMPORT, message=str(e))
 
     try:
@@ -1090,7 +1090,7 @@ def cmd_import_key(db, conn):
             server_common.gpg_change_password(conn.config, fingerprint,
                                               import_key_passphrase,
                                               new_key_passphrase)
-        except server_common.GPGError, e:
+        except server_common.GPGError as e:
             conn.send_error(errors.IMPORT_PASSPHRASE_ERROR)
 
         key = Key(key_name, fingerprint)
@@ -1435,7 +1435,7 @@ def cmd_sign_rpm(db, conn):
     ctx = SigningContext(conn, access.key, key_passphrase)
     try:
         ctx.sign_rpm(conn.config, rpm)
-    except RPMFileError, e:
+    except RPMFileError as e:
         logging.error(str(e))
         conn.send_error(rpm.status)
 
@@ -1565,7 +1565,7 @@ class SignRPMsSignerThread(utils.WorkerThread):
 
         try:
             self.__ctx.sign_rpm(self.__config, rpm)
-        except RPMFileError, e:
+        except RPMFileError as e:
             logging.error(str(e))
 
 class SignRPMsReplyThread(utils.WorkerThread):
@@ -1727,20 +1727,20 @@ def request_handling_child(config):
             try:
                 conn.close()
             except (double_tls.ChildConnectionRefusedError,
-                    double_tls.ChildUnrecoverableError), e:
+                    double_tls.ChildUnrecoverableError) as e:
                 child_exception = e
     except RequestHandled:
         pass
-    except InvalidRequestError, e:
+    except InvalidRequestError as e:
         logging.warning('Invalid request: %s', str(e))
-    except (IOError, socket.error), e:
+    except (IOError, socket.error) as e:
         logging.info('I/O error: %s', repr(e))
-    except nss.error.NSPRError, e:
+    except nss.error.NSPRError as e:
         if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
             logging.debug('NSPR error: Connection reset')
         else:
             logging.warning('NSPR error: %s', str(e))
-    except EOFError, e:
+    except EOFError as e:
         if isinstance(child_exception, double_tls.ChildConnectionRefusedError):
             logging.info('Connection to the bridge refused')
             return _CHILD_CONNECTION_REFUSED
@@ -1751,7 +1751,7 @@ def request_handling_child(config):
             logging.info('Unexpected EOF')
     except (KeyboardInterrupt, SystemExit):
         pass # Don't consider this an unexpected exception
-    except (utils.NSSInitError, double_tls.InnerCertificateNotFound), e:
+    except (utils.NSSInitError, double_tls.InnerCertificateNotFound) as e:
         logging.error(str(e))
         return _CHILD_BUG
     except:
@@ -1766,7 +1766,7 @@ def main():
     utils.setup_logging(options, 'server')
     try:
         config = ServerConfiguration(options.config_file)
-    except utils.ConfigurationError, e:
+    except utils.ConfigurationError as e:
         sys.exit(str(e))
 
     utils.BindingMethodRegistry.register_enabled_methods(config)

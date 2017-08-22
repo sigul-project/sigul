@@ -104,7 +104,7 @@ def create_listen_sock(config, port):
     sock.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
     try:
         cert = nss.nss.find_cert_from_nickname(config.bridge_cert_nickname)
-    except nss.error.NSPRError, e:
+    except nss.error.NSPRError as e:
         if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
             raise BridgeError('Certificate \'{0!s}\' is not available'.format(
                               config.bridge_cert_nickname))
@@ -151,7 +151,7 @@ def fas_user_is_in_group(config, user_name, group_name):
                 return True
         return False
     except (fedora.client.FedoraClientError,
-            fedora.client.FedoraServiceError), e:
+            fedora.client.FedoraServiceError) as e:
         raise BridgeError('Error communicating with FAS: {0!s}'.format(str(e)))
 
 def urlopen(url):
@@ -330,7 +330,7 @@ class KojiClient(object):
             try:
                 self.__koji_config = utils.koji_read_config(self.__conn.config,
                                                             instance)
-            except utils.KojiError, e:
+            except utils.KojiError as e:
                 raise ForwardingError('Error preparing Koji configuration: {0!s}'.format(
                                       str(e)))
             self.__koji_pathinfo = koji.PathInfo(self.__koji_config['topurl'])
@@ -343,7 +343,7 @@ class KojiClient(object):
                 else:
                     self.__koji_session = utils.koji_connect(self.__koji_config,
                                                              authenticate=True)
-            except (utils.KojiError, koji.GenericError), e:
+            except (utils.KojiError, koji.GenericError) as e:
                 raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
         return self.__koji_session
 
@@ -370,7 +370,7 @@ class KojiClient(object):
             d[key] = v
         try:
             info = session.getRPM(d)
-        except (utils.KojiError, koji.GenericError), e:
+        except (utils.KojiError, koji.GenericError) as e:
             raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
         if info is None:
             raise ForwardingError('RPM not found')
@@ -392,7 +392,7 @@ class KojiClient(object):
             build = session.getBuild(rpm_info['build_id'])
             if build is None:
                 raise ForwardingError('RPM has no build')
-        except (utils.KojiError, koji.GenericError), e:
+        except (utils.KojiError, koji.GenericError) as e:
             raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
         return (self.__koji_pathinfo.build(build) + '/' +
                 self.__koji_pathinfo.rpm(rpm_info))
@@ -432,7 +432,7 @@ class KojiClient(object):
                                       'imported')
             if len(sigs) == 0:
                 session.addRPMSig(rpm_info['id'], base64.encodestring(sighdr))
-        except (utils.KojiError, koji.GenericError), e:
+        except (utils.KojiError, koji.GenericError) as e:
             raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
 
     def close(self):
@@ -467,7 +467,7 @@ class SignRPMRequestHandler(RequestHandler):
                                 payload_size)
             finally:
                 src.close()
-        except requests.RequestException, e:
+        except requests.RequestException as e:
             raise ForwardingError('Error reading {0!s}: {1!s}'.format(url, str(e)))
 
     def forward_reply_payload(self, conn):
@@ -586,7 +586,7 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
             fields = utils.read_fields(client_proxy.stored_read)
         except EOFError:
             return (None, None)
-        except utils.InvalidFieldsError, e:
+        except utils.InvalidFieldsError as e:
             raise InvalidRequestError(str(e))
         s = utils.readable_fields(fields)
         logging.debug('%s: Started handling %s', self.name, s)
@@ -714,7 +714,7 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
                 utils.copy_data(self.__server_buf.write, readfn, payload_size)
             finally:
                 src.close()
-        except requests.RequestException, e:
+        except requests.RequestException as e:
             if payload_size != 0:
                 # This exception was not expected, let the default handling
                 # handle it
@@ -778,7 +778,7 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
                     sock.shutdown(socket.SHUT_RDWR)
                 finally:
                     sock.close()
-            except Exception, e:
+            except Exception as e:
                 logging.debug('%s: Shut down failed: %s', self.name, repr(e))
                 # But otherwise ignore this, raise the original one
             raise
@@ -794,7 +794,7 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
             fields = utils.read_fields(server_proxy.stored_read)
         except EOFError:
             return None
-        except utils.InvalidFieldsError, e:
+        except utils.InvalidFieldsError as e:
             raise InvalidReplyError(str(e))
         logging.debug('%s: Started handling %s', self.name,
                       utils.readable_fields(fields))
@@ -1130,7 +1130,7 @@ class BridgeConnection(object):
                                       client_version))
         try:
             self.request_fields = utils.read_fields(proxy.stored_read)
-        except utils.InvalidFieldsError, e:
+        except utils.InvalidFieldsError as e:
             raise InvalidRequestError(str(e))
 
         logging.info('Request: %s', utils.readable_fields(self.request_fields))
@@ -1174,7 +1174,7 @@ class BridgeConnection(object):
         buf = proxy.stored_read(utils.u32_size)
         try:
             fields = utils.read_fields(proxy.stored_read)
-        except utils.InvalidFieldsError, e:
+        except utils.InvalidFieldsError as e:
             raise InvalidReplyError(str(e))
         error_code = utils.u32_unpack(buf)
         if error_code != errors.OK:
@@ -1252,23 +1252,23 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
                 client_sock.close()
         finally:
             server_sock.close()
-    except InvalidRequestError, e:
+    except InvalidRequestError as e:
         logging.warning('Invalid request: %s', str(e))
-    except InvalidReplyError, e:
+    except InvalidReplyError as e:
         logging.warning('Invalid reply: %s', str(e))
-    except ForwardingError, e:
+    except ForwardingError as e:
         logging.warning('Error working with request data: %s', str(e))
-    except IOError, e:
+    except IOError as e:
         logging.info('I/O error: %s', repr(e))
-    except EOFError, e:
+    except EOFError as e:
         logging.info('Unexpected EOF: %s', repr(e))
-    except nss.error.NSPRError, e:
+    except nss.error.NSPRError as e:
         if e.errno == nss.error.SEC_ERROR_EXPIRED_CERTIFICATE:
             logging.warning("Peer's certificate has expired, rejecting "
                             "connection")
         else:
             logging.info('NSPR I/O error: %s', str(e), exc_info=True)
-    except BridgeError, e:
+    except BridgeError as e:
         logging.warning(str(e))
     logging.debug('Request handling finished')
 
@@ -1278,7 +1278,7 @@ def main():
     utils.setup_logging(options, 'bridge')
     try:
         config = BridgeConfiguration(options.config_file)
-    except utils.ConfigurationError, e:
+    except utils.ConfigurationError as e:
         sys.exit(str(e))
 
     if options.daemonize:
@@ -1309,7 +1309,7 @@ def main():
         try:
             try:
                 utils.nss_init(config)
-            except utils.NSSInitError, e:
+            except utils.NSSInitError as e:
                 logging.error(str(e))
                 sys.exit(1)
             try:
@@ -1317,10 +1317,10 @@ def main():
                     create_listen_sock(config, config.server_listen_port)
                 client_listen_sock = \
                     create_listen_sock(config, config.client_listen_port)
-            except nss.error.NSPRError, e:
+            except nss.error.NSPRError as e:
                 logging.error('NSPR error: {0!s}'.format(str(e)))
                 sys.exit(1)
-            except BridgeError, e:
+            except BridgeError as e:
                 logging.error(str(e))
                 sys.exit(1)
 

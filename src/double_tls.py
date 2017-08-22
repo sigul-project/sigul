@@ -276,7 +276,7 @@ class _CombiningBuffer(_ForwardingBuffer):
                self._BUFFER_LEN - len(self.__buffer))
         try:
             data = self.__inner_src.recv(self._BUFFER_LEN - len(self.__buffer))
-        except nss.error.NSPRError, e:
+        except nss.error.NSPRError as e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
                 _debug('...!exception, closing src: %s', repr(e))
                 data = ''
@@ -308,7 +308,7 @@ class _CombiningBuffer(_ForwardingBuffer):
         assert len(self.__buffer) + utils.u32_size < self._BUFFER_LEN
         try:
             data = self.__outer_src.recv(self._BUFFER_LEN - len(self.__buffer))
-        except nss.error.NSPRError, e:
+        except nss.error.NSPRError as e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
                 _debug('...!exception, closing src: %s', repr(e))
                 data = ''
@@ -352,7 +352,7 @@ class _CombiningBuffer(_ForwardingBuffer):
                 try:
                     _debug('... shutting down %s', _id(self.__dst))
                     self.__dst.shutdown(nss.io.PR_SHUTDOWN_SEND)
-                except nss.error.NSPRError, e:
+                except nss.error.NSPRError as e:
                     # The other side might have closed the socket before us
                     if e.errno != nss.error.PR_NOT_CONNECTED_ERROR:
                         raise
@@ -454,7 +454,7 @@ class _SplittingBuffer(_ForwardingBuffer):
         try:
             _debug('b%s: reading from %s: %d', _id(self), _id(self.__src), left)
             data = self.__src.recv(left)
-        except nss.error.NSPRError, e:
+        except nss.error.NSPRError as e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
                 _debug('...!exception, closing src: %s', repr(e))
                 data = ''
@@ -513,7 +513,7 @@ class _SplittingBuffer(_ForwardingBuffer):
                 try:
                     _debug('...shutting down inner')
                     self.__inner_dst.shutdown(nss.io.PR_SHUTDOWN_SEND)
-                except nss.error.NSPRError, e:
+                except nss.error.NSPRError as e:
                     # The other side might have closed the socket before us
                     if e.errno != nss.error.PR_NOT_CONNECTED_ERROR:
                         raise
@@ -526,7 +526,7 @@ class _SplittingBuffer(_ForwardingBuffer):
                 try:
                     _debug('...shutting down outer')
                     self.__outer_dst.shutdown(nss.io.PR_SHUTDOWN_SEND)
-                except nss.error.NSPRError, e:
+                except nss.error.NSPRError as e:
                     # The other side might have closed the socket before us
                     if e.errno != nss.error.PR_NOT_CONNECTED_ERROR:
                         raise
@@ -631,7 +631,7 @@ class DoubleTLSClient(object):
             self.__inner.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
             try:
                 cert = nss.nss.find_cert_from_nickname(cert_nickname)
-            except nss.error.NSPRError, e:
+            except nss.error.NSPRError as e:
                 if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
                     raise InnerCertificateNotFound('Certificate \'%s\' is not '
                                                    'available' % cert_nickname)
@@ -663,7 +663,7 @@ class DoubleTLSClient(object):
             self.__inner.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
             try:
                 cert = nss.nss.find_cert_from_nickname(cert_nickname)
-            except nss.error.NSPRError, e:
+            except nss.error.NSPRError as e:
                 if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
                     raise InnerCertificateNotFound('Certificate \'%s\' is not '
                                                    'available' % cert_nickname)
@@ -746,7 +746,7 @@ class DoubleTLSClient(object):
             socket_fd.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
             try:
                 cert = nss.nss.find_cert_from_nickname(self.__cert_nickname)
-            except nss.error.NSPRError, e:
+            except nss.error.NSPRError as e:
                 if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
                     raise utils.NSSInitError('Certificate \'%s\' is not '
                                              'available' % self.__cert_nickname)
@@ -761,7 +761,7 @@ class DoubleTLSClient(object):
                 net_addr.port = self.__port
                 try:
                     socket_fd.connect(net_addr)
-                except Exception, e:
+                except Exception as e:
                     if first_error is None:
                         first_error = e
             if first_error is not None:
@@ -787,7 +787,7 @@ class DoubleTLSClient(object):
             logging.debug('Connection refused')
             logging.shutdown()
             os._exit(self.__connection_refused_exit_code)
-        except nss.error.NSPRError, e:
+        except nss.error.NSPRError as e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
                 logging.debug('NSPR error: Connection reset')
             elif e.errno == nss.error.SSL_ERROR_EXPIRED_CERT_ALERT:
@@ -798,7 +798,7 @@ class DoubleTLSClient(object):
                 logging.warning('Exception in child', exc_info=True)
             logging.shutdown()
             os._exit(1) # Nothing that extraordinary
-        except utils.NSSInitError, e:
+        except utils.NSSInitError as e:
             logging.error(str(e))
             logging.shutdown()
             os._exit(self.__unrecoverable_error_exit_code)
@@ -982,7 +982,7 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
                self._BUFFER_LEN - len(self.__buffer))
         try:
             data = self.__src.recv(self._BUFFER_LEN - len(self.__buffer))
-        except nss.error.NSPRError, e:
+        except nss.error.NSPRError as e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
                 _debug('...!exception, closing src: %s', repr(e))
                 data = ''
