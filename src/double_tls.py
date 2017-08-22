@@ -285,7 +285,8 @@ class _CombiningBuffer(_ForwardingBuffer):
         '''
         if (poll_descs.get(self.__inner_src, 0) & nss.io.PR_POLL_READ) == 0:
             return False
-        assert len(self.__buffer) + utils.u32_size < self._BUFFER_LEN
+        if len(self.__buffer) + utils.u32_size >= self._BUFFER_LEN:
+            raise Exception('Inner buffer length exceeded')
         _debug('b%s: reading inner %s: %d', _id(self), _id(self.__inner_src),
                self._BUFFER_LEN - len(self.__buffer))
         try:
@@ -301,7 +302,8 @@ class _CombiningBuffer(_ForwardingBuffer):
                 raise
         _debug('=> %d', len(data))
         # This automatically sends EOF if len(data) == 0
-        assert len(data) < _chunk_inner_mask
+        if len(data) >= _chunk_inner_mask:
+            raise Exception('Data size is larger than chunk limit')
         self.__buffer += utils.u32_pack(_chunk_inner_mask | len(data))
         self.__buffer += data
         if len(data) == 0:
@@ -319,7 +321,8 @@ class _CombiningBuffer(_ForwardingBuffer):
             return False
         _debug('b%s: reading outer %s: %d', _id(self), _id(self.__outer_src),
                self._BUFFER_LEN - len(self.__buffer))
-        assert len(self.__buffer) + utils.u32_size < self._BUFFER_LEN
+        if len(self.__buffer) + utils.u32_size >= self._BUFFER_LEN:
+            raise Exception('Outer contents exceeded buffer length')
         try:
             data = self.__outer_src.recv(self._BUFFER_LEN - len(self.__buffer))
         except nss.error.NSPRError as e:
@@ -333,7 +336,8 @@ class _CombiningBuffer(_ForwardingBuffer):
                 raise
         _debug('=> %d', len(data))
         # This automatically sends EOF if len(data) == 0
-        assert len(data) < _chunk_inner_mask
+        if len(data) >= _chunk_inner_mask:
+            raise Exception('Data length is larger than limit')
         self.__buffer += utils.u32_pack(len(data))
         self.__buffer += data
         if len(data) == 0:
@@ -465,7 +469,8 @@ class _SplittingBuffer(_ForwardingBuffer):
             return
         left = (self._BUFFER_LEN -
                 max(len(self.__inner_buffer), len(self.__outer_buffer)))
-        assert left > 0
+        if left <= 0:
+            raise Exception('No data left while expected')
         try:
             _debug(
                 'b%s: reading from %s: %d', _id(self), _id(
@@ -503,7 +508,8 @@ class _SplittingBuffer(_ForwardingBuffer):
                 self.__header_buffer += data[:run]
                 data = data[run:]
                 _debug('... consumed %d header', run)
-                assert len(self.__header_buffer) <= utils.u32_size
+                if len(self.__header_buffer) > utils.u32_size:
+                    raise Exception('Buffer is larger than max size')
                 if len(self.__header_buffer) == utils.u32_size:
                     v = utils.u32_unpack(self.__header_buffer)
                     self.__header_buffer = ''
@@ -693,7 +699,8 @@ class DoubleTLSClient(object):
             self.__inner.reset_handshake(True)
             self.__inner.force_handshake()
             self.peercert = self.__inner.get_peer_certificate()
-            assert self.peercert is not None
+            if self.peercert is None:
+                raise InnerCertificateNotFound('No peer certificate received')
             logging.info(
                 'Connection from {0!s}'.format(
                     repr(
@@ -880,7 +887,8 @@ class OuterBuffer(object):
             self.__outer_data = self.__outer_data[run:]
             if len(res) == buf_size:
                 break
-            assert len(self.__outer_data) == 0
+            if len(self.__outer_data) != 0:
+                raise Exception('Unexpected outer data')
             header = self.__recv_exact(utils.u32_size)
             v = utils.u32_unpack(header)
             _debug('o%s: header %08X', _id(self), v)
@@ -903,7 +911,8 @@ class OuterBuffer(object):
         The caller must make sure not to interrupt any pending packet.
 
         '''
-        assert len(data) < _chunk_inner_mask
+        if len(data) >= _chunk_inner_mask:
+            raise Exception('Data size larger than limit')
         _debug('o%s: sending %d bytes', _id(self), len(data))
         self.__socket.send(utils.u32_pack(len(data)))
         self.__socket.send(data)
@@ -1005,7 +1014,8 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
     def _receive(self, poll_descs):
         if (poll_descs.get(self.__src, 0) & nss.io.PR_POLL_READ) == 0:
             return
-        assert len(self.__buffer) < self._BUFFER_LEN
+        if len(self.__buffer) >= self._BUFFER_LEN:
+            raise Exception('Buffer larger than length')
         _debug('b%s: reading from %s: %d', _id(self), _id(self.__src),
                self._BUFFER_LEN - len(self.__buffer))
         try:
@@ -1042,7 +1052,8 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
                 self.__header_buffer += data[:run]
                 data = data[run:]
                 _debug('... consumed %d header', run)
-                assert len(self.__header_buffer) <= utils.u32_size
+                if len(self.__header_buffer) > utils.u32_size:
+                    raise Exception('Invalid header buffer size')
                 if len(self.__header_buffer) == utils.u32_size:
                     v = utils.u32_unpack(self.__header_buffer)
                     _debug('... header: %08x', v)

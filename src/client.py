@@ -1513,7 +1513,8 @@ def cmd_sign_rpms(conn, args):
     for (k, v) in six.iteritems(reply_thread.results):
         # If the result was set by request_thread, server never saw the request
         # and there should be no reply.
-        assert k not in results
+        if k in results:
+            raise Exception('Got multiple results for the same subrequest')
         results[k] = v
 
     if ok:
@@ -1687,7 +1688,7 @@ def main():
                                 double_tls.ChildUnrecoverableError):
                     logging.debug('Unrecoverable error in child')
                 else:
-                    assert False, 'Unhandled child_exception type'
+                    raise Exception('Unhandled child_exception type')
             else:
                 logging.error('I/O error: NSPR connection reset')
         elif e.errno == nss.error.PR_END_OF_FILE_ERROR:

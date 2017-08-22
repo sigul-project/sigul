@@ -1,4 +1,6 @@
 2017-08-22  Patrick Uiterwijk  <puiterwijk@redhat.com>
+	* various: replaced asserts with if+raise
+
 	* tests/*.at: Split out some common test code into include_*.at
 
 	* tests/basic.at: Split sign-rpms test from basic

@@ -479,7 +479,8 @@ class SHA512HMACReader(_DigestsReader):
         '''
         digest = self.__hmac.digest_final()
         self.__hmac = None  # Just to be sure nothing unexpected happens
-        assert len(digest) == 64
+        if len(digest) != 64:
+            raise ValueError('Digest length incorrect')
         auth = self._read_fn(64)
         return auth == digest
 
@@ -498,7 +499,8 @@ class SHA512HashAndHMACReader(_DigestsReader):
         '''Return HMAC of the data sent so far.'''
         auth = self.__hmac.digest_final()
         self.__hmac = None  # Just to be sure nothing unexpected happens
-        assert len(auth) == 64
+        if len(auth) != 64:
+            raise ValueError('Auth value length incorrect')
         return auth
 
     def sha512(self):
@@ -550,7 +552,8 @@ class SHA512HMACWriter(_DigestsWriter):
         '''Compute and write HMAC of the data sent so far.'''
         auth = self.__hmac.digest_final()
         self.__hmac = None  # Just to be sure nothing unexpected happens
-        assert len(auth) == 64
+        if len(auth) != 64:
+            raise ValueError('HMAC length incorrect')
         self._write_fn(auth)
 
 # Protocol utilities
@@ -700,7 +703,8 @@ class WorkerQueue(object):
 
     def get(self):
         '''Remove and return an item from the queue. See Queue.get().'''
-        assert not self.__orphaned.is_set()
+        if self.__orphaned.is_set():
+            raise WorkerQueueOrphanedError('Work queue was orphaned')
         return self.__queue.get()
 
     def put(self, item):

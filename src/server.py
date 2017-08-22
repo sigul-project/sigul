@@ -150,7 +150,8 @@ def request_handler(**kwargs):
 
     '''
     def real_decorator(fn):
-        assert fn.__name__.startswith('cmd_')
+        if not fn.__name__.startswith('cmd_'):
+            raise InvalidRequestError('Invalid request handler')
         request_handlers[fn.__name__[len('cmd_'):].replace('_', '-')] = \
             RequestHandler(fn, **kwargs)
         return fn
@@ -308,7 +309,8 @@ class ServersConnection(object):
             utils.copy_data(f.write, reader.read, payload_size)
             self.__payload = f.getvalue()
         else:
-            assert handler.payload_storage == RequestHandler.PAYLOAD_FILE
+            if handler.payload_storage != RequestHandler.PAYLOAD_FILE:
+                raise InvalidRequestError('Payload type is not file')
             if payload_size > self.config.max_file_payload_size:
                 raise InvalidRequestError('Payload too large')
             (fd, self.payload_path) = tempfile.mkstemp(text=False)
@@ -595,11 +597,13 @@ class ServersConnection(object):
                 crypted_pw = 'x'
             if crypt.crypt(password, crypted_pw) != crypted_pw:
                 self.auth_fail('password does not match')
-            assert user is not None
+            if user is None:
+                raise InvalidRequestError('No user object')
             if not user.admin or key is None:
                 self.auth_fail('user is not a server administrator')
         else:
-            assert user_passphrase is not None
+            if user_passphrase is None:
+                raise Exception('No user passphrase')
             access = None
             if user is not None and key is not None:
                 access = (db.query(KeyAccess).filter_by(user=user, key=key).
@@ -610,9 +614,12 @@ class ServersConnection(object):
                                                    user_passphrase)
             if not key_passphrase:
                 self.auth_fail('passphrase does not match')
-            assert user is not None
-            assert key is not None
-            assert access is not None
+            if user is None:
+                raise InvalidRequestError('No user object')
+            if key is None:
+                raise InvalidRequestError('No key object')
+            if access is None:
+                raise InvalidRequestError('No access object')
         return (user, key, access)  # OK
 
     def authenticate_admin_or_user(self, db):
@@ -667,7 +674,12 @@ class ServersConnection(object):
                                                user_passphrase)
         if not key_passphrase:
             self.auth_fail('passphrase does not match')
-        assert user is not None and key is not None and access is not None
+        if user is None:
+            raise InvalidRequestError('No user object')
+        if key is None:
+            raise InvalidRequestError('No key object')
+        if access is None:
+            raise InvalidRequestError('No access')
         return (access, key_passphrase)
 
     def authenticate_key_admin(self, db):

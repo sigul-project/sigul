@@ -464,7 +464,8 @@ class KojiClient(object):
 
         try:
             sigs = session.queryRPMSigs(rpm_id=rpm_info['id'], sigkey=sigkey)
-            assert len(sigs) <= 1
+            if len(sigs) > 1:
+                raise ForwardingError('Multiple signatures returned for key')
             if len(sigs) > 0 and sigs[0]['sighash'] != sighdr_digest:
                 raise ForwardingError('A different signature was already '
                                       'imported')
@@ -566,7 +567,8 @@ class SubrequestMap(object):
         self.__lock.acquire()
         try:
             id_ = rpm.request_fields['id']
-            assert id_ not in self.__map
+            if id_ in self.__map:
+                raise ForwardingError('Subrequest ID repeated')
             self.__map[id_] = rpm
         finally:
             self.__lock.release()
@@ -885,7 +887,8 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
 
         buf = self.__server_buf.read(utils.u64_size)
         rpm.reply_payload_size = utils.u64_unpack(buf)
-        assert rpm.tmp_path is None
+        if rpm.tmp_path is not None:
+            raise ForwardingError('RPM handled twice')
         (fd, rpm.tmp_path) = tempfile.mkstemp(text=False, dir=self.__tmp_dir)
         dst = os.fdopen(fd, 'w+')
         try:
@@ -1134,7 +1137,8 @@ class BridgeConnection(object):
         '''Handle a single connection using client_sock and server_sock.'''
         client_sock.force_handshake()
         cert = client_sock.get_peer_certificate()
-        assert cert is not None
+        if cert is None:
+            raise ForwardingError('No client certificate')
         user_name = cert.subject_common_name
         logging.info('Client with CN %s connected', repr(user_name))
         if (config.required_fas_group is not None and

@@ -167,10 +167,12 @@ def pkcs11(tokens, **config):
     for token in tokens:
         # This is a lazy way of checking: it will just throw KeyError
         config['{0!s}_pubkey'.format(token)]
-        assert 'pkcs11:' not in config['{0!s}_pubkey'.format(token)]
+        if 'pkcs11:' in config['{0!s}_pubkey'.format(token)]:
+            raise ValueError("Pubkey must not be pkcs11:")
 
         if ('{0!s}_privkey'.format(token)) in config:
-            assert 'pkcs11:' in config['{0!s}_privkey'.format(token)]
+            if 'pkcs11:' not in config['{0!s}_privkey'.format(token)]:
+                raise ValueError('Privkey must be pkcs11:')
 
             if ('{0!s}_pin'.format(token)) not in config:
                 config['{0!s}_pin'.format(token)] = getpass(
