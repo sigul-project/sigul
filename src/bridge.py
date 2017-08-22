@@ -47,8 +47,10 @@ import utils
 
 # Infrastructure
 
+
 class BridgeError(Exception):
     pass
+
 
 class BridgeConfiguration(utils.DaemonIDConfiguration, utils.KojiConfiguration,
                           utils.NSSConfiguration, utils.Configuration):
@@ -71,7 +73,8 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.KojiConfiguration,
 
     def _read_configuration(self, parser):
         super(BridgeConfiguration, self)._read_configuration(parser)
-        self.bridge_cert_nickname = parser.get('bridge', 'bridge-cert-nickname')
+        self.bridge_cert_nickname = parser.get(
+            'bridge', 'bridge-cert-nickname')
         self.client_listen_port = parser.getint('bridge', 'client-listen-port')
         self.required_fas_group = parser.get('bridge', 'required-fas-group')
         if self.required_fas_group == '':
@@ -97,6 +100,7 @@ class BridgeConfiguration(utils.DaemonIDConfiguration, utils.KojiConfiguration,
                 group = None
             self.koji_fas_groups[v] = group
 
+
 def create_listen_sock(config, port):
     sock = nss.ssl.SSLSocket(nss.io.PR_AF_INET)
     # FIXME? does this belong in a finished product?
@@ -116,23 +120,29 @@ def create_listen_sock(config, port):
     sock.listen()
     return sock
 
+
 class InvalidRequestError(Exception):
     '''The client's request was invalid.'''
     pass
+
 
 class InvalidReplyError(Exception):
     '''The server's reply was invalid.'''
     pass
 
+
 class ForwardingError(Exception):
-    '''An error was detected while forwarding or modifying the communication.'''
+    '''An error was detected while forwarding or modifying the communication'''
     pass
+
 
 def copy_file_data(dest, src, size):
     '''Copy size bytes from file-like src to file-like dst.'''
     utils.copy_data(dest.write, src.read, size)
 
 _fas_connection = None
+
+
 def fas_user_is_in_group(config, user_name, group_name):
     '''Return True if user_name is in group.'''
     global _fas_connection
@@ -145,7 +155,7 @@ def fas_user_is_in_group(config, user_name, group_name):
                                             password=config.fas_password)
         logging.debug('Authenticating user in FAS')
         person = _fas_connection.person_by_username(user_name)
-        if len(person) == 0: # Not found
+        if len(person) == 0:  # Not found
             return False
         for group in person.approved_memberships:
             if str(group['name']) == group_name:
@@ -154,6 +164,7 @@ def fas_user_is_in_group(config, user_name, group_name):
     except (fedora.client.FedoraClientError,
             fedora.client.FedoraServiceError) as e:
         raise BridgeError('Error communicating with FAS: {0!s}'.format(str(e)))
+
 
 def urlopen(url):
     '''Open url.
@@ -168,6 +179,7 @@ def urlopen(url):
         raise ForwardingError('Content-Length not returned for {0!s}'.format(
                               url))
     return (r, size)
+
 
 class RPMObject(object):
     '''Data about a single 'sign-rpms' subrequest.'''
@@ -195,7 +207,8 @@ class RPMObject(object):
     def get_rpm_info(self, koji_client):
         '''Return information from koji, perhaps using koji_client.'''
         if self.__koji_rpm_info is None:
-            self.__koji_rpm_info = koji_client.get_rpm_info(self.request_fields)
+            self.__koji_rpm_info = koji_client.get_rpm_info(
+                self.request_fields)
         return self.__koji_rpm_info
 
     def compute_payload_url(self, koji_client):
@@ -209,6 +222,7 @@ class RPMObject(object):
         koji_client.add_signature(rpm_info, self.tmp_path)
 
 # Header and payload size validation
+
 
 class Field(object):
     '''A field.'''
@@ -224,7 +238,10 @@ class Field(object):
 
         '''
         if not self.__optional and value is None:
-            raise InvalidRequestError('Required field {0!s} missing'.format(self.name))
+            raise InvalidRequestError(
+                'Required field {0!s} missing'.format(
+                    self.name))
+
 
 class StringField(Field):
     '''A string field.'''
@@ -232,7 +249,10 @@ class StringField(Field):
     def validate(self, value):
         super(StringField, self).validate(value)
         if value is not None and not utils.string_is_safe(value):
-            raise InvalidRequestError('Field {0!s} is not printable'.format(self.name))
+            raise InvalidRequestError(
+                'Field {0!s} is not printable'.format(
+                    self.name))
+
 
 class BoolField(Field):
     '''A bool field.'''
@@ -241,7 +261,10 @@ class BoolField(Field):
         super(BoolField, self).validate(value)
         if value is not None and (len(value) != utils.u8_size or
                                   utils.u8_unpack(value) not in (0, 1)):
-            raise InvalidRequestError('Field {0!s} is not a boolean'.format(self.name))
+            raise InvalidRequestError(
+                'Field {0!s} is not a boolean'.format(
+                    self.name))
+
 
 class YYYYMMDDField(Field):
     '''A date field, using the yyyy-mm-dd format.'''
@@ -251,6 +274,7 @@ class YYYYMMDDField(Field):
         if value is not None and not utils.yyyy_mm_dd_is_valid(value):
             raise InvalidRequestError('Field {0!s} is not a valid date'.format(
                                       self.name))
+
 
 class RequestValidator(object):
     '''A validator of header fields and payload size.'''
@@ -266,13 +290,16 @@ class RequestValidator(object):
         '''Validate fiels and payload_size.'''
         for key in fields.keys():
             if key not in self.__known_fields:
-                raise InvalidRequestError('Unexpected field {0!s}'.format(repr(key)))
+                raise InvalidRequestError(
+                    'Unexpected field {0!s}'.format(
+                        repr(key)))
         for f in self.__fields:
             f.validate(fields.get(f.name))
         if payload_size > self.__max_payload:
             raise InvalidRequestError('Payload too large')
 
 # Request type-specific code
+
 
 class RequestHandler(object):
     '''Request type-specific connection handling.'''
@@ -297,6 +324,7 @@ class RequestHandler(object):
         '''Deinitialize any costly state.'''
         pass
 
+
 class KojiClient(object):
     '''Utilities for working with Koji.
 
@@ -304,6 +332,7 @@ class KojiClient(object):
     subrequests.
 
     '''
+
     def __init__(self, conn):
         '''Initialize for conn.'''
         self.__conn = conn
@@ -332,26 +361,30 @@ class KojiClient(object):
                 self.__koji_config = utils.koji_read_config(self.__conn.config,
                                                             instance)
             except utils.KojiError as e:
-                raise ForwardingError('Error preparing Koji configuration: {0!s}'.format(
-                                      str(e)))
+                raise ForwardingError(
+                    'Error preparing Koji configuration: {0!s}'.format(
+                        str(e)))
             self.__koji_pathinfo = koji.PathInfo(self.__koji_config['topurl'])
         if self.__koji_session is None:
             try:
                 if settings.koji_do_proxy_auth:
-                    self.__koji_session = utils.koji_connect \
-                        (self.__koji_config, authenticate=True,
-                         proxyuser=self.__conn.user_name)
+                    self.__koji_session = utils.koji_connect(
+                        self.__koji_config, authenticate=True,
+                        proxyuser=self.__conn.user_name)
                 else:
-                    self.__koji_session = utils.koji_connect(self.__koji_config,
-                                                             authenticate=True)
+                    self.__koji_session = utils.koji_connect(
+                        self.__koji_config, authenticate=True)
             except (utils.KojiError, koji.GenericError) as e:
-                raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
+                raise ForwardingError(
+                    'Koji connection failed: {0!s}'.format(
+                        str(e)))
         return self.__koji_session
 
     __rpm_info_map = {'name': StringField('rpm-name'),
                       'version': StringField('rpm-version'),
                       'release': StringField('rpm-release'),
                       'arch': StringField('rpm-arch')}
+
     def get_rpm_info(self, fields):
         '''Return information about a rpm specified by fields.
 
@@ -372,7 +405,9 @@ class KojiClient(object):
         try:
             info = session.getRPM(d)
         except (utils.KojiError, koji.GenericError) as e:
-            raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
+            raise ForwardingError(
+                'Koji connection failed: {0!s}'.format(
+                    str(e)))
         if info is None:
             raise ForwardingError('RPM not found')
         return info
@@ -394,7 +429,9 @@ class KojiClient(object):
             if build is None:
                 raise ForwardingError('RPM has no build')
         except (utils.KojiError, koji.GenericError) as e:
-            raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
+            raise ForwardingError(
+                'Koji connection failed: {0!s}'.format(
+                    str(e)))
         return (self.__koji_pathinfo.build(build) + '/' +
                 self.__koji_pathinfo.rpm(rpm_info))
 
@@ -434,13 +471,16 @@ class KojiClient(object):
             if len(sigs) == 0:
                 session.addRPMSig(rpm_info['id'], base64.encodestring(sighdr))
         except (utils.KojiError, koji.GenericError) as e:
-            raise ForwardingError('Koji connection failed: {0!s}'.format(str(e)))
+            raise ForwardingError(
+                'Koji connection failed: {0!s}'.format(
+                    str(e)))
 
     def close(self):
         '''Disconnect from koji.'''
         if self.__koji_session is not None:
             utils.koji_disconnect(self.__koji_session)
             self.__koji_session = None
+
 
 class SignRPMRequestHandler(RequestHandler):
     '''A specialized handler for the 'sign-rpm' request.'''
@@ -469,12 +509,14 @@ class SignRPMRequestHandler(RequestHandler):
             finally:
                 src.close()
         except requests.RequestException as e:
-            raise ForwardingError('Error reading {0!s}: {1!s}'.format(url, str(e)))
+            raise ForwardingError(
+                'Error reading {0!s}: {1!s}'.format(
+                    url, str(e)))
 
     def forward_reply_payload(self, conn):
         # Zero-length response should happen only on error.
-        if (conn.reply_payload_size != 0 and
-            conn.request_fields.get('import-signature') == utils.u8_pack(1)):
+        if (conn.reply_payload_size != 0 and conn.request_fields.get(
+                'import-signature') == utils.u8_pack(1)):
             (fd, self.__rpm.tmp_path) = tempfile.mkstemp(text=False)
             try:
                 tmp_file = os.fdopen(fd, 'w+')
@@ -511,6 +553,7 @@ class SignRPMRequestHandler(RequestHandler):
         if self.__koji_client is not None:
             self.__koji_client.close()
 
+
 class SubrequestMap(object):
     '''A map of subrequest ID => RPMObject, internally serialized.'''
 
@@ -536,6 +579,7 @@ class SubrequestMap(object):
         finally:
             self.__lock.release()
 
+
 class SignRPMsReadRequestThread(utils.WorkerThread):
     '''A thread that reads sign-rpm subrequests.
 
@@ -552,7 +596,7 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
                           StringField('rpm-release', optional=True),
                           StringField('rpm-arch', optional=True),
                           Field('rpm-sigmd5', optional=True)),
-                         max_payload=1024*1024*1024*1024)
+                         max_payload=1024 * 1024 * 1024 * 1024)
 
     def __init__(self, conn, dest_queue, subrequest_map, tmp_dir):
         super(SignRPMsReadRequestThread, self). \
@@ -566,8 +610,8 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
     def _real_run(self):
         total_size = 0
         while True:
-            (rpm, size) = self.__read_one_request \
-                (self.__conn.config.max_rpms_payloads_size - total_size)
+            (rpm, size) = self.__read_one_request(
+                self.__conn.config.max_rpms_payloads_size - total_size)
             if rpm is None:
                 break
             total_size += size
@@ -592,7 +636,7 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
         s = utils.readable_fields(fields)
         logging.debug('%s: Started handling %s', self.name, s)
         logging.info('Subrequest: %s', s)
-        client_proxy.stored_read(64) # Ignore value
+        client_proxy.stored_read(64)  # Ignore value
 
         buf = self.__conn.client_buf.read(utils.u64_size)
         payload_size = utils.u64_unpack(buf)
@@ -617,6 +661,7 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
                 dst.close()
         rpm.request_payload_digest = self.__conn.client_buf.read(64)
         return (rpm, size)
+
 
 class SignRPMsKojiRequestThread(utils.WorkerThread):
     '''A thread that talks to koji for sign-rpm subrequests.
@@ -670,6 +715,7 @@ class SignRPMsKojiRequestThread(utils.WorkerThread):
             size = utils.path_size_in_blocks(rpm.tmp_path)
         return size
 
+
 class SignRPMsSendRequestThread(utils.WorkerThread):
     '''A thread that forwards sign-rpm subrequests.
 
@@ -720,10 +766,13 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
                 # This exception was not expected, let the default handling
                 # handle it
                 raise
-            raise ForwardingError('Error reading {0!s}: {1!s}'.format(rpm.request_payload_url, str(e)))
+            raise ForwardingError(
+                'Error reading {0!s}: {1!s}'.format(
+                    rpm.request_payload_url, str(e)))
         self.__server_buf.write(rpm.request_payload_digest)
 
         rpm.remove_tmp_path()
+
 
 class SignRPMsReadReplyThread(utils.WorkerThread):
     '''A thread that reads sign-rpm subreplies.
@@ -732,6 +781,7 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
     end of the replies.
 
     '''
+
     def __init__(self, dest_queue, server_buf, subrequest_map, tmp_dir):
         super(SignRPMsReadReplyThread, self). \
             __init__('sign-rpms:read replies', 'read reply thread',
@@ -756,9 +806,9 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
             # keeps replying with zero-window ACKs, the connection will never
             # time out and our request-side threads will not terminate.
             #
-            # Ideally we would studown(SHUT_RD), and the kernel would send a RST
-            # to the server about the unread data, but the Linux kernel actually
-            # ignores SHUT_RD for TCP.
+            # Ideally we would studown(SHUT_RD), and the kernel would send a
+            # RST to the server about the unread data, but the Linux kernel
+            # actually ignores SHUT_RD for TCP.
             #
             # Instead, shut down the server socket also for writing; this will
             # cause SignRPMsSendRequestThread to terminate, and we are not even
@@ -771,8 +821,9 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
             # NSS; the NSS socket is still in full-duplex mode, so touching the
             # sending side might not be a good idea.
             try:
-                logging.debug('%s: Exception, shutting down write side as well',
-                              self.name)
+                logging.debug(
+                    '%s: Exception, shutting down write side as well',
+                    self.name)
                 fd = self.__server_buf.socket.fileno()
                 sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
                 try:
@@ -829,7 +880,7 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
         logging.debug('Subreply: %s', utils.readable_fields(fields))
 
         rpm.reply_fields = fields
-        server_proxy.stored_read(64) # Ignore value
+        server_proxy.stored_read(64)  # Ignore value
         rpm.reply_header_data = server_proxy.stored_data()
 
         buf = self.__server_buf.read(utils.u64_size)
@@ -843,6 +894,7 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
             dst.close()
         rpm.reply_payload_digest = self.__server_buf.read(64)
         return rpm
+
 
 class SignRPMsKojiReplyThread(utils.WorkerThread):
     '''A thread that talks to koji for sign-rpm subreplies.
@@ -887,6 +939,7 @@ class SignRPMsKojiReplyThread(utils.WorkerThread):
             (self.__conn.request_fields.get('import-signature') ==
              utils.u8_pack(1))):
             rpm.add_signature_to_koji(koji_client)
+
 
 class SignRPMsSendReplyThread(utils.WorkerThread):
     '''A thread that forwards sign-rpm subreplies.
@@ -933,6 +986,7 @@ class SignRPMsSendReplyThread(utils.WorkerThread):
 
         rpm.remove_tmp_path()
 
+
 class SignRPMsRequestHandler(RequestHandler):
     '''A specialized handler for the 'sign-rpms' request.'''
 
@@ -972,6 +1026,7 @@ class SignRPMsRequestHandler(RequestHandler):
         if exception is not None:
             raise exception[0](exception[1]).with_traceback(exception[2])
 
+
 class RT(object):
     '''Request type description.'''
 
@@ -998,7 +1053,7 @@ request_types = {
                    SF('name-email', optional=True),
                    YYYYMMDDField('expire-date', optional=True))),
     'import-key': RT((SF('key'), SF('initial-key-admin', optional=True)),
-                     max_payload=1024*1024),
+                     max_payload=1024 * 1024),
     'delete-key': RT((SF('key'),)),
     'modify-key': RT((SF('key'), SF('new-name', optional=True))),
     'list-key-users': RT((SF('key'),)),
@@ -1009,18 +1064,18 @@ request_types = {
     'revoke-key-access': RT((SF('key'), SF('name'))),
     'get-public-key': RT((SF('key'),)),
     'change-passphrase': RT((SF('key'),)),
-    'sign-text': RT((SF('key'),), max_payload=1024*1024*1024),
+    'sign-text': RT((SF('key'),), max_payload=1024 * 1024 * 1024),
     'sign-data': RT((SF('key'),
                      BoolField('armor', optional=True)),
-                    max_payload=1024*1024*1024*1024),
+                    max_payload=1024 * 1024 * 1024 * 1024),
     'sign-git-tag': RT((SF('key'),),
-                       max_payload=1024*1024*1024),
+                       max_payload=1024 * 1024 * 1024),
     'sign-container': RT((SF('key'),
                           SF('docker-reference')),
-                         max_payload=1024*1024*1024),
+                         max_payload=1024 * 1024 * 1024),
     'sign-ostree': RT((SF('key'),
                        SF('ostree-hash')),
-                      max_payload=1024*1024*1024),
+                      max_payload=1024 * 1024 * 1024),
     'sign-rpm': RT((SF('key'), SF('rpm-name', optional=True),
                     SF('rpm-epoch', optional=True),
                     SF('rpm-version', optional=True),
@@ -1031,18 +1086,20 @@ request_types = {
                     BoolField('return-data', optional=True),
                     SF('koji-instance', optional=True),
                     BoolField('v3-signature', optional=True)),
-                   max_payload=1024*1024*1024, handler=SignRPMRequestHandler),
+                   max_payload=1024 * 1024 * 1024,
+                   handler=SignRPMRequestHandler),
     'sign-rpms': RT((SF('key'), BoolField('import-signature', optional=True),
                      BoolField('return-data', optional=True),
                      SF('koji-instance', optional=True),
                      BoolField('v3-signature', optional=True)),
                     handler=SignRPMsRequestHandler),
     'list-binding-methods': RT(()),
-    }
+}
 del RT
 del SF
 
 # Request handling
+
 
 class StoringProxy(object):
     '''A proxy for a double_tls.OuterBuffer that stores read outer data.'''
@@ -1068,6 +1125,7 @@ class StoringProxy(object):
         self.__stored = ''
         return res
 
+
 class BridgeConnection(object):
     '''State and handling of a single connection.'''
 
@@ -1082,7 +1140,9 @@ class BridgeConnection(object):
         if (config.required_fas_group is not None and
             not fas_user_is_in_group(config, user_name,
                                      config.required_fas_group)):
-            raise InvalidRequestError('User {0!s} not allowed to connect'.format(repr(user_name)))
+            raise InvalidRequestError(
+                'User {0!s} not allowed to connect'.format(
+                    repr(user_name)))
 
         client_buf = double_tls.OuterBuffer(client_sock)
         server_buf = double_tls.OuterBuffer(server_sock)
@@ -1113,7 +1173,8 @@ class BridgeConnection(object):
     def __forward_request_headers(self):
         '''Read and forward request data up to the request payload size.
 
-        Note that request payload size is read and validated, but not forwarded!
+        Note that request payload size is read and validated, but not
+        forwarded!
         Also enforce self.config.koji_fas_groups.
 
         Set self.__handler, self.request_fields and self.request_payload_size.
@@ -1145,7 +1206,7 @@ class BridgeConnection(object):
             raise InvalidRequestError('Unknown op value')
         self.__handler = rt.handler()
 
-        buf = self.client_buf.read(utils.u64_size) # Not using proxy
+        buf = self.client_buf.read(utils.u64_size)  # Not using proxy
         self.request_payload_size = utils.u64_unpack(buf)
 
         rt.validator.validate(self.request_fields, self.request_payload_size)
@@ -1160,10 +1221,13 @@ class BridgeConnection(object):
         if instance is not None and instance in self.config.koji_fas_groups:
             group = self.config.koji_fas_groups[instance]
             if (group is not None and
-                not fas_user_is_in_group(self.config, self.user_name, group)):
-                raise InvalidRequestError('User %s not allowed to use Koji '
-                                          'instance %s' % (repr(self.user_name),
-                                                           repr(instance)))
+                    not fas_user_is_in_group(self.config, self.user_name,
+                                             group)):
+                raise InvalidRequestError(
+                    'User %s not allowed to use Koji '
+                    'instance %s' %
+                    (repr(self.user_name),
+                     repr(instance)))
 
     def __forward_reply_headers(self):
         '''Read and forward reply data up to (and including) the reply header.
@@ -1185,7 +1249,7 @@ class BridgeConnection(object):
                              errors.message(error_code), msg)
             else:
                 logging.info('Request error: %s', errors.message(error_code))
-        proxy.stored_read(64) # Ignore value
+        proxy.stored_read(64)  # Ignore value
         self.client_buf.write(proxy.stored_data())
 
     def __forward_reply_payload(self):
@@ -1234,6 +1298,7 @@ class BridgeConnection(object):
         if self.__handler is not None:
             self.__handler.close()
 
+
 def bridge_one_request(config, server_listen_sock, client_listen_sock):
     '''Forward one request and reply.'''
 
@@ -1271,6 +1336,7 @@ def bridge_one_request(config, server_listen_sock, client_listen_sock):
     except BridgeError as e:
         logging.warning(str(e))
     logging.debug('Request handling finished')
+
 
 def main():
     options = utils.get_daemon_options('A signing server bridge',
@@ -1331,7 +1397,7 @@ def main():
                 bridge_one_request(config, server_listen_sock,
                                    client_listen_sock)
         except (KeyboardInterrupt, SystemExit):
-            pass # Silence is golden
+            pass  # Silence is golden
         except:
             logging.error('Unexpected exception', exc_info=True)
             sys.exit(1)

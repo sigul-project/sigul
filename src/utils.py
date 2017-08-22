@@ -49,9 +49,11 @@ import settings
 
 # Configuration handling
 
+
 class ConfigurationError(Exception):
     '''Error reading utility configuration.'''
     pass
+
 
 class Configuration(object):
     '''A configuration of one of the utilities.'''
@@ -76,14 +78,17 @@ class Configuration(object):
                         os.path.expanduser(config_file))
         files = parser.read(config_paths)
         if len(files) == 0:
-            raise ConfigurationError('No configuration file found (tried {0!s})'.format(
-                                     ', '.join("'{0!s}'".format(p)
-                                               for p in config_paths)))
+            raise ConfigurationError(
+                'No configuration file found (tried {0!s})'.format(
+                    ', '.join("'{0!s}'".format(p)
+                              for p in config_paths)))
         try:
             self._read_configuration(parser)
         # ValueError is not handled by parser.getint()
         except (configparser.Error, ValueError) as e:
-            raise ConfigurationError('Error reading configuration: {0!s}'.format(str(e)))
+            raise ConfigurationError(
+                'Error reading configuration: {0!s}'.format(
+                    str(e)))
 
     def _add_defaults(self, defaults):
         '''Add more default values to defaults.'''
@@ -101,6 +106,7 @@ class Configuration(object):
         '''
         pass
 
+
 def optparse_add_batch_option(parser):
     '''Add --batch option to parser.'''
     parser.add_option('--batch', action='store_true',
@@ -108,15 +114,19 @@ def optparse_add_batch_option(parser):
                       'expect NUL-terminated input)')
     parser.set_defaults(batch=False)
 
+
 def optparse_add_config_file_option(parser, default):
     '''Add a --config-file option to parser with the specified default.'''
     parser.add_option('-c', '--config-file', help='Configuration file path')
     parser.set_defaults(config_file=default)
 
+
 def optparse_add_verbosity_option(parser):
     '''Add --verbose option to parser.'''
-    parser.add_option('-v', '--verbose', action='count',
-                      help='More verbose output (twice for debugging messages)')
+    parser.add_option(
+        '-v', '--verbose', action='count',
+        help='More verbose output (twice for debugging messages)')
+
 
 def logging_level_from_options(options):
     '''Return a logging verbosity level depending on options.verbose'''
@@ -124,8 +134,9 @@ def logging_level_from_options(options):
         return logging.WARNING
     elif options.verbose == 1:
         return logging.INFO
-    else: # options.verbose >= 2
+    else:  # options.verbose >= 2
         return logging.DEBUG
+
 
 def setup_logging(options, component):
     logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
@@ -133,14 +144,18 @@ def setup_logging(options, component):
                         filename=os.path.join(options.log_dir,
                                               'sigul_%s.log' % component))
 
+
 def create_basic_parser(description, default_config_file):
     '''Create a basic optparse parser for a bridge/server component.'''
-    parser = optparse.OptionParser(usage='%prog [options]',
-                                   version='%prog {0!s}'.format((settings.version)),
-                                   description=description)
+    parser = optparse.OptionParser(
+        usage='%prog [options]',
+        version='%prog {0!s}'.format(
+            (settings.version)),
+        description=description)
     optparse_add_config_file_option(parser, default_config_file)
     optparse_add_verbosity_option(parser)
     return parser
+
 
 def optparse_parse_options_only(parser):
     '''Parse input using parser, expecting no arguments.
@@ -152,6 +167,7 @@ def optparse_parse_options_only(parser):
     if len(args) != 0:
         parser.error('unexpected argument')
     return options
+
 
 def get_daemon_options(description, default_config_file):
     '''Handle command-line options for a daemon.
@@ -173,6 +189,7 @@ def get_daemon_options(description, default_config_file):
 
 # Koji utilities
 
+
 class KojiConfiguration(Configuration):
 
     def _add_defaults(self, defaults):
@@ -191,12 +208,16 @@ class KojiConfiguration(Configuration):
         for v in parser.get('koji', 'koji-instances').split():
             self.koji_instances[v] = parser.get('koji', 'koji-config-' + v)
 
+
 class KojiError(Exception):
     pass
 
 _u8_format = '!B'
+
+
 def u8_pack(v):
     return struct.pack(_u8_format, v)
+
 
 def u8_unpack(data):
     return struct.unpack(_u8_format, data)[0]
@@ -204,8 +225,11 @@ def u8_unpack(data):
 u8_size = struct.calcsize(_u8_format)
 
 _u32_format = '!I'
+
+
 def u32_pack(v):
     return struct.pack(_u32_format, v)
+
 
 def u32_unpack(data):
     return struct.unpack(_u32_format, data)[0]
@@ -213,13 +237,17 @@ def u32_unpack(data):
 u32_size = struct.calcsize(_u32_format)
 
 _u64_format = '!Q'
+
+
 def u64_pack(v):
     return struct.pack(_u64_format, v)
+
 
 def u64_unpack(data):
     return struct.unpack(_u64_format, data)[0]
 
 u64_size = struct.calcsize(_u64_format)
+
 
 def koji_read_config(global_config, instance):
     '''Read koji's configuration and verify it, using global_config.
@@ -232,8 +260,9 @@ def koji_read_config(global_config, instance):
         try:
             config_path = global_config.koji_instances[instance]
         except KeyError:
-            raise KojiError('Koji configuration instance {0!s} not defined'.format(
-                            instance))
+            raise KojiError(
+                'Koji configuration instance {0!s} not defined'.format(
+                    instance))
     else:
         config_path = global_config.koji_config
     parser = configparser.ConfigParser()
@@ -241,7 +270,8 @@ def koji_read_config(global_config, instance):
     config = dict(parser.items('koji'))
     for opt in ('server', 'topurl'):
         if opt not in config:
-            raise KojiError('Missing koji configuration option {0!s}'.format(opt))
+            raise KojiError(
+                'Missing koji configuration option {0!s}'.format(opt))
     for opt in ('cert', 'serverca'):
         if opt in config:
             config[opt] = os.path.expanduser(config[opt])
@@ -257,6 +287,7 @@ def koji_read_config(global_config, instance):
         raise KojiError('Unsupported authtype {0!s} requested'.format(
                         config['authtype']))
     return config
+
 
 def koji_connect(koji_config, authenticate, proxyuser=None):
     '''Return an authenticated koji session.
@@ -290,8 +321,11 @@ def koji_connect(koji_config, authenticate, proxyuser=None):
     except xmlrpc_client.ProtocolError:
         raise KojiError('Cannot connect to Koji')
     if version != koji.API_VERSION:
-        raise KojiError('Koji API version mismatch (server {0:d}, client {1:d})'.format(version, koji.API_VERSION))
+        raise KojiError(
+            'Koji API version mismatch (server {0:d}, client {1:d})'.format(
+                version, koji.API_VERSION))
     return session
+
 
 def koji_disconnect(session):
     try:
@@ -300,6 +334,7 @@ def koji_disconnect(session):
         pass
 
 # Crypto utilities
+
 
 class NSSConfiguration(Configuration):
 
@@ -318,21 +353,25 @@ class NSSConfiguration(Configuration):
         super(NSSConfiguration, self)._read_configuration(parser)
         self.nss_dir = os.path.expanduser(parser.get('nss', 'nss-dir'))
         if not os.path.isdir(self.nss_dir):
-            raise ConfigurationError('[nss] nss-dir \'{0!s}\' is not a directory'.format(
-                                     self.nss_dir))
+            raise ConfigurationError(
+                '[nss] nss-dir \'{0!s}\' is not a directory'.format(
+                    self.nss_dir))
         self.nss_password = parser.get('nss', 'nss-password')
         if self.nss_password is None:
             self.nss_password = getpass.getpass('NSS database password: ')
         self.nss_min_tls = parser.get('nss', 'nss-min-tls')
         self.nss_max_tls = parser.get('nss', 'nss-max-tls')
 
+
 def nss_client_auth_callback_single(unused_ca_names, cert):
     '''Provide the specified certificate.'''
     return (cert, nss.nss.find_key_by_any_cert(cert))
 
+
 class NSSInitError(Exception):
     '''Error in nss_init.'''
     pass
+
 
 def nss_init(config):
     '''Initialize NSS.
@@ -352,7 +391,9 @@ def nss_init(config):
         nss.nss.get_internal_key_slot().authenticate()
     except nss.error.NSPRError as e:
         if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
-            raise NSSInitError('\'{0!s}\' does not contain a valid NSS database'.format(config.nss_dir))
+            raise NSSInitError(
+                '\'{0!s}\' does not contain a valid NSS database'.format(
+                    config.nss_dir))
         elif e.errno == nss.error.SEC_ERROR_BAD_PASSWORD:
             raise NSSInitError('Provided NSS password is incorrect')
         raise
@@ -370,6 +411,8 @@ def nss_init(config):
     nss.ssl.config_server_session_id_cache()
 
 _derivation_counter_1 = u32_pack(1)
+
+
 def derived_key(nss_base_key, instance):
     '''Return a NSS HMAC key derived from nss_base_key and instance number.'''
     # This is a degenerate case of NIST SP 800-56A section 5.8, with
@@ -387,6 +430,7 @@ def derived_key(nss_base_key, instance):
                                   nss.nss.PK11_OriginDerive, nss.nss.CKA_SIGN,
                                   nss.nss.SecItem(raw))
 
+
 class _DigestsReader(object):
     '''A wrapper with a .read method, computing digests of the data.'''
 
@@ -403,6 +447,7 @@ class _DigestsReader(object):
             d.digest_op(data)
         return data
 
+
 class SHA512Reader(_DigestsReader):
     '''A wrapper with a .read method, computing a SHA-512 hash of the data.'''
 
@@ -413,15 +458,16 @@ class SHA512Reader(_DigestsReader):
     def sha512(self):
         '''Return a SHA-512 hash of the data sent so far.'''
         digest = self.__digest.digest_final()
-        self.__digest = None # Just to be sure nothing unexpected happens
+        self.__digest = None  # Just to be sure nothing unexpected happens
         return digest
+
 
 class SHA512HMACReader(_DigestsReader):
     '''A wrapper with a .read method, computing a SHA-512 HMAC of the data.'''
 
     def __init__(self, read_fn, nss_key):
-        self.__hmac = nss.nss.create_context_by_sym_key \
-            (nss.nss.CKM_SHA512_HMAC, nss.nss.CKA_SIGN, nss_key, None)
+        self.__hmac = nss.nss.create_context_by_sym_key(
+            nss.nss.CKM_SHA512_HMAC, nss.nss.CKA_SIGN, nss_key, None)
         super(SHA512HMACReader, self).__init__(read_fn, self.__hmac)
 
     def verify_64B_hmac_authenticator(self):
@@ -431,33 +477,35 @@ class SHA512HMACReader(_DigestsReader):
 
         '''
         digest = self.__hmac.digest_final()
-        self.__hmac = None # Just to be sure nothing unexpected happens
+        self.__hmac = None  # Just to be sure nothing unexpected happens
         assert len(digest) == 64
         auth = self._read_fn(64)
         return auth == digest
+
 
 class SHA512HashAndHMACReader(_DigestsReader):
     '''A wrapper with a .read method, computing a SHA-512 hash and HMAC.'''
 
     def __init__(self, read_fn, nss_key):
         self.__digest = nss.nss.create_digest_context(nss.nss.SEC_OID_SHA512)
-        self.__hmac = nss.nss.create_context_by_sym_key \
-            (nss.nss.CKM_SHA512_HMAC, nss.nss.CKA_SIGN, nss_key, None)
+        self.__hmac = nss.nss.create_context_by_sym_key(
+            nss.nss.CKM_SHA512_HMAC, nss.nss.CKA_SIGN, nss_key, None)
         super(SHA512HashAndHMACReader, self).__init__(read_fn, self.__digest,
                                                       self.__hmac)
 
     def hmac(self):
         '''Return HMAC of the data sent so far.'''
         auth = self.__hmac.digest_final()
-        self.__hmac = None # Just to be sure nothing unexpected happens
+        self.__hmac = None  # Just to be sure nothing unexpected happens
         assert len(auth) == 64
         return auth
 
     def sha512(self):
         '''Return a SHA-512 hash of the data sent so far.'''
         digest = self.__digest.digest_final()
-        self.__digest = None # Just to be sure nothing unexpected happens
+        self.__digest = None  # Just to be sure nothing unexpected happens
         return digest
+
 
 class _DigestsWriter(object):
     '''A wrapper with a .write method, computing digests of the data.'''
@@ -474,6 +522,7 @@ class _DigestsWriter(object):
         for d in self.__digests:
             d.digest_op(data)
 
+
 class SHA512Writer(_DigestsWriter):
     '''A wrapper with a .write method, computing a SHA-512 hash of the data.'''
 
@@ -484,30 +533,32 @@ class SHA512Writer(_DigestsWriter):
     def sha512(self):
         '''Return a SHA-512 hash of the data sent so far.'''
         digest = self.__digest.digest_final()
-        self.__digest = None # Just to be sure nothing unexpected happens
+        self.__digest = None  # Just to be sure nothing unexpected happens
         return digest
+
 
 class SHA512HMACWriter(_DigestsWriter):
     '''A wrapper with a .write method, computing a SHA-512 HMAC of the data.'''
 
     def __init__(self, write_fn, nss_key):
-        self.__hmac = nss.nss.create_context_by_sym_key \
-            (nss.nss.CKM_SHA512_HMAC, nss.nss.CKA_SIGN, nss_key, None)
+        self.__hmac = nss.nss.create_context_by_sym_key(
+            nss.nss.CKM_SHA512_HMAC, nss.nss.CKA_SIGN, nss_key, None)
         super(SHA512HMACWriter, self).__init__(write_fn, self.__hmac)
 
     def write_64B_hmac(self):
         '''Compute and write HMAC of the data sent so far.'''
         auth = self.__hmac.digest_final()
-        self.__hmac = None # Just to be sure nothing unexpected happens
+        self.__hmac = None  # Just to be sure nothing unexpected happens
         assert len(auth) == 64
         self._write_fn(auth)
 
 # Protocol utilities
-
 protocol_version = 0
+
 
 class InvalidFieldsError(Exception):
     pass
+
 
 def read_fields(read_fn):
     '''Read field mapping using read_fn(size).
@@ -536,6 +587,7 @@ def read_fields(read_fn):
         value = read_fn(size)
         fields[key] = value
     return fields
+
 
 def format_fields(fields):
     '''Return fields formated using the protocol.
@@ -566,10 +618,15 @@ def format_fields(fields):
         data += value
     return data
 
+
 def readable_fields(fields):
     '''Return a string representing fields.'''
     keys = sorted(fields.keys())
-    return ', '.join(('{0!s} = {1!s}'.format(repr(k), repr(fields[k])) for k in keys))
+    return ', '.join(
+        ('{0!s} = {1!s}'.format(
+            repr(k), repr(
+                fields[k])) for k in keys))
+
 
 def string_is_safe(s, filename=False):
     '''Return True if s an allowed readable string.
@@ -596,6 +653,8 @@ def string_is_safe(s, filename=False):
     return True
 
 _date_re = re.compile('^\d\d\d\d-\d\d-\d\d$')
+
+
 def yyyy_mm_dd_is_valid(s):
     '''Return True if s is a valid yyyy-mm-dd date.'''
     if _date_re.match(s) is None:
@@ -605,6 +664,7 @@ def yyyy_mm_dd_is_valid(s):
     except ValueError:
         return False
     return True
+
 
 def is_int(s):
     '''Return True if s is a valid int.'''
@@ -616,9 +676,11 @@ def is_int(s):
 
 # Threading utilities
 
+
 class WorkerQueueOrphanedError(Exception):
     '''Putting an item into a WorkerQueue failed because it is orphaned.'''
     pass
+
 
 class WorkerQueue(object):
     '''A synchronized queue similar to Queue.Queue, except that it can be marked
@@ -633,7 +695,7 @@ class WorkerQueue(object):
     def __init__(self, maxsize=0):
         '''Create a FIFO queue.  See Queue.Queue.'''
         self.__queue = queue.Queue(maxsize)
-        self.__orphaned = threading.Event() # Used as a thread-safe boolean.
+        self.__orphaned = threading.Event()  # Used as a thread-safe boolean.
 
     def get(self):
         '''Remove and return an item from the queue. See Queue.get().'''
@@ -649,7 +711,8 @@ class WorkerQueue(object):
         timeout = 0.001
         while True:
             if self.__orphaned.is_set():
-                raise WorkerQueueOrphanedError('Work queue orphaned by consumer')
+                raise WorkerQueueOrphanedError(
+                    'Work queue orphaned by consumer')
             try:
                 self.__queue.put(item, True, timeout)
             except queue.Full:
@@ -662,6 +725,7 @@ class WorkerQueue(object):
     def mark_orphaned(self):
         '''Mark the queue as orphaned; future additions will fail.'''
         self.__orphaned.set()
+
 
 class WorkerThread(threading.Thread):
     '''A temporary thread, with exception logging done in parent.
@@ -707,8 +771,9 @@ class WorkerThread(threading.Thread):
         except:
             self.exc_info = sys.exc_info()
             if not isinstance(self.exc_info[1], self.ignored_exception_types):
-                log_exception(self.name, self.exc_info,
-                              ('Unexpected error in {0!s}'.format(self.description)))
+                log_exception(
+                    self.name, self.exc_info,
+                    ('Unexpected error in {0!s}'.format(self.description)))
             else:
                 logging.debug('%s: Terminated by an exception',
                               self.name, exc_info=True)
@@ -716,6 +781,7 @@ class WorkerThread(threading.Thread):
     def _real_run(self):
         '''The real body of the thread.'''
         raise NotImplementedError
+
 
 def run_worker_threads(threads, exception_types=()):
     '''Run the specified WorkerThreads.
@@ -750,11 +816,14 @@ def run_worker_threads(threads, exception_types=()):
         logging.debug('%s finished, exc_info: %s', t.name, repr(t.exc_info))
         if t.exc_info is not None:
             ok = False
-            if isinstance(t.exc_info[1], exception_types) and exception is None:
+            if isinstance(
+                    t.exc_info[1],
+                    exception_types) and exception is None:
                 exception = t.exc_info
     return (ok, exception)
 
 # Utilities for daemons
+
 
 class DaemonIDConfiguration(Configuration):
     '''UID/GID configuration for a daemon.'''
@@ -777,7 +846,7 @@ class DaemonIDConfiguration(Configuration):
                 except ValueError:
                     raise ConfigurationError('[daemon] unix-user \'%s\' not '
                                              'found' %
-                                        user)
+                                             user)
         self.daemon_uid = user
         group = parser.get('daemon', 'unix-group')
         if group == '':
@@ -793,6 +862,7 @@ class DaemonIDConfiguration(Configuration):
                                              'found' % group)
         self.daemon_gid = group
 
+
 def set_regid(config):
     '''Change real and effective GID according to config.'''
     if config.daemon_gid is not None:
@@ -802,6 +872,7 @@ def set_regid(config):
             logging.error('Error switching to group %d: %s', config.daemon_gid,
                           sys.exc_info()[1])
             raise
+
 
 def set_reuid(config):
     '''Change real and effective UID according to config.'''
@@ -813,10 +884,12 @@ def set_reuid(config):
                           sys.exc_info()[1])
             raise
 
+
 def update_HOME_for_uid(config):
     '''Update $HOME for config.daemon_uid if necessary.'''
     if config.daemon_uid is not None:
         os.environ['HOME'] = pwd.getpwuid(config.daemon_uid).pw_dir
+
 
 def daemonize():
     '''Fork and terminate the parent, prepare the child to run as a daemon.'''
@@ -841,6 +914,7 @@ def daemonize():
                 except OSError:
                     pass
 
+
 def create_pid_file(options, daemon_name):
     '''Create a PID file with the specified name.
 
@@ -853,6 +927,7 @@ def create_pid_file(options, daemon_name):
     finally:
         f.close()
 
+
 def delete_pid_file(options, daemon_name):
     '''Delete a PID file with the specified name.
 
@@ -861,14 +936,16 @@ def delete_pid_file(options, daemon_name):
     '''
     os.remove(os.path.join(options.pid_dir, daemon_name + '.pid'))
 
+
 def sigterm_handler(*unused_args):
-    sys.exit(0) # "raise SystemExit..."
+    sys.exit(0)  # "raise SystemExit..."
 
 # Miscellaneous utilities
 
+
 def copy_data(write_fn, read_fn, size):
     '''Copy size bytes using write_fn and read_fn.'''
-    if type(read_fn) is types.GeneratorType:
+    if isinstance(read_fn, types.GeneratorType):
         for data in read_fn:
             write_fn(data)
     else:
@@ -877,17 +954,20 @@ def copy_data(write_fn, read_fn, size):
             write_fn(data)
             size -= len(data)
 
+
 def file_size_in_blocks(fd):
     '''Return size of fd, taking into account block sizes.'''
     st = os.fstat(fd.fileno())
     # 512 is what (info libc) says.  See also <sys/stat.h> in POSIX.
     return st.st_blocks * 512
 
+
 def path_size_in_blocks(path):
     '''Return size of path, taking into account block sizes.'''
     st = os.stat(path)
     # 512 is what (info libc) says.  See also <sys/stat.h> in POSIX.
     return st.st_blocks * 512
+
 
 def log_exception(thread_name, exc_info, default_msg):
     '''Log exc_info, using default_msg if nothing better is known.
@@ -913,6 +993,7 @@ def log_exception(thread_name, exc_info, default_msg):
     else:
         logging.error(prefix + default_msg, exc_info=exc_info)
 
+
 def read_password(config, prompt):
     '''Return a password using prompt, based on config.batch_mode.
 
@@ -925,11 +1006,12 @@ def read_password(config, prompt):
     while True:
         c = sys.stdin.read(1)
         if c == '\x00':
-            break;
+            break
         if c == '':
             raise EOFError('Unexpected EOF when reading a batch mode password')
         password += c
     return password
+
 
 def write_new_file(path, write_fn):
     '''Atomically replace file at path with data written by write_fn(fd).'''
@@ -987,8 +1069,9 @@ class MethodRegistry(object):
         if method in cls._method_registry:
             return cls._method_registry[method]
         else:
-            raise KeyError('Method {0!s} not registered in {1!s}'.format(method,
-                                                               cls.__name__))
+            raise KeyError(
+                'Method {0!s} not registered in {1!s}'.format(
+                    method, cls.__name__))
 
 
 # Passphrase binding
@@ -1015,6 +1098,7 @@ class BindingConfiguration(Configuration):
 
 
 class BindingMethodRegistry(MethodRegistry):
+
     @classmethod
     def register_method(cls, method, binding_function, unbinding_function):
         MethodRegistry.register_method(method, binding_function,
@@ -1037,7 +1121,7 @@ class BindingMethodRegistry(MethodRegistry):
         function.
         """
         return cls.get_method(method)[0]
-    
+
     @classmethod
     def get_unbinding_function(cls, method):
         """Returns the unbinding functions for the specified method.
@@ -1063,6 +1147,7 @@ class BindingMethodRegistry(MethodRegistry):
 def random_passphrase(length):
     return str(base64.urlsafe_b64encode(os.urandom(length))[:length])
 
+
 def bind_list_to_object(bind_list):
     if bind_list is None:
         return None
@@ -1075,12 +1160,14 @@ def bind_list_to_object(bind_list):
             for arg in args.split(','):
                 if arg != '':
                     if '=' not in arg:
-                        raise ValueError('Argument {0!s} is not key=value'.format(arg))
+                        raise ValueError(
+                            'Argument {0!s} is not key=value'.format(arg))
                     key, _, value = arg.partition('=')
                     binding[key] = value
             methods.append(binding)
         bindings.append(methods)
     return bindings
+
 
 def unbind_passphrase(bound_passphrase):
     """Try to undo binding to get the raw key passphrase back.
@@ -1114,12 +1201,14 @@ def unbind_passphrase(bound_passphrase):
             # This unbinding failed
             logging.warning(
                 'Failed to unbind with any of the following: {0!s}'.format(
-                ', '.join(['method: {0!s}, args: {1!s}'.format(entry[0], entry[1])
-                           for entry in attempted])))
+                    ', '.join(['method: {0!s}, args: {1!s}'.format(
+                        entry[0], entry[1])
+                        for entry in attempted])))
             return None
         bound_passphrase = unbound_passphrase
 
     return str(bound_passphrase)
+
 
 def bind_passphrase(passphrase, bind_params):
     """Bind the passphrase to the hardware.

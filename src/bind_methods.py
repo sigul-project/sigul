@@ -22,6 +22,7 @@ import subprocess
 # Binding to a TPM1.2
 tpm_srk = None
 
+
 def tpm_bind(value, pcrs=None):
     """This function seals data with a TPM1.2 using trousers.
 
@@ -47,9 +48,12 @@ def tpm_bind(value, pcrs=None):
                             stderr=subprocess.PIPE)
     (stdout, stderr) = proc.communicate(value)
     if proc.returncode != 0:
-        logging.error('Unable to seal with TPM. RC: {0:d}, stdout: {1!s}, stderr: {2!s}'.format(proc.returncode, stdout, stderr))
+        logging.error(
+            'Unable to seal with TPM. RC: {0:d}, stdout: {1!s}, stderr: {2!s}'.
+            format(proc.returncode, stdout, stderr))
         return None, None
     return stdout, None
+
 
 def tpm_unbind(value):
     """This function unseals data with a TPM1.2 using trousers.
@@ -74,6 +78,7 @@ def tpm_unbind(value):
         return None
     return stdout
 
+
 def tpm(**config):
     global tpm_srk
     if 'srk' in config:
@@ -88,6 +93,7 @@ def tpm(**config):
 # Binding to PKCS11 token with openssl engine_pkcs11
 pkcs11_config = {}
 
+
 def pkcs11_bind(value, token):
     """This function binds data with a PKCS11 token using engine_pkcs11.
 
@@ -97,7 +103,8 @@ def pkcs11_bind(value, token):
     global pkcs11_config
 
     if token not in pkcs11_config['tokens']:
-        logging.error('Binding attempted with unknown pkcs11 token {0!s}'.format(token))
+        logging.error(
+            'Binding attempted with unknown pkcs11 token {0!s}'.format(token))
         return None, None
 
     pubkey = pkcs11_config['{0!s}_pubkey'.format(token)]
@@ -115,6 +122,7 @@ def pkcs11_bind(value, token):
         return None, None
     return stdout, {'token': token}
 
+
 def pkcs11_unbind(value, token):
     """This function unbinds data with engine_pkcs11.
 
@@ -123,11 +131,14 @@ def pkcs11_unbind(value, token):
     global pkcs11_config
 
     if token not in pkcs11_config['tokens']:
-        logging.error('Unbinding attempted with unknown pkcs11 token {0!s}'.format(token))
+        logging.error(
+            'Unbinding attempted with unknown pkcs11 token {0!s}'.format(
+                token))
         return None
 
     if ('{0!s}_privkey'.format(token)) not in pkcs11_config:
-        logging.info('Unbinding attempted with pubonly token {0!s}'.format(token))
+        logging.info(
+            'Unbinding attempted with pubonly token {0!s}'.format(token))
         return None
 
     privkey = pkcs11_config['{0!s}_privkey'.format(token)]
@@ -148,6 +159,7 @@ def pkcs11_unbind(value, token):
                       % (token, proc.returncode, stdout, stderr))
         return None
     return stdout
+
 
 def pkcs11(tokens, **config):
     # Check config
@@ -177,10 +189,12 @@ def pkcs11(tokens, **config):
 def test_bind(passphrase, may_unbind):
     return passphrase, {'may_unbind': may_unbind}
 
+
 def test_unbind(bound, may_unbind):
     if may_unbind != '1':
         return None
     return bound
+
 
 def test():
     return (test_bind, test_unbind)

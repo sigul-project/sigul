@@ -21,6 +21,7 @@ import sys
 import server_common
 import utils
 
+
 def main():
     parser = utils.create_basic_parser('Create a database for the signing '
                                        'server', '~/.sigul/server.conf')

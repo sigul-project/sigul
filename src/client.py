@@ -40,15 +40,18 @@ import utils
 
 MAX_SIGN_RPMS_PAYLOAD_SIZE = 9 * 1024 * 1024 * 1024
 
+
 class ClientError(Exception):
     '''Any error in the client.'''
     pass
+
 
 class InvalidResponseError(ClientError):
     '''The response received from the bridge/server is not valid.'''
     pass
 
 # Infrastructure
+
 
 class ClientConfiguration(utils.KojiConfiguration, utils.NSSConfiguration,
                           utils.BindingConfiguration, utils.Configuration):
@@ -70,17 +73,22 @@ class ClientConfiguration(utils.KojiConfiguration, utils.NSSConfiguration,
         super(ClientConfiguration, self)._read_configuration(parser)
         self.bridge_hostname = parser.get('client', 'bridge-hostname')
         self.bridge_port = parser.getint('client', 'bridge-port')
-        self.client_cert_nickname = parser.get('client', 'client-cert-nickname')
+        self.client_cert_nickname = parser.get(
+            'client', 'client-cert-nickname')
         self.server_hostname = parser.get('client', 'server-hostname')
         self.user_name = parser.get('client', 'user-name')
         self.passphrase_length = parser.get('client', 'passphrase-length')
         self.batch_mode = False
 
+
 def safe_string(s):
     '''Raise ClientError if s is not a safe string, otherwise return s.'''
     if not utils.string_is_safe(s):
-        raise ClientError('\'{0!s}\' ({1!s}) contains prohibited characters'.format(s, repr(s)))
+        raise ClientError(
+            '\'{0!s}\' ({1!s}) contains prohibited characters'.format(
+                s, repr(s)))
     return s
+
 
 class ClientsConnection(object):
     '''A connection to the bridge/server.'''
@@ -111,7 +119,7 @@ class ClientsConnection(object):
 
     def send_outer_fields(self, op, outer_fields):
         '''Send outer_fields.'''
-        fields = dict(outer_fields) # Shallow copy
+        fields = dict(outer_fields)  # Shallow copy
         fields['op'] = safe_string(op)
         fields['user'] = safe_string(self.config.user_name)
         self.__request_header_writer.write(utils.format_fields(fields))
@@ -127,8 +135,8 @@ class ClientsConnection(object):
     def __send_payload_from_file(self, writer, fd):
         '''Send contents of fd to the server as payload, using writer.
 
-        Valid both for the primary payload and for subreply payloads.  Note that
-        the subrequest HMAC, if any, is not sent!
+        Valid both for the primary payload and for subreply payloads.  Note
+        that the subrequest HMAC, if any, is not sent!
 
         '''
         fd.seek(0)
@@ -162,7 +170,7 @@ class ClientsConnection(object):
         '''Send the inner header, including inner_fields.'''
         # FIXME: handle errors.UNKNOWN_VERSION - there is no inner session and
         # outer session data is not all read
-        fields = dict(inner_fields) # Shallow copy
+        fields = dict(inner_fields)  # Shallow copy
         fields['header-auth-sha512'] = self.__request_header_writer.sha512()
         if not omit_payload_auth:
             fields['payload-auth-sha512'] = \
@@ -189,7 +197,7 @@ class ClientsConnection(object):
         finally:
             self.__client.inner_close()
 
-    def read_response(self, expected_errors = (), no_payload=False):
+    def read_response(self, expected_errors=(), no_payload=False):
         '''Read server's response.
 
         Return an error code if OK or in expected_errors. Verify the response
@@ -203,15 +211,20 @@ class ClientsConnection(object):
             self.__response_fields = \
                 utils.read_fields(self.__reply_header_reader.read)
         except utils.InvalidFieldsError as e:
-            raise InvalidResponseError('Invalid response format: {0!s}'.format(str(e)))
+            raise InvalidResponseError(
+                'Invalid response format: {0!s}'.format(str(e)))
         if not self.__reply_header_reader.verify_64B_hmac_authenticator():
             raise InvalidResponseError('Header authentication failed')
         if error_code != errors.OK and error_code not in expected_errors:
             message = self.response_field('message')
             if message is not None:
-                raise ClientError('Error: {0!s}: {1!s}'.format(errors.message(error_code), message))
+                raise ClientError(
+                    'Error: {0!s}: {1!s}'.format(
+                        errors.message(error_code), message))
             else:
-                raise ClientError('Error: {0!s}'.format((errors.message(error_code))))
+                raise ClientError(
+                    'Error: {0!s}'.format(
+                        (errors.message(error_code))))
         buf = self.__client.outer_read(utils.u64_size)
         self.__payload_size = utils.u64_unpack(buf)
         if no_payload:
@@ -246,7 +259,7 @@ class ClientsConnection(object):
         '''
         if self.__payload_size != 0:
             raise InvalidResponseError('Unexpected payload in response')
-        self.__client.outer_read(64) # Ignore
+        self.__client.outer_read(64)  # Ignore
 
     def response_field(self, key):
         '''Return a response field value or None if not present.'''
@@ -263,7 +276,8 @@ class ClientsConnection(object):
             try:
                 v = utils.u32_unpack(v)
             except struct.error:
-                raise InvalidResponseError('Integer field has incorrect length')
+                raise InvalidResponseError(
+                    'Integer field has incorrect length')
         return v
 
     def response_field_bool(self, key):
@@ -276,11 +290,12 @@ class ClientsConnection(object):
         if v is not None:
             try:
                 v = utils.u8_unpack(v)
-                v = { 0: False, 1: True }[v]
+                v = {0: False, 1: True}[v]
             except KeyError:
                 raise InvalidResponseError('Boolean field has invalid value')
             except struct.error:
-                raise InvalidResponseError('Boolean field has incorrect length')
+                raise InvalidResponseError(
+                    'Boolean field has incorrect length')
         return v
 
     def send_subheader(self, fields, nss_key):
@@ -307,7 +322,8 @@ class ClientsConnection(object):
         try:
             fields = utils.read_fields(reader.read)
         except utils.InvalidFieldsError as e:
-            raise InvalidResponseError('Invalid response format: {0!s}'.format(str(e)))
+            raise InvalidResponseError(
+                'Invalid response format: {0!s}'.format(str(e)))
         if not reader.verify_64B_hmac_authenticator():
             raise InvalidResponseError('Subreply header authentication failed')
         return fields
@@ -323,7 +339,7 @@ class ClientsConnection(object):
                 raise InvalidResponseError('Subreply payload authentication '
                                            'failed')
         else:
-            self.__client.outer_read(64) # Ignore
+            self.__client.outer_read(64)  # Ignore
 
     def write_subpayload_to_file(self, nss_key, f):
         '''Write server's payload to f, authenticate using nss_key.'''
@@ -332,7 +348,8 @@ class ClientsConnection(object):
         reader = utils.SHA512HMACReader(self.__client.outer_read, nss_key)
         utils.copy_data(f.write, reader.read, payload_size)
         if not reader.verify_64B_hmac_authenticator():
-            raise InvalidResponseError('Subreply payload authentication failed')
+            raise InvalidResponseError(
+                'Subreply payload authentication failed')
 
     def outer_shutdown_write(self):
         '''Shutdown the outer pipe for writing.'''
@@ -351,9 +368,11 @@ class ClientsConnection(object):
             finally:
                 self.__client = None
 
+
 def read_admin_password(config):
     '''Return an administrator's password.'''
     return utils.read_password(config, 'Administrator\'s password: ')
+
 
 def read_key_passphrase(config):
     '''Return a key passphrase.'''
@@ -361,6 +380,7 @@ def read_key_passphrase(config):
         return config.passphrase
     else:
         return utils.read_password(config, 'Key passphrase: ')
+
 
 def read_new_password(config, prompt1, prompt2):
     '''Return a new password (ask for it twice).'''
@@ -371,9 +391,11 @@ def read_new_password(config, prompt1, prompt2):
             raise ClientError('Error: Input does not match')
     return password
 
+
 def bool_to_text(val):
     '''Return an user-readable representation of a bool value.'''
     return {True: 'yes', False: 'no'}[val]
+
 
 def print_list_in_payload(conn, num_field_name):
     '''Read payload from conn and print is as a list of strings.'''
@@ -391,11 +413,13 @@ def print_list_in_payload(conn, num_field_name):
                                        'server')
         print(e)
 
+
 def key_user_add_password_option(p2):
     '''Add options for authenticating an administrator instead of key user.'''
     p2.add_option('--password', action='store_true',
                   help='Use a password to authenticate a server administrator')
     p2.set_defaults(password=False)
+
 
 def key_user_passphrase_or_password(config, o2):
     '''Return inner_fields value for authenticating a key user or server
@@ -410,6 +434,7 @@ def key_user_passphrase_or_password(config, o2):
     passphrase = read_key_passphrase(config)
     return {'passphrase': passphrase}
 
+
 def get_bound_passphrase(config, filename):
     bound_passphrase = None
     with open(filename, 'r') as pwdfile:
@@ -423,6 +448,7 @@ def get_bound_passphrase(config, filename):
         # Please don't use this mechanism for unbound passphrases....
         raise ClientError('Passphrase file is unbound!')
     return passphrase
+
 
 class SignRPMArgumentExaminer(object):
     '''An object that can be used to analyze sign-rpm{s,} operands.'''
@@ -445,10 +471,14 @@ class SignRPMArgumentExaminer(object):
             try:
                 rpm_file = open(arg, 'rb')
             except IOError as e:
-                raise ClientError('Error opening {0!s}: {1!s}'.format(arg, e.strerror))
+                raise ClientError(
+                    'Error opening {0!s}: {1!s}'.format(
+                        arg, e.strerror))
             # Count whole blocks, that's what the bridge and server do.
             if os.fstat(rpm_file.fileno()).st_size == 0:
-                raise ClientError('Error: Cannot sign zero-length RPM file {0!s}'.format(arg))
+                raise ClientError(
+                    'Error: Cannot sign zero-length RPM file {0!s}'.format(
+                        arg))
             size = utils.file_size_in_blocks(rpm_file)
         else:
             # Don't import koji before initializing ClientsConnection!  The rpm
@@ -461,8 +491,8 @@ class SignRPMArgumentExaminer(object):
                 if self.__koji_session is None:
                     kc = utils.koji_read_config(self.__config,
                                                 self.__koji_instance)
-                    self.__koji_session = utils.koji_connect(kc,
-                                                             authenticate=False)
+                    self.__koji_session = utils.koji_connect(
+                        kc, authenticate=False)
                 rpm = self.__koji_session.getRPM(arg)
             except (utils.KojiError, koji.GenericError) as e:
                 raise ClientError(str(e))
@@ -487,8 +517,8 @@ class SignRPMArgumentExaminer(object):
             utils.koji_disconnect(self.__koji_session)
             self.__koji_session = None
 
-# Command handlers
 
+# Command handlers
 def cmd_list_users(conn, args):
     p2 = optparse.OptionParser(usage='%prog list-users',
                                description='List users')
@@ -502,6 +532,7 @@ def cmd_list_users(conn, args):
     conn.send_inner({'password': password})
     conn.read_response()
     print_list_in_payload(conn, 'num-users')
+
 
 def cmd_new_user(conn, args):
     p2 = optparse.OptionParser(usage='%prog new-user [options] user',
@@ -530,6 +561,7 @@ def cmd_new_user(conn, args):
     conn.send_inner(f)
     conn.read_response(no_payload=True)
 
+
 def cmd_delete_user(conn, args):
     p2 = optparse.OptionParser(usage='%prog delete-user user',
                                description='Delete a user')
@@ -542,6 +574,7 @@ def cmd_delete_user(conn, args):
     conn.empty_payload()
     conn.send_inner({'password': password})
     conn.read_response(no_payload=True)
+
 
 def cmd_user_info(conn, args):
     p2 = optparse.OptionParser(usage='%prog user-info user',
@@ -560,6 +593,7 @@ def cmd_user_info(conn, args):
           bool_to_text(conn.response_field_bool('admin'))))
 
     # FIXME: list accessible keys?
+
 
 def cmd_modify_user(conn, args):
     p2 = optparse.OptionParser(usage='%prog modify-user [options] user',
@@ -594,10 +628,11 @@ def cmd_modify_user(conn, args):
     conn.send_inner(f)
     conn.read_response(no_payload=True)
 
+
 def cmd_key_user_info(conn, args):
-    p2 = optparse.OptionParser(usage='%prog key-user-info user key',
-                               description='Show information about user\'s key '
-                               'access')
+    p2 = optparse.OptionParser(
+        usage='%prog key-user-info user key',
+        description="Show information about user's key access")
     (o2, args) = p2.parse_args(args)
     if len(args) != 2:
         p2.error('user name and key name expected')
@@ -615,9 +650,11 @@ def cmd_key_user_info(conn, args):
         print('Access defined, key administrator: {0!s}'.format(
               bool_to_text(conn.response_field_bool('key-admin'))))
 
+
 def cmd_modify_key_user(conn, args):
-    p2 = optparse.OptionParser(usage='%prog modify-key-user [options] user key',
-                               description='Modify user\'s key access')
+    p2 = optparse.OptionParser(
+        usage='%prog modify-key-user [options] user key',
+        description='Modify user\'s key access')
     p2.add_option('--key-admin', choices=('yes', 'no'),
                   help='Is the user a administrator of this key ("yes" or '
                   '"no")?')
@@ -636,8 +673,11 @@ def cmd_modify_key_user(conn, args):
     conn.send_inner({'password': password})
     conn.read_response(no_payload=True)
 
+
 def cmd_list_keys(conn, args):
-    p2 = optparse.OptionParser(usage='%prog list-keys', description='List keys')
+    p2 = optparse.OptionParser(
+        usage='%prog list-keys',
+        description='List keys')
     (_, args) = p2.parse_args(args)
     if len(args) != 0:
         p2.error('unexpected arguments')
@@ -648,6 +688,7 @@ def cmd_list_keys(conn, args):
     conn.send_inner({'password': password})
     conn.read_response()
     print_list_in_payload(conn, 'num-keys')
+
 
 def cmd_new_key(conn, args):
     p2 = optparse.OptionParser(usage='%prog new-key [options] key',
@@ -689,6 +730,7 @@ def cmd_new_key(conn, args):
         raise InvalidResponseError('Public key is not safely printable')
     print(pubkey, end='')
 
+
 def cmd_import_key(conn, args):
     p2 = optparse.OptionParser(usage='%prog import-key [options] key file',
                                description='Import a secret key')
@@ -704,7 +746,9 @@ def cmd_import_key(conn, args):
     try:
         f = open(args[1], 'rb')
     except IOError as e:
-        raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
+        raise ClientError(
+            'Error opening {0!s}: {1!s}'.format(
+                args[1], e.strerror))
 
     try:
         fields = {'key': safe_string(args[0])}
@@ -718,6 +762,7 @@ def cmd_import_key(conn, args):
                      'new-passphrase': new_passphrase})
     conn.read_response(no_payload=True)
 
+
 def cmd_delete_key(conn, args):
     p2 = optparse.OptionParser(usage='%prog delete-key key',
                                description='Delete a key')
@@ -730,6 +775,7 @@ def cmd_delete_key(conn, args):
     conn.empty_payload()
     conn.send_inner({'password': password})
     conn.read_response(no_payload=True)
+
 
 def cmd_modify_key(conn, args):
     p2 = optparse.OptionParser(usage='%prog modify-key [options] key',
@@ -750,6 +796,7 @@ def cmd_modify_key(conn, args):
     conn.send_inner({'password': password})
     conn.read_response(no_payload=True)
 
+
 def cmd_list_key_users(conn, args):
     p2 = optparse.OptionParser(usage='%prog list-key-users [options] key',
                                description='List users that can access a key')
@@ -764,6 +811,7 @@ def cmd_list_key_users(conn, args):
     conn.send_inner(inner_f)
     conn.read_response()
     print_list_in_payload(conn, 'num-users')
+
 
 def cmd_grant_key_access(conn, args):
     p2 = optparse.OptionParser(usage='%prog grant-key-access key user',
@@ -826,6 +874,7 @@ def cmd_grant_key_access(conn, args):
         with open(o2.passphrase_file, 'w') as ppfile:
             ppfile.write(bound_passphrase)
 
+
 def cmd_change_key_expiration(conn, args):
     p2 = optparse.OptionParser(usage='%prog change-key-expiration key',
                                description='Change key expiration date')
@@ -854,6 +903,7 @@ def cmd_change_key_expiration(conn, args):
     conn.send_inner({'passphrase': passphrase})
     conn.read_response(no_payload=True)
 
+
 def cmd_revoke_key_access(conn, args):
     p2 = optparse.OptionParser(usage='%prog revoke-key-access [options] key '
                                'user',
@@ -869,6 +919,7 @@ def cmd_revoke_key_access(conn, args):
     conn.empty_payload()
     conn.send_inner(inner_f)
     conn.read_response(no_payload=True)
+
 
 def cmd_get_public_key(conn, args):
     p2 = optparse.OptionParser(usage='%prog get-public-key [options] key',
@@ -887,6 +938,7 @@ def cmd_get_public_key(conn, args):
     if not utils.string_is_safe(pubkey.replace('\n', '')):
         raise InvalidResponseError('Public key is not safely printable')
     print(pubkey, end='')
+
 
 def cmd_change_passphrase(conn, args):
     p2 = optparse.OptionParser(usage='%prog change-passphrase key',
@@ -948,10 +1000,11 @@ def cmd_change_passphrase(conn, args):
         with open(o2.passphrase_file, 'w') as ppfile:
             ppfile.write(bound_passphrase)
 
+
 def cmd_sign_text(conn, args):
-    p2 = optparse.OptionParser(usage='%prog sign-text [options] key input_file',
-                               description='Output a cleartext signature of a '
-                               'text')
+    p2 = optparse.OptionParser(
+        usage='%prog sign-text [options] key input_file',
+        description='Output a cleartext signature of a text')
     p2.add_option('-o', '--output', metavar='FILE',
                   help='Write output to this file')
     (o2, args) = p2.parse_args(args)
@@ -962,7 +1015,9 @@ def cmd_sign_text(conn, args):
     try:
         f = open(args[1])
     except IOError as e:
-        raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
+        raise ClientError(
+            'Error opening {0!s}: {1!s}'.format(
+                args[1], e.strerror))
 
     try:
         conn.connect('sign-text', {'key': safe_string(args[0])})
@@ -977,7 +1032,10 @@ def cmd_sign_text(conn, args):
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError as e:
-        raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
+        raise ClientError(
+            'Error writing to {0!s}: {1!s}'.format(
+                o2.output, e.strerror))
+
 
 def cmd_sign_data(conn, args):
     p2 = optparse.OptionParser(usage='%prog sign-data [options] input_file',
@@ -996,7 +1054,9 @@ def cmd_sign_data(conn, args):
     try:
         f = open(args[1], 'rb')
     except IOError as e:
-        raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
+        raise ClientError(
+            'Error opening {0!s}: {1!s}'.format(
+                args[1], e.strerror))
 
     try:
         conn.connect('sign-data', {'key': safe_string(args[0]),
@@ -1012,7 +1072,10 @@ def cmd_sign_data(conn, args):
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError as e:
-        raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
+        raise ClientError(
+            'Error writing to {0!s}: {1!s}'.format(
+                o2.output, e.strerror))
+
 
 def call_git(args, stdin=None, ignore_error=False, strip_newline=False):
     cmd = ['git']
@@ -1034,6 +1097,7 @@ def call_git(args, stdin=None, ignore_error=False, strip_newline=False):
         stdout = stdout.replace('\n', '')
     return stdout
 
+
 def cmd_sign_git_tag(conn, args):
     p2 = optparse.OptionParser(usage='%prog sign-git-tag [options] tagname',
                                description='Sign a GPG tag')
@@ -1046,8 +1110,9 @@ def cmd_sign_git_tag(conn, args):
 
     passphrase = read_key_passphrase(conn.config)
 
-    unsigned_oid = call_git(['show-ref', '-s', 'refs/tags/{0!s}'.format(args[1])],
-                            strip_newline=True)
+    unsigned_oid = call_git(
+        ['show-ref', '-s', 'refs/tags/{0!s}'.format(args[1])],
+        strip_newline=True)
     unsigned_obj = call_git(['cat-file', '-p', unsigned_oid])
 
     conn.connect('sign-git-tag', {'key': safe_string(args[0])})
@@ -1062,9 +1127,11 @@ def cmd_sign_git_tag(conn, args):
     call_git(['update-ref', 'refs/tags/{0!s}'.format(args[1]), signed_oid,
               unsigned_oid])
 
+
 def cmd_sign_container(conn, args):
-    p2 = optparse.OptionParser(usage='%prog sign-container [options] key manifest tag',
-                               description='Sign a Docker container')
+    p2 = optparse.OptionParser(
+        usage='%prog sign-container [options] key manifest tag',
+        description='Sign a Docker container')
     p2.add_option('-o', '--output', metavar='FILE',
                   help='Write output to this file')
     (o2, args) = p2.parse_args(args)
@@ -1078,11 +1145,15 @@ def cmd_sign_container(conn, args):
     try:
         f = open(args[1], 'r')
     except IOError as e:
-        raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
+        raise ClientError(
+            'Error opening {0!s}: {1!s}'.format(
+                args[1], e.strerror))
 
     try:
-        conn.connect('sign-container', {'key': safe_string(args[0]),
-                                        'docker-reference': safe_string(args[2])})
+        conn.connect(
+            'sign-container',
+            {'key': safe_string(args[0]),
+             'docker-reference': safe_string(args[2])})
         conn.send_payload_from_file(f)
     finally:
         f.close()
@@ -1094,11 +1165,15 @@ def cmd_sign_container(conn, args):
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError as e:
-        raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
+        raise ClientError(
+            'Error writing to {0!s}: {1!s}'.format(
+                o2.output, e.strerror))
+
 
 def cmd_sign_ostree(conn, args):
-    p2 = optparse.OptionParser(usage='%prog sign-ostree [options] key hash input_file',
-                               description='Sign an OSTree commit object')
+    p2 = optparse.OptionParser(
+        usage='%prog sign-ostree [options] key hash input_file',
+        description='Sign an OSTree commit object')
     p2.add_option('-o', '--output', metavar='FILE',
                   help='Write output to this file')
     (o2, args) = p2.parse_args(args)
@@ -1111,7 +1186,9 @@ def cmd_sign_ostree(conn, args):
     try:
         f = open(args[2], 'rb')
     except IOError as e:
-        raise ClientError('Error opening {0!s}: {1!s}'.format(args[1], e.strerror))
+        raise ClientError(
+            'Error opening {0!s}: {1!s}'.format(
+                args[1], e.strerror))
 
     try:
         conn.connect('sign-ostree', {'key': safe_string(args[0]),
@@ -1127,7 +1204,10 @@ def cmd_sign_ostree(conn, args):
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError as e:
-        raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
+        raise ClientError(
+            'Error writing to {0!s}: {1!s}'.format(
+                o2.output, e.strerror))
+
 
 def cmd_sign_rpm(conn, args):
     p2 = optparse.OptionParser(usage='%prog sign-rpm [options] '
@@ -1194,9 +1274,12 @@ def cmd_sign_rpm(conn, args):
         try:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
         except IOError as e:
-            raise ClientError('Error writing to {0!s}: {1!s}'.format(o2.output, e.strerror))
+            raise ClientError(
+                'Error writing to {0!s}: {1!s}'.format(
+                    o2.output, e.strerror))
     else:
         conn.read_empty_unauthenticated_payload()
+
 
 class SignRPMsRequestThread(utils.WorkerThread):
     '''A thread that sends sign-rpm subrequests.'''
@@ -1269,6 +1352,7 @@ class SignRPMsRequestThread(utils.WorkerThread):
                     rpm_file.close()
             server_idx += 1
 
+
 class SignRPMsReplyThread(utils.WorkerThread):
     '''A thread that handles sign-rpm subreplies.'''
 
@@ -1300,11 +1384,13 @@ class SignRPMsReplyThread(utils.WorkerThread):
             try:
                 arg_idx = utils.u32_unpack(buf)
             except struct.error:
-                raise InvalidResponseError('Integer field has incorrect length')
+                raise InvalidResponseError(
+                    'Integer field has incorrect length')
             if arg_idx > len(self.__args):
                 raise InvalidResponseError('Invalid subreply id')
             if arg_idx in self.results:
-                raise InvalidResponseError('Duplicate subreply id {0:d}'.format(arg_idx))
+                raise InvalidResponseError(
+                    'Duplicate subreply id {0:d}'.format(arg_idx))
 
             try:
                 buf = fields['status']
@@ -1313,13 +1399,15 @@ class SignRPMsReplyThread(utils.WorkerThread):
             try:
                 error_code = utils.u32_unpack(buf)
             except struct.error:
-                raise InvalidResponseError('Integer field has incorrect length')
+                raise InvalidResponseError(
+                    'Integer field has incorrect length')
 
             nss_key = utils.derived_key(self.__payload_nss_key, server_idx)
             if error_code != errors.OK:
                 message = fields.get('message')
                 if message is not None:
-                    msg = '{0!s}: {1!s}'.format(errors.message(error_code), message)
+                    msg = '{0!s}: {1!s}'.format(
+                        errors.message(error_code), message)
                 else:
                     msg = errors.message(error_code)
                 self.results[arg_idx] = msg
@@ -1337,12 +1425,15 @@ class SignRPMsReplyThread(utils.WorkerThread):
                         self.__conn.write_subpayload_to_file(nss_key, f)
                     utils.write_new_file(output_path, writer)
                 except IOError as e:
-                    raise ClientError('Error writing to {0!s}: {1!s}'.format(output_path, e.strerror))
+                    raise ClientError(
+                        'Error writing to {0!s}: {1!s}'.format(
+                            output_path, e.strerror))
             else:
                 self.__conn.read_empty_subpayload(nss_key, ignore_auth=True)
-            self.results[arg_idx] = None # Mark arg_idx as succesful
+            self.results[arg_idx] = None  # Mark arg_idx as succesful
             logging.info('Signed %s', self.__args[arg_idx])
             server_idx += 1
+
 
 def cmd_sign_rpms(conn, args):
     p2 = optparse.OptionParser(usage='%prog sign-rpms [options] '
@@ -1375,7 +1466,9 @@ def cmd_sign_rpms(conn, args):
             os.mkdir(o2.output)
         except OSError as e:
             if e.errno != errno.EEXIST or not os.path.isdir(o2.output):
-                raise ClientError('Error creating {0!s}: {1!s}'.format(o2.output, e.strerror))
+                raise ClientError(
+                    'Error creating {0!s}: {1!s}'.format(
+                        o2.output, e.strerror))
     elif not o2.koji_only:
         p2.error('--output is mandatory without --koji-only')
 
@@ -1436,6 +1529,7 @@ def cmd_sign_rpms(conn, args):
     if not ok:
         raise ClientError('')
 
+
 def cmd_list_binding_methods(conn, args):
     p2 = optparse.OptionParser(usage='%prog list-binding-methods',
                                description='List binding methods supported ' +
@@ -1445,6 +1539,7 @@ def cmd_list_binding_methods(conn, args):
         p2.error('unexpected arguments')
     for method in utils.BindingMethodRegistry.get_registered_methods():
         print(method)
+
 
 def cmd_list_server_binding_methods(conn, args):
     p2 = optparse.OptionParser(usage='%prog list-server-binding-methods',
@@ -1496,7 +1591,8 @@ command_handlers = {
                              'List bind methods supported by client'),
     'list-server-binding-methods': (cmd_list_server_binding_methods,
                                     'List bind methods supported by server'),
-    }
+}
+
 
 def handle_global_options():
     '''Handle global options.
@@ -1504,10 +1600,12 @@ def handle_global_options():
     Return (configuration, command handler, its arguments).
 
     '''
-    parser = optparse.OptionParser(usage='%prog [options] command '
-                                   '[command-args...]',
-                                   version='%prog {0!s}'.format((settings.version)),
-                                   description='A signing server client')
+    parser = optparse.OptionParser(
+        usage='%prog [options] command '
+        '[command-args...]',
+        version='%prog {0!s}'.format(
+            (settings.version)),
+        description='A signing server client')
     parser.add_option('--help-commands', action='store_true',
                       help='List supported commands')
     utils.optparse_add_batch_option(parser)
@@ -1550,6 +1648,7 @@ def handle_global_options():
         config.passphrase = None
 
     return (config, command_handlers[args[0]][0], args[1:])
+
 
 def main():
     child_exception = None
@@ -1594,7 +1693,7 @@ def main():
         logging.error('Interrupted')
         sys.exit(1)
     except SystemExit:
-        raise # Don't consider this an unexpected exception
+        raise  # Don't consider this an unexpected exception
     except:
         logging.error('Unexpected exception', exc_info=True)
         sys.exit(1)

@@ -36,6 +36,7 @@ import utils
 
 # Configuration
 
+
 class ServerBaseConfiguration(utils.DaemonIDConfiguration,
                               utils.BindingConfiguration,
                               utils.NSSConfiguration, utils.Configuration):
@@ -62,14 +63,17 @@ class ServerBaseConfiguration(utils.DaemonIDConfiguration,
         super(ServerBaseConfiguration, self)._read_configuration(parser)
         self.database_path = parser.get('database', 'database-path')
         if (not self.__allow_missing_database_path and
-            not os.path.isfile(self.database_path)):
-            raise utils.ConfigurationError('[database] database-path \'%s\' is '
-                                           'not an existing file' %
-                                           self.database_path)
+                not os.path.isfile(self.database_path)):
+            raise utils.ConfigurationError(
+                '[database] database-path \'%s\' is '
+                'not an existing file' %
+                self.database_path)
 
 # Database
 
+
 class User(object):
+
     def __init__(self, name, clear_password=None, admin=False):
         self.name = name
         if clear_password is not None:
@@ -79,6 +83,7 @@ class User(object):
     __salt_length = 16
     __salt_characters = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ' \
         'abcdefghijklmnopqrstuvwxyz'
+
     def __set_clear_password(self, clear_password):
         random = nss.nss.generate_random(self.__salt_length)
         salt = '$6$'
@@ -86,16 +91,20 @@ class User(object):
             salt += self.__salt_characters[ord(random[i]) %
                                            len(self.__salt_characters)]
         self.sha512_password = crypt.crypt(clear_password, salt)
-    clear_password = property(fset = __set_clear_password,
+    clear_password = property(fset=__set_clear_password,
                               doc='Setting this attribute updates '
                               'sha512_password')
 
+
 class Key(object):
+
     def __init__(self, name, fingerprint):
         self.name = name
         self.fingerprint = fingerprint
 
+
 class KeyAccess(object):
+
     def __init__(self, key, user, key_admin=False):
         self.key = key
         self.user = user
@@ -110,7 +119,7 @@ class KeyAccess(object):
             encrypted_passphrase = 'x'
         else:
             encrypted_passphrase = self.encrypted_passphrase
-        
+
         try:
             passphrase = gpg_decrypt(config,
                                      encrypted_passphrase,
@@ -132,53 +141,70 @@ class KeyAccess(object):
 sa = sqlalchemy
 _db_metadata = sa.MetaData()
 
-_db_users_table = sa.Table('users', _db_metadata,
-                           sa.Column('id', sa.Integer,
-                                     sa.Sequence('users_id_seq', optional=True),
-                                     primary_key=True),
-                           sa.Column('name', sa.Text, nullable=False,
-                                     unique=True),
-                           sa.Column('sha512_password', sa.Binary),
-                           sa.Column('admin', sa.Boolean, nullable=False))
+_db_users_table = sa.Table(
+    'users', _db_metadata,
+    sa.Column('id',
+              sa.Integer,
+              sa.Sequence('users_id_seq', optional=True),
+              primary_key=True),
+    sa.Column('name',
+              sa.Text,
+              nullable=False,
+              unique=True),
+    sa.Column('sha512_password', sa.Binary),
+    sa.Column('admin', sa.Boolean, nullable=False))
 
-_db_keys_table = sa.Table('keys', _db_metadata,
-                          sa.Column('id', sa.Integer,
-                                    sa.Sequence('keys_id_seq', optional=True),
-                                    primary_key=True),
-                          sa.Column('name', sa.Text, nullable=False,
-                                    unique=True),
-                          sa.Column('fingerprint', sa.Text, nullable=False,
-                                    unique=True))
+_db_keys_table = sa.Table(
+    'keys', _db_metadata,
+    sa.Column('id',
+              sa.Integer,
+              sa.Sequence('keys_id_seq', optional=True),
+              primary_key=True),
+    sa.Column('name',
+              sa.Text,
+              nullable=False,
+              unique=True),
+    sa.Column('fingerprint',
+              sa.Text,
+              nullable=False,
+              unique=True))
 
-_db_key_accesses_table = sa.Table('key_accesses', _db_metadata,
-                                  sa.Column('id', sa.Integer,
-                                            sa.Sequence('key_accesses_id_seq',
-                                                        optional=True),
-                                            primary_key=True),
-                                  sa.Column('key_id', sa.Integer,
-                                            sa.ForeignKey('keys.id'),
-                                            nullable=False),
-                                  sa.Column('user_id', sa.Integer,
-                                            sa.ForeignKey('users.id'),
-                                            nullable=False),
-                                  sa.Column('encrypted_passphrase', sa.Binary,
-                                            nullable=False),
-                                  sa.Column('key_admin', sa.Boolean,
-                                            nullable=False),
-                                  sa.UniqueConstraint('key_id', 'user_id'))
+_db_key_accesses_table = sa.Table(
+    'key_accesses', _db_metadata,
+    sa.Column('id',
+              sa.Integer,
+              sa.Sequence('key_accesses_id_seq', optional=True),
+              primary_key=True),
+    sa.Column('key_id',
+              sa.Integer,
+              sa.ForeignKey('keys.id'),
+              nullable=False),
+    sa.Column('user_id',
+              sa.Integer,
+              sa.ForeignKey('users.id'),
+              nullable=False),
+    sa.Column('encrypted_passphrase',
+              sa.Binary,
+              nullable=False),
+    sa.Column('key_admin',
+              sa.Boolean,
+              nullable=False),
+    sa.UniqueConstraint('key_id', 'user_id'))
 del sa
 
 sa_orm = sqlalchemy.orm
 sa_orm.mapper(User, _db_users_table, properties={
-        'key_accesses': sa_orm.relation(KeyAccess, backref='user')
-        })
+    'key_accesses': sa_orm.relation(KeyAccess, backref='user')
+})
 sa_orm.mapper(Key, _db_keys_table, properties={
-        'key_accesses': sa_orm.relation(KeyAccess, backref='key')
-        })
+    'key_accesses': sa_orm.relation(KeyAccess, backref='key')
+})
 sa_orm.mapper(KeyAccess, _db_key_accesses_table)
 del sa_orm
 
 _db_engine = None
+
+
 def _db_get_engine(config):
     '''Return _db_engine, setting it up if necessary.'''
     global _db_engine
@@ -189,16 +215,20 @@ def _db_get_engine(config):
                                               config.database_path)
     return _db_engine
 
+
 def db_open(config):
     '''Open the database, return a session.'''
     return sqlalchemy.orm.sessionmaker(bind=_db_get_engine(config),
                                        autocommit=False)()
+
 
 def db_create(config):
     '''Create database metadata.'''
     _db_metadata.create_all(_db_get_engine(config))
 
 # OSTree utility
+
+
 def call_ostree_helper(args, stdin=None):
     cmd = ['sigul-ostree-helper']
     cmd.extend(args)
@@ -216,12 +246,15 @@ def call_ostree_helper(args, stdin=None):
 
 # GPG utilities
 
+
 class GPGError(Exception):
     '''Error performing a GPG operation.'''
     pass
 
+
 class GPGEditError(GPGError):
     '''Error performing a GPG edit operation.'''
+
     def __init__(self, msg, expected_state, actual_state, expected_arg,
                  actual_arg, *args):
         self.message = msg
@@ -254,6 +287,7 @@ class GPGConfiguration(utils.Configuration):
         super(GPGConfiguration, self)._read_configuration(parser)
         self.gnupg_home = parser.get('gnupg', 'gnupg-home')
 
+
 def gpg_modify_environ(config):
     '''Modify os.envion based on config.
 
@@ -265,6 +299,7 @@ def gpg_modify_environ(config):
         del os.environ['GPG_AGENT_INFO']
     os.environ['GNUPGHOME'] = config.gnupg_home
 
+
 def _gpg_open(config):
     '''Return a configured gpgme context.'''
     ctx = gpgme.Context()
@@ -272,6 +307,7 @@ def _gpg_open(config):
     ctx.set_engine_info(gpgme.PROTOCOL_OpenPGP, settings.gnupg_bin,
                         config.gnupg_home)
     return ctx
+
 
 def _gpg_set_passphrase(ctx, passphrase):
     '''Let ctx use passphrase.'''
@@ -284,6 +320,7 @@ def _gpg_set_passphrase(ctx, passphrase):
             data = data[run:]
     ctx.passphrase_cb = cb
 
+
 def gpg_public_key(config, fingerprint):
     '''Return an ascii-armored public key.'''
     ctx = _gpg_open(config)
@@ -291,6 +328,7 @@ def gpg_public_key(config, fingerprint):
     data = StringIO()
     ctx.export(fingerprint, data)
     return data.getvalue()
+
 
 def gpg_delete_key(config, fingerprint):
     '''Delete the specified key.'''
@@ -401,12 +439,13 @@ def gpg_import_key(config, key_file):
         ctx = _gpg_open(config)
         r = ctx.import_(key_file)
         if (r.imported == 0 and r.secret_imported == 0 and
-            len(r.imports) == 1 and (r.imports[0][2] & gpgme.IMPORT_NEW) == 0):
+                len(r.imports) == 1 and
+                (r.imports[0][2] & gpgme.IMPORT_NEW) == 0):
             raise GPGError('Key already exists')
         if (r.imported != 1 or r.secret_imported != 1 or len(r.imports) != 2 or
             set((r.imports[0][2], r.imports[1][2])) !=
             set((gpgme.IMPORT_NEW, gpgme.IMPORT_NEW | gpgme.IMPORT_SECRET)) or
-            r.imports[0][0] != r.imports[1][0]):
+                r.imports[0][0] != r.imports[1][0]):
             raise GPGError('Unexpected import file contents')
         if r.imports[0][1] is not None:
             raise r.imports[0][1]
@@ -420,9 +459,12 @@ def gpg_import_key(config, key_file):
         shutil.rmtree(tmp_dir)
     return r.imports[0][0]
 
-# In LISP a nested function that modifies upper-level variables would be enough;
+# In LISP a nested function that modifies upper-level variables would be enough
 # Python requires an object
+
+
 class _ChangePasswordResponder(object):
+
     def __init__(self, old_passphrase, new_passphrase):
         self.old_passphrase = old_passphrase
         self.new_passphrase = new_passphrase
@@ -464,7 +506,8 @@ class _ChangePasswordResponder(object):
             return gpgme.ERR_NO_ERROR
         except Exception as e:
             self.exception = e
-            raise # Will return gpgme.ERR_GENERAL
+            raise  # Will return gpgme.ERR_GENERAL
+
 
 def gpg_change_password(config, fingerprint, old_passphrase, new_passphrase):
     '''Change a passphrase for the specified key.
@@ -482,9 +525,10 @@ def gpg_change_password(config, fingerprint, old_passphrase, new_passphrase):
             raise responder.exception
         raise
     if (not responder.passwd_cmd_sent or not responder.want_new_passphrase or
-        not responder.quit_cmd_sent):
+            not responder.quit_cmd_sent):
         logging.error('Unexpected state when changing GPG key password')
         raise NotImplementedError()
+
 
 def gpg_encrypt_symmetric(config, cleartext, passphrase):
     '''Return cleartext encrypted using passphrase.'''
@@ -495,6 +539,7 @@ def gpg_encrypt_symmetric(config, cleartext, passphrase):
                 data)
     return data.getvalue()
 
+
 def gpg_decrypt(config, ciphertext, passphrase):
     '''Return ciphertext encrypted using passphrase.'''
     ctx = _gpg_open(config)
@@ -502,6 +547,7 @@ def gpg_decrypt(config, ciphertext, passphrase):
     data = StringIO()
     ctx.decrypt(StringIO(ciphertext), data)
     return data.getvalue()
+
 
 def gpg_signature(config, signature_file, cleartext_file, fingerprint,
                   passphrase, armor):
@@ -519,7 +565,13 @@ def gpg_signature(config, signature_file, cleartext_file, fingerprint,
     ctx.textmode = False
     ctx.sign(cleartext_file, signature_file, gpgme.SIG_MODE_NORMAL)
 
-def gpg_clearsign(config, signed_file, cleartext_file, fingerprint, passphrase):
+
+def gpg_clearsign(
+        config,
+        signed_file,
+        cleartext_file,
+        fingerprint,
+        passphrase):
     '''Create a cleartext signature.
 
     Sign contents of cleartext_file, write the signed text to signed_file.  Use
@@ -531,6 +583,7 @@ def gpg_clearsign(config, signed_file, cleartext_file, fingerprint, passphrase):
     key = ctx.get_key(fingerprint, True)
     ctx.signers = (key,)
     ctx.sign(cleartext_file, signed_file, gpgme.SIG_MODE_CLEAR)
+
 
 def gpg_detached_signature(config, signature_file, cleartext_file, fingerprint,
                            passphrase, armor):

@@ -52,11 +52,12 @@ MAX_FAST_RECONNECTIONS = 5
 FAST_RECONNECTION_SECONDS = 5
 SLOW_RECONNECTION_SECONDS = 60
 
- # Infrastructure
+# Infrastructure
 
 Key = server_common.Key
 KeyAccess = server_common.KeyAccess
 User = server_common.User
+
 
 class ServerConfiguration(server_common.GPGConfiguration,
                           server_common.ServerBaseConfiguration):
@@ -80,7 +81,7 @@ class ServerConfiguration(server_common.GPGConfiguration,
 
     def _add_sections(self, sections):
         super(ServerConfiguration, self)._add_sections(sections)
-        sections.update(('gnupg','server'))
+        sections.update(('gnupg', 'server'))
 
     def _read_configuration(self, parser):
         super(ServerConfiguration, self)._read_configuration(parser)
@@ -102,18 +103,24 @@ class ServerConfiguration(server_common.GPGConfiguration,
                                                      'max-memory-payload-size')
         self.max_rpms_payloads_size = parser.getint('server',
                                                     'max-rpms-payloads-size')
-        self.server_cert_nickname = parser.get('server', 'server-cert-nickname')
+        self.server_cert_nickname = parser.get(
+            'server', 'server-cert-nickname')
         self.signing_timeout = parser.getint('server', 'signing-timeout')
-        self.lenient_username_check = parser.getboolean('server', 'lenient-username-check')
-        self.proxy_usernames = [us.strip() for us in
-                                parser.get('server', 'proxy-usernames').split(',')]
+        self.lenient_username_check = parser.getboolean(
+            'server', 'lenient-username-check')
+        self.proxy_usernames = [
+            us.strip()
+            for us in parser.get('server', 'proxy-usernames').split(',')]
+
 
 class RequestHandled(Exception):
     '''Used to terminate further processing of the request.'''
     pass
 
+
 class InvalidRequestError(Exception):
     pass
+
 
 class RequestHandler(object):
     '''Information about a request type and its handler.'''
@@ -133,6 +140,7 @@ class RequestHandler(object):
 # the default handler
 request_handlers = {}
 
+
 def request_handler(**kwargs):
     '''Register this function as a request handler, using kwargs.
 
@@ -147,6 +155,7 @@ def request_handler(**kwargs):
             RequestHandler(fn, **kwargs)
         return fn
     return real_decorator
+
 
 class ServerProxy(object):
     '''A proxy for double_tls.DoubleTLSClient that stores read outer data.'''
@@ -171,6 +180,7 @@ class ServerProxy(object):
         self.__stored = ''
         return res
 
+
 class ServersConnection(object):
     '''A connection to the bridge/client.'''
 
@@ -182,7 +192,7 @@ class ServersConnection(object):
                                                    config.server_cert_nickname)
         self.payload_path = None
         self.payload_file = None
-        utils.nss_init(config) # May raise utils.NSSInitError
+        utils.nss_init(config)  # May raise utils.NSSInitError
 
     def peer_subject(self):
         return self.__client.peercert.subject
@@ -195,7 +205,8 @@ class ServersConnection(object):
         '''
         v = self.__outer_fields.get(key)
         if required and v is None:
-            raise InvalidRequestError('Required outer field {0!s} missing'.format(key))
+            raise InvalidRequestError(
+                'Required outer field {0!s} missing'.format(key))
         return v
 
     def safe_outer_field(self, key, filename=False, **kwargs):
@@ -207,7 +218,9 @@ class ServersConnection(object):
         '''
         v = self.outer_field(key, **kwargs)
         if v is not None and not utils.string_is_safe(v, filename):
-            raise InvalidRequestError('Field {0!s} has unsafe value'.format(repr(key)))
+            raise InvalidRequestError(
+                'Field {0!s} has unsafe value'.format(
+                    repr(key)))
         return v
 
     def outer_field_bool(self, key):
@@ -223,7 +236,7 @@ class ServersConnection(object):
             except struct.error:
                 raise InvalidRequestError('Integer field has incorrect length')
             try:
-                v = { 0: False, 1: True }[v]
+                v = {0: False, 1: True}[v]
             except KeyError:
                 raise InvalidRequestError('Boolean field has invalid value')
         return v
@@ -236,7 +249,8 @@ class ServersConnection(object):
         '''
         v = self.__inner_fields.get(key)
         if required and v is None:
-            raise InvalidRequestError('Required inner field {0!s} missing.'.format(key))
+            raise InvalidRequestError(
+                'Required inner field {0!s} missing.'.format(key))
         return v
 
     def safe_inner_field(self, key, **kwargs):
@@ -247,7 +261,9 @@ class ServersConnection(object):
         '''
         v = self.inner_field(key, **kwargs)
         if v is not None and not utils.string_is_safe(v):
-            raise InvalidRequestError('Field {0!s} has unsafe value'.format(repr(key)))
+            raise InvalidRequestError(
+                'Field {0!s} has unsafe value'.format(
+                    repr(key)))
         return v
 
     def read_request(self):
@@ -317,7 +333,7 @@ class ServersConnection(object):
             self.__client.inner_close()
         # print repr(self.__inner_fields)
         if (self.inner_field('header-auth-sha512', required=True) !=
-            nss.nss.sha512_digest(header_data)):
+                nss.nss.sha512_digest(header_data)):
             raise InvalidRequestError('Header authentication failed')
         payload_auth = self.inner_field('payload-auth-sha512')
         if payload_auth is None:
@@ -334,15 +350,23 @@ class ServersConnection(object):
         if len(buf) < 64:
             raise InvalidRequestError('Header authentication key too small')
         # "Unwrap" because the key was encrypted for transmission using TLS
-        nss_key = nss.nss.import_sym_key(slot, mech, nss.nss.PK11_OriginUnwrap,
-                                         nss.nss.CKA_SIGN, nss.nss.SecItem(buf))
+        nss_key = nss.nss.import_sym_key(
+            slot,
+            mech,
+            nss.nss.PK11_OriginUnwrap,
+            nss.nss.CKA_SIGN,
+            nss.nss.SecItem(buf))
         self.__reply_header_writer = \
             utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
         buf = self.inner_field('payload-auth-key', required=True)
         if len(buf) < 64:
             raise InvalidRequestError('Payload authentication key too small')
-        nss_key = nss.nss.import_sym_key(slot, mech, nss.nss.PK11_OriginUnwrap,
-                                         nss.nss.CKA_SIGN, nss.nss.SecItem(buf))
+        nss_key = nss.nss.import_sym_key(
+            slot,
+            mech,
+            nss.nss.PK11_OriginUnwrap,
+            nss.nss.CKA_SIGN,
+            nss.nss.SecItem(buf))
         self.__reply_payload_writer = \
             utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
         return handler
@@ -426,9 +450,12 @@ class ServersConnection(object):
         try:
             fields = utils.read_fields(reader.read)
         except utils.InvalidFieldsError as e:
-            raise InvalidRequestError('Invalid response format: {0!s}'.format(str(e)))
+            raise InvalidRequestError(
+                'Invalid response format: {0!s}'.format(
+                    str(e)))
         if not reader.verify_64B_hmac_authenticator():
-            raise InvalidRequestError('Subrequest header authentication failed')
+            raise InvalidRequestError(
+                'Subrequest header authentication failed')
         return fields
 
     def read_subpayload_to_file(self, nss_key, max_size, tmp_dir):
@@ -586,7 +613,7 @@ class ServersConnection(object):
             assert user is not None
             assert key is not None
             assert access is not None
-        return (user, key, access) # OK
+        return (user, key, access)  # OK
 
     def authenticate_admin_or_user(self, db):
         '''Check the request is a valid key access request.
@@ -655,6 +682,7 @@ class ServersConnection(object):
             self.auth_fail('user is not a key administrator')
         return (access, key_passphrase)
 
+
 def key_by_name(db, conn):
     '''Return a key specified by conn.safe_outer_field('key').
 
@@ -667,6 +695,7 @@ def key_by_name(db, conn):
         conn.send_error(errors.KEY_NOT_FOUND)
     return key
 
+
 def user_by_name(db, conn):
     '''Return an user specified by conn.safe_outer_field('name').
 
@@ -678,6 +707,7 @@ def user_by_name(db, conn):
     if user is None:
         conn.send_error(errors.USER_NOT_FOUND)
     return user
+
 
 def key_access_by_names(db, conn):
     '''Return a key access specified by conn.safe_outer_field('name'),
@@ -694,8 +724,10 @@ def key_access_by_names(db, conn):
         conn.send_error(errors.KEY_USER_NOT_FOUND)
     return access
 
+
 class RPMFileError(Exception):
     pass
+
 
 class RPMFile(object):
     '''A single RPM, to be signed.'''
@@ -750,7 +782,9 @@ class RPMFile(object):
             self.__header = ts.hdrFromFdno(fd.fileno())
         except rpm.error as e:
             self.status = errors.CORRUPT_RPM
-            raise RPMFileError('Error reading RPM header: {0!s}'.format(str(e)))
+            raise RPMFileError(
+                'Error reading RPM header: {0!s}'.format(
+                    str(e)))
 
         rpm_id = (self.__header[rpm.RPMTAG_NAME],
                   self.__header[rpm.RPMTAG_EPOCH],
@@ -782,10 +816,11 @@ class RPMFile(object):
             if field_value is None:
                 continue
             if not utils.string_is_safe(field_value):
-                raise InvalidRequestError('Field {0!s} has unsafe value'.format(
-                                          repr(field)))
+                raise InvalidRequestError(
+                    'Field {0!s} has unsafe value'.format(
+                        repr(field)))
             if (tag == rpm.RPMTAG_ARCH and
-                self.__header[rpm.RPMTAG_SOURCEPACKAGE] == 1):
+                    self.__header[rpm.RPMTAG_SOURCEPACKAGE] == 1):
                 rpm_value = 'src'
             else:
                 rpm_value = self.__header[tag]
@@ -803,10 +838,12 @@ class RPMFile(object):
             self.status = errors.UNAUTHENTICATED_RPM
             raise RPMFileError('RPM not authenticated')
 
+
 class SigningContext(object):
     '''A tool for running rpm --addsign.'''
 
     _rpm_sign_args_gpg_workaround = None
+
     @staticmethod
     def _get_rpm_sign_args_gpg_workaround():
         """
@@ -835,14 +872,15 @@ class SigningContext(object):
                        '--define', '__gpg {0!s}'.format(settings.gnupg_bin)]
         field_value = conn.outer_field_bool('v3-signature')
         if field_value is not None and field_value:
-            # Add --force-v3-sigs to the value in redhat-rpm-config-9.0.3-3.fc10
-            self.__argv += ['--define',
-                            '__gpg_sign_cmd %{__gpg} gpg --force-v3-sigs '
-                            '--no-verbose --no-armor ' +
-                            SigningContext._get_rpm_sign_args_gpg_workaround()
-                            + '--no-secmem-warning -u "%{_gpg_name}" -sbo '
-                            '%{__signature_filename} %{__plaintext_filename}']
-        self.__env = dict(os.environ) # Shallow copy, uses our $GNUPGHOME
+            # Add --force-v3-sigs to the value in
+            # redhat-rpm-config-9.0.3-3.fc10
+            self.__argv += [
+                '--define', '__gpg_sign_cmd %{__gpg} gpg --force-v3-sigs '
+                '--no-verbose --no-armor ' +
+                SigningContext._get_rpm_sign_args_gpg_workaround() +
+                '--no-secmem-warning -u "%{_gpg_name}" -sbo '
+                '%{__signature_filename} %{__plaintext_filename}']
+        self.__env = dict(os.environ)  # Shallow copy, uses our $GNUPGHOME
         self.__env['LC_ALL'] = 'C'
 
     def sign_rpm(self, config, rpm):
@@ -878,17 +916,22 @@ class SigningContext(object):
             child.expect(pexpect.EOF)
             child.close()
         except pexpect.ExceptionPexpect as e:
-            msg = str(e).splitlines()[0] # We don't want all of the pexpect dump
+            # We don't want all of the pexpect dump
+            msg = str(e).splitlines()[0]
             rpm.status = errors.UNKNOWN_ERROR
-            raise RPMFileError('Error signing {0!s}: {1!s}, output {2!s}'.format(rpm.rpm_id, msg, child.before))
+            raise RPMFileError(
+                'Error signing {0!s}: {1!s}, output {2!s}'.format(
+                    rpm.rpm_id, msg, child.before))
         if (not os.WIFEXITED(child.status) or
-            os.WEXITSTATUS(child.status) != 0 or answer not in [0, 1]):
+                os.WEXITSTATUS(child.status) != 0 or answer not in [0, 1]):
             rpm.status = errors.UNKNOWN_ERROR
-            raise RPMFileError('Error signing {0!s}: status {1:d}, output {2!s}'.format(rpm.rpm_id, child.status, child.before))
+            raise RPMFileError(
+                'Error signing {0!s}: status {1:d}, output {2!s}'.format(
+                    rpm.rpm_id, child.status, child.before))
         logging.info('Signed RPM %s with key %s', rpm.rpm_id, self.__key.name)
 
- # Request handlers
 
+# Request handlers
 @request_handler()
 def cmd_list_users(db, conn):
     conn.authenticate_admin(db)
@@ -899,6 +942,7 @@ def cmd_list_users(db, conn):
     for user in users:
         payload += user.name + '\x00'
     conn.send_reply_payload(payload)
+
 
 @request_handler()
 def cmd_new_user(db, conn):
@@ -916,6 +960,7 @@ def cmd_new_user(db, conn):
     db.commit()
     conn.send_reply_ok_only()
 
+
 @request_handler()
 def cmd_delete_user(db, conn):
     conn.authenticate_admin(db)
@@ -926,12 +971,14 @@ def cmd_delete_user(db, conn):
     db.commit()
     conn.send_reply_ok_only()
 
+
 @request_handler()
 def cmd_user_info(db, conn):
     conn.authenticate_admin(db)
     user = user_by_name(db, conn)
     conn.send_reply_header(errors.OK, {'admin': user.admin})
     conn.send_reply_payload('')
+
 
 @request_handler()
 def cmd_modify_user(db, conn):
@@ -952,12 +999,14 @@ def cmd_modify_user(db, conn):
     db.commit()
     conn.send_reply_ok_only()
 
+
 @request_handler()
 def cmd_key_user_info(db, conn):
     conn.authenticate_admin(db)
     access = key_access_by_names(db, conn)
     conn.send_reply_header(errors.OK, {'key-admin': access.key_admin})
     conn.send_reply_payload('')
+
 
 @request_handler()
 def cmd_modify_key_user(db, conn):
@@ -969,6 +1018,7 @@ def cmd_modify_key_user(db, conn):
     db.commit()
     conn.send_reply_ok_only()
 
+
 @request_handler()
 def cmd_list_keys(db, conn):
     conn.authenticate_admin(db)
@@ -979,6 +1029,7 @@ def cmd_list_keys(db, conn):
     for user in keys:
         payload += user.name + '\x00'
     conn.send_reply_payload(payload)
+
 
 @request_handler()
 def cmd_new_key(db, conn):
@@ -997,8 +1048,9 @@ def cmd_new_key(db, conn):
                  'Key-Length: {0:d}\n'.format(conn.config.gnupg_key_length) +
                  'Key-Usage: {0!s}\n'.format(conn.config.gnupg_key_usage))
     if conn.config.gnupg_subkey_type is not None:
-        key_attrs += ('Subkey-Type: {0!s}\n'.format(conn.config.gnupg_subkey_type) +
-                      'Subkey-Length: {0:d}\n'.format(conn.config.gnupg_subkey_length))
+        key_attrs += (
+            'Subkey-Type: {0!s}\n'.format(conn.config.gnupg_subkey_type) +
+            'Subkey-Length: {0:d}\n'.format(conn.config.gnupg_subkey_length))
     key_passphrase = utils.random_passphrase(conn.config.passphrase_length)
     key_attrs += 'Passphrase: {0!s}\n'.format(key_passphrase)
     name = conn.safe_outer_field('name-real')
@@ -1018,7 +1070,7 @@ def cmd_new_key(db, conn):
         key_attrs += 'Expire-Date: {0!s}\n'.format(expire)
     user_passphrase = conn.inner_field('passphrase', required=True)
 
-    env = dict(os.environ) # Shallow copy, uses our $GNUPGHOME
+    env = dict(os.environ)  # Shallow copy, uses our $GNUPGHOME
     env['LC_ALL'] = 'C'
     sub = subprocess.Popen((settings.gnupg_bin, '--gen-key', '--batch',
                             '--quiet', '--status-fd', '1'),
@@ -1026,18 +1078,19 @@ def cmd_new_key(db, conn):
                            stderr=subprocess.PIPE, close_fds=True, env=env)
     (out, err) = sub.communicate(key_attrs)
     for line in err.split('\n'):
+        good_startswiths = ('gpg: WARNING: unsafe permissions on homedir',
+                            'Not enough random bytes available.',
+                            'the OS a chance to collect more entropy')
         if (line != '' and
-            not line.startswith('gpg: WARNING: unsafe permissions on homedir')
-            and not line.startswith('Not enough random bytes available.')
-            and not line.startswith('the OS a chance to collect more entropy!')
-            and not (line.startswith('gpg: key ') and
+                not line.startswith(good_startswiths) and
+                not (line.startswith('gpg: key ') and
                      line.endswith('marked as ultimately trusted'))):
-                logging.error('Unrecognized GPG stderr: %s', repr(line))
-                conn.send_error(errors.UNKNOWN_ERROR)
+            logging.error('Unrecognized GPG stderr: %s', repr(line))
+            conn.send_error(errors.UNKNOWN_ERROR)
     fingerprint = None
     for line in out.split('\n'):
         if (line == '' or line == '[GNUPG:] GOOD_PASSPHRASE' or
-            line.startswith('[GNUPG:] PROGRESS')):
+                line.startswith('[GNUPG:] PROGRESS')):
             continue
         if not line.startswith('[GNUPG:] KEY_CREATED'):
             logging.error('Unrecognized GPG stdout: %s', repr(line))
@@ -1063,6 +1116,7 @@ def cmd_new_key(db, conn):
     conn.send_reply_header(errors.OK, {})
     conn.send_reply_payload(payload)
 
+
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_import_key(db, conn):
     conn.authenticate_admin(db)
@@ -1081,7 +1135,8 @@ def cmd_import_key(db, conn):
     user_passphrase = conn.inner_field('new-passphrase', required=True)
 
     try:
-        fingerprint = server_common.gpg_import_key(conn.config, conn.payload_file)
+        fingerprint = server_common.gpg_import_key(
+            conn.config, conn.payload_file)
     except server_common.GPGError as e:
         conn.send_error(errors.INVALID_IMPORT, message=str(e))
 
@@ -1106,6 +1161,7 @@ def cmd_import_key(db, conn):
         raise
     conn.send_reply_ok_only()
 
+
 @request_handler()
 def cmd_delete_key(db, conn):
     conn.authenticate_admin(db)
@@ -1116,6 +1172,7 @@ def cmd_delete_key(db, conn):
     db.delete(key)
     db.commit()
     conn.send_reply_ok_only()
+
 
 @request_handler()
 def cmd_modify_key(db, conn):
@@ -1130,6 +1187,7 @@ def cmd_modify_key(db, conn):
     db.commit()
     conn.send_reply_ok_only()
 
+
 @request_handler()
 def cmd_list_key_users(db, conn):
     (user, key) = conn.authenticate_admin_or_key_admin(db)
@@ -1141,6 +1199,7 @@ def cmd_list_key_users(db, conn):
         payload += name + '\x00'
     conn.send_reply_payload(payload)
 
+
 @request_handler()
 def cmd_grant_key_access(db, conn):
     (access, key_passphrase) = conn.authenticate_key_admin(db)
@@ -1148,29 +1207,33 @@ def cmd_grant_key_access(db, conn):
     new_passphrase = conn.inner_field('new-passphrase', required=True)
     # FIXME: is this check atomic?
     if (db.query(KeyAccess).filter_by(user=user, key=access.key).first() is not
-        None):
+            None):
         conn.send_error(errors.ALREADY_EXISTS)
     server_binding = conn.safe_inner_field('server-binding', required=False)
     client_binding = conn.safe_inner_field('client-binding', required=False)
     try:
         if server_binding is not None:
             server_binding = json.loads(server_binding)
-            logging.info('Server binding requested: {0!s}'.format(server_binding))
+            logging.info(
+                'Server binding requested: {0!s}'.format(server_binding))
         if client_binding is not None:
             client_binding = json.loads(client_binding)
             logging.info('Client binding used: {0!s}'.format(client_binding))
     except Exception as ex:
-        raise InvalidRequestError('Unable to decode binding args: {0!s}'.format(ex))
+        raise InvalidRequestError(
+            'Unable to decode binding args: {0!s}'.format(ex))
     a2 = KeyAccess(access.key, user, key_admin=False)
     try:
         a2.set_passphrase(conn.config, key_passphrase=key_passphrase,
                           user_passphrase=new_passphrase,
                           bind_params=server_binding)
     except NotImplementedError():
-        raise InvalidRequestError('Non-implemented binding mechanism requested')
+        raise InvalidRequestError(
+            'Non-implemented binding mechanism requested')
     db.add(a2)
     db.commit()
     conn.send_reply_ok_only()
+
 
 @request_handler()
 def cmd_revoke_key_access(db, conn):
@@ -1185,12 +1248,14 @@ def cmd_revoke_key_access(db, conn):
     db.commit()
     conn.send_reply_ok_only()
 
+
 @request_handler()
 def cmd_get_public_key(db, conn):
     (_, key) = conn.authenticate_admin_or_user(db)
     payload = server_common.gpg_public_key(conn.config, str(key.fingerprint))
     conn.send_reply_header(errors.OK, {})
     conn.send_reply_payload(payload)
+
 
 @request_handler()
 def cmd_change_key_expiration(db, conn):
@@ -1225,6 +1290,7 @@ def cmd_change_key_expiration(db, conn):
     db.commit()
     conn.send_reply_ok_only()
 
+
 @request_handler()
 def cmd_change_passphrase(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
@@ -1234,25 +1300,32 @@ def cmd_change_passphrase(db, conn):
     try:
         if server_binding is not None:
             server_binding = json.loads(server_binding)
-            logging.info('Server binding requested: {0!s}'.format(server_binding))
+            logging.info(
+                'Server binding requested: {0!s}'.format(server_binding))
         if client_binding is not None:
             client_binding = json.loads(client_binding)
             logging.info('Client binding used: {0!s}'.format(client_binding))
     except Exception as ex:
-        raise InvalidRequestError('Unable to decode binding args: {0!s}'.format(ex))
+        raise InvalidRequestError(
+            'Unable to decode binding args: {0!s}'.format(ex))
     access.set_passphrase(conn.config, key_passphrase=key_passphrase,
                           user_passphrase=new_passphrase,
                           bind_params=server_binding)
     db.commit()
     conn.send_reply_ok_only()
 
+
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_text(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
     signed_file = tempfile.TemporaryFile()
     try:
-        server_common.gpg_clearsign(conn.config, signed_file, conn.payload_file,
-                                    access.key.fingerprint, key_passphrase)
+        server_common.gpg_clearsign(
+            conn.config,
+            signed_file,
+            conn.payload_file,
+            access.key.fingerprint,
+            key_passphrase)
         logging.info('Signed text %s with key %s',
                      binascii.b2a_hex(conn.payload_sha512_digest),
                      access.key.name)
@@ -1260,6 +1333,7 @@ def cmd_sign_text(db, conn):
         conn.send_reply_payload_from_file(signed_file)
     finally:
         signed_file.close()
+
 
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_data(db, conn):
@@ -1281,6 +1355,7 @@ def cmd_sign_data(db, conn):
         conn.send_reply_payload_from_file(signature_file)
     finally:
         signature_file.close()
+
 
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_git_tag(db, conn):
@@ -1326,6 +1401,7 @@ def cmd_sign_git_tag(db, conn):
     finally:
         signature_file.close()
 
+
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_ostree(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
@@ -1362,17 +1438,20 @@ def cmd_sign_ostree(db, conn):
                      file_hash,
                      access.key.name)
         signature_file.seek(0)
-        server_common.call_ostree_helper(['import-signature', ostree_path,
-                                          file_hash],
-                                         stdin=base64.b64encode(signature_file.read()))
-        with open(os.path.join(ostree_path, 'objects', file_hash[:2],
-                               '{0!s}.commitmeta'.format(file_hash[2:]))) as metafile:
+        server_common.call_ostree_helper(
+            ['import-signature', ostree_path, file_hash],
+            stdin=base64.b64encode(signature_file.read()))
+        with open(
+                os.path.join(
+                    ostree_path, 'objects', file_hash[:2],
+                    '{0!s}.commitmeta'.format(file_hash[2:]))) as metafile:
             conn.send_reply_header(errors.OK, {})
             conn.send_reply_payload_from_file(metafile)
     finally:
         shutil.rmtree(ostree_path)
         input_file.close()
         signature_file.close()
+
 
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_container(db, conn):
@@ -1419,6 +1498,7 @@ def cmd_sign_container(db, conn):
     finally:
         signature_file.close()
 
+
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE,
                  payload_auth_optional=True)
 def cmd_sign_rpm(db, conn):
@@ -1439,13 +1519,15 @@ def cmd_sign_rpm(db, conn):
         logging.error(str(e))
         conn.send_error(rpm.status)
 
-    # Reopen to get the new file even if rpm doesn't overwrite the file in place
+    # Reopen to get the new file even if rpm doesn't overwrite the file in
+    # place
     f = open(rpm.path, 'rb')
     try:
         conn.send_reply_header(errors.OK, {})
         conn.send_reply_payload_from_file(f)
     finally:
         f.close()
+
 
 class SignRPMsRequestThread(utils.WorkerThread):
     '''A thread that handles sign-rpm requests.
@@ -1470,9 +1552,9 @@ class SignRPMsRequestThread(utils.WorkerThread):
         total_size = 0
         server_idx = 0
         while True:
-            (rpm, size) = self.__read_one_request \
-                (server_idx,
-                 self.__conn.config.max_rpms_payloads_size - total_size)
+            (rpm, size) = self.__read_one_request(
+                server_idx,
+                self.__conn.config.max_rpms_payloads_size - total_size)
             if rpm is None:
                 break
             server_idx += 1
@@ -1523,6 +1605,7 @@ class SignRPMsRequestThread(utils.WorkerThread):
 
         return (rpm, size)
 
+
 class SignRPMsSignerThread(utils.WorkerThread):
     '''A thread that actually performs the signing.
 
@@ -1532,10 +1615,10 @@ class SignRPMsSignerThread(utils.WorkerThread):
     '''
 
     def __init__(self, config, dst_queue, src_queue, ctx):
-        super(SignRPMsSignerThread, self).__init__ \
-            ('sign-rpms:signing', 'signer thread',
-             input_queues=((src_queue, None),),
-             output_queues=((dst_queue, None),))
+        super(SignRPMsSignerThread, self).__init__(
+            'sign-rpms:signing', 'signer thread',
+            input_queues=((src_queue, None),),
+            output_queues=((dst_queue, None),))
         self.__config = config
         self.__dst = dst_queue
         self.__src = src_queue
@@ -1567,6 +1650,7 @@ class SignRPMsSignerThread(utils.WorkerThread):
             self.__ctx.sign_rpm(self.__config, rpm)
         except RPMFileError as e:
             logging.error(str(e))
+
 
 class SignRPMsReplyThread(utils.WorkerThread):
     '''A thread that sends subrequest replies.
@@ -1629,30 +1713,30 @@ def cmd_sign_rpms(db, conn):
         raise InvalidRequestError('Subrequest header authentication key too '
                                   'small')
     # "Unwrap" because the key was encrypted for transmission using TLS
-    subrequest_header_nss_key = nss.nss.import_sym_key \
-        (slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
-         nss.nss.SecItem(buf))
+    subrequest_header_nss_key = nss.nss.import_sym_key(
+        slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
+        nss.nss.SecItem(buf))
     buf = conn.inner_field('subrequest-payload-auth-key', required=True)
     if len(buf) < 64:
         raise InvalidRequestError('Subrequest payload authentication key too '
                                   'small')
-    subrequest_payload_nss_key = nss.nss.import_sym_key \
-        (slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
-         nss.nss.SecItem(buf))
+    subrequest_payload_nss_key = nss.nss.import_sym_key(
+        slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
+        nss.nss.SecItem(buf))
     buf = conn.inner_field('subreply-header-auth-key', required=True)
     if len(buf) < 64:
         raise InvalidRequestError('Subreply header authentication key too '
                                   'small')
-    subreply_header_nss_key = nss.nss.import_sym_key \
-        (slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
-         nss.nss.SecItem(buf))
+    subreply_header_nss_key = nss.nss.import_sym_key(
+        slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
+        nss.nss.SecItem(buf))
     buf = conn.inner_field('subreply-payload-auth-key', required=True)
     if len(buf) < 64:
         raise InvalidRequestError('Subreply payload authentication key too '
                                   'small')
-    subreply_payload_nss_key = nss.nss.import_sym_key \
-        (slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
-         nss.nss.SecItem(buf))
+    subreply_payload_nss_key = nss.nss.import_sym_key(
+        slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
+        nss.nss.SecItem(buf))
     signing_ctx = SigningContext(conn, access.key, key_passphrase)
     conn.send_reply_ok_only()
 
@@ -1677,6 +1761,7 @@ def cmd_sign_rpms(db, conn):
     if exception is not None:
         raise exception[0](exception[1]).with_traceback(exception[2])
 
+
 @request_handler()
 def cmd_list_binding_methods(db, conn):
     conn.authenticate_admin(db)
@@ -1686,6 +1771,7 @@ def cmd_list_binding_methods(db, conn):
     for method in methods:
         payload += method + '\x00'
     conn.send_reply_payload(payload)
+
 
 def unknown_request_handler(unused_db, conn):
     conn.send_reply_header(errors.UNKNOWN_OP, {})
@@ -1700,6 +1786,7 @@ _CHILD_OK = 0                   # Handled a request
 _CHILD_CONNECTION_REFUSED = 1   # Connection to the bridge was refused
 _CHILD_BUG = 2                  # A bug in the child
 # Undefined values are treated as _CHILD_BUG:
+
 
 def request_handling_child(config):
     '''Handle a single request, runinng in a child process.
@@ -1750,7 +1837,7 @@ def request_handling_child(config):
         else:
             logging.info('Unexpected EOF')
     except (KeyboardInterrupt, SystemExit):
-        pass # Don't consider this an unexpected exception
+        pass  # Don't consider this an unexpected exception
     except (utils.NSSInitError, double_tls.InnerCertificateNotFound) as e:
         logging.error(str(e))
         return _CHILD_BUG
@@ -1759,6 +1846,7 @@ def request_handling_child(config):
         return _CHILD_BUG
     logging.debug('Request handling finished')
     return _CHILD_OK
+
 
 def main():
     options = utils.get_daemon_options('A signing server',
@@ -1794,7 +1882,8 @@ def main():
                         finally:
                             os._exit(_CHILD_BUG)
                 (_, status) = os.waitpid(child_pid, 0)
-                if os.WIFEXITED(status) and os.WEXITSTATUS(status) == _CHILD_OK:
+                if os.WIFEXITED(status) and os.WEXITSTATUS(
+                        status) == _CHILD_OK:
                     fast_reconnections_done = 0
                 elif (os.WIFEXITED(status) and
                       os.WEXITSTATUS(status) == _CHILD_CONNECTION_REFUSED):
@@ -1804,11 +1893,11 @@ def main():
                     else:
                         time.sleep(SLOW_RECONNECTION_SECONDS)
                         fast_reconnections_done = 0
-                else: # _CHILD_BUG, unknown status code or WIFSIGNALED
+                else:  # _CHILD_BUG, unknown status code or WIFSIGNALED
                     logging.error('Child died with status %d', status)
                     break
         except (KeyboardInterrupt, SystemExit):
-            pass # Silence is golden
+            pass  # Silence is golden
     finally:
         utils.delete_pid_file(options, 'sigul_server')
 

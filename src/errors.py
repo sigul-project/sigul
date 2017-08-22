@@ -47,7 +47,8 @@ _messages = {
     UNAUTHENTICATED_RPM: 'Missing RPM file authentication by client',
     INVALID_IMPORT: 'Invalid import file',
     IMPORT_PASSPHRASE_ERROR: 'Import passphrase does not match',
-    }
+}
+
 
 def message(error_code):
     '''Return an error message for error_code.'''

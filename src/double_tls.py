@@ -30,6 +30,8 @@ import utils
 # A helper for debug prints
 __next_id = 0
 __ids = {}
+
+
 def _id(obj):
     global __next_id, __ids
     try:
@@ -48,6 +50,8 @@ def _id(obj):
 
 # _debug_file = None
 # _debug_pid = None
+
+
 def _debug(fmt, *args):
     # global _debug_pid, _debug_file
     # pid = os.getpid()
@@ -57,17 +61,21 @@ def _debug(fmt, *args):
     # print >> _debug_file, fmt % args
     pass
 
+
 class ChildConnectionRefusedError(Exception):
     '''Child could not connect.'''
     pass
+
 
 class ChildUnrecoverableError(Exception):
     '''We don't know how to recover from an error in the child.'''
     pass
 
+
 class InnerCertificateNotFound(Exception):
     '''inner_open_* certificate was not found.'''
     pass
+
 
 def _nspr_poll(descs, timeout):
     '''Poll for descs.
@@ -81,6 +89,7 @@ def _nspr_poll(descs, timeout):
     res = nss.io.Socket.poll(flat, timeout)
     for (i, desc) in enumerate(flat):
         descs[desc[0]] = res[i]
+
 
 def _tcp_socketpair():
     '''Like socket.socketpair(), but using AF_INET sockets.
@@ -103,6 +112,7 @@ def _tcp_socketpair():
 _POLL_PROBLEM = nss.io.PR_POLL_ERR | nss.io.PR_POLL_HUP
 
 _chunk_inner_mask = 1 << 31
+
 
 class _ForwardingBuffer(object):
     '''A buffer that can be used for forwarding data between sockets.'''
@@ -202,13 +212,15 @@ class _CombiningBuffer(_ForwardingBuffer):
     @property
     def _active(self):
         _debug('b%s active: inner open:%s, outer open:%s, len:%s', _id(self),
-               self.__inner_src_open, self.__outer_src_open, len(self.__buffer))
+               self.__inner_src_open, self.__outer_src_open,
+               len(self.__buffer))
         return (self.__inner_src_open or self.__outer_src_open or
                 len(self.__buffer) > 0)
 
     def _prepare_poll(self, poll_descs):
         _debug('b%s poll: inner open:%s, outer open:%s, len:%s', _id(self),
-               self.__inner_src_open, self.__outer_src_open, len(self.__buffer))
+               self.__inner_src_open, self.__outer_src_open,
+               len(self.__buffer))
         if len(self.__buffer) + utils.u32_size < self._BUFFER_LEN:
             if self.__inner_src_open:
                 _debug(' => read inner %s', _id(self.__inner_src))
@@ -230,8 +242,8 @@ class _CombiningBuffer(_ForwardingBuffer):
                 _debug('b%s: inner src %s problem, adding EOF', _id(self),
                        _id(self.__inner_src))
                 self.__inner_src_open = False
-                # Append the EOF even if the buffer is too large - this can only
-                # happen once per source.
+                # Append the EOF even if the buffer is too large - this can
+                # only happen once per source.
                 self.__buffer += utils.u32_pack(_chunk_inner_mask)
             else:
                 _debug('b%s: inner src %s problem after EOF, ignoring',
@@ -242,8 +254,8 @@ class _CombiningBuffer(_ForwardingBuffer):
                 _debug('b%s: outer src %s problem, adding EOF', _id(self),
                        _id(self.__outer_src))
                 self.__outer_src_open = False
-                # Append the EOF even if the buffer is too large - this can only
-                # happen once per source.
+                # Append the EOF even if the buffer is too large - this can
+                # only happen once per source.
                 self.__buffer += utils.u32_pack(0)
             else:
                 _debug('b%s: outer src %s problem after EOF, ignoring',
@@ -257,8 +269,8 @@ class _CombiningBuffer(_ForwardingBuffer):
                 self.__buffer = ''
 
     def _send(self, poll_descs):
-        if (poll_descs.get(self.__dst, 0) &
-            (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
+        if (poll_descs.get(self.__dst, 0) & (
+                nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
             _debug('b%s: sending to %s: %d', _id(self), _id(self.__dst),
                    len(self.__buffer))
             sent = self.__dst.send(self.__buffer)
@@ -360,6 +372,7 @@ class _CombiningBuffer(_ForwardingBuffer):
                         raise
                 self.__dst_shut_down = True
 
+
 class _SplittingBuffer(_ForwardingBuffer):
     '''A buffer that splits data into an inner and outer stream.'''
 
@@ -432,15 +445,15 @@ class _SplittingBuffer(_ForwardingBuffer):
                 self.__outer_buffer = ''
 
     def _send(self, poll_descs):
-        if (poll_descs.get(self.__inner_dst, 0) &
-            (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
+        if (poll_descs.get(self.__inner_dst, 0) & (
+                nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
             _debug('b%s: sending inner %s: %d', _id(self),
                    _id(self.__inner_dst), len(self.__inner_buffer))
             sent = self.__inner_dst.send(self.__inner_buffer)
             self.__inner_buffer = self.__inner_buffer[sent:]
             _debug('=> %d', sent)
-        if (poll_descs.get(self.__outer_dst, 0) &
-            (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
+        if (poll_descs.get(self.__outer_dst, 0) & (
+                nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
             _debug('b%s: sending outer %s: %d', _id(self),
                    _id(self.__outer_dst), len(self.__outer_buffer))
             sent = self.__outer_dst.send(self.__outer_buffer)
@@ -454,7 +467,9 @@ class _SplittingBuffer(_ForwardingBuffer):
                 max(len(self.__inner_buffer), len(self.__outer_buffer)))
         assert left > 0
         try:
-            _debug('b%s: reading from %s: %d', _id(self), _id(self.__src), left)
+            _debug(
+                'b%s: reading from %s: %d', _id(self), _id(
+                    self.__src), left)
             data = self.__src.recv(left)
         except nss.error.NSPRError as e:
             if e.errno == nss.error.PR_CONNECT_RESET_ERROR:
@@ -483,7 +498,8 @@ class _SplittingBuffer(_ForwardingBuffer):
                 data = data[run:]
                 _debug('... stored %d outer', run)
             if self.__inner_bytes_left == 0 and self.__outer_bytes_left == 0:
-                run = min(utils.u32_size - len(self.__header_buffer), len(data))
+                run = min(utils.u32_size -
+                          len(self.__header_buffer), len(data))
                 self.__header_buffer += data[:run]
                 data = data[run:]
                 _debug('... consumed %d header', run)
@@ -508,7 +524,7 @@ class _SplittingBuffer(_ForwardingBuffer):
                self.__src_open, self.__got_inner_eof, len(self.__inner_buffer),
                self.__got_outer_eof, len(self.__outer_buffer))
         if (((not self.__src_open) or self.__got_inner_eof) and
-            len(self.__inner_buffer) == 0):
+                len(self.__inner_buffer) == 0):
             _debug('...inner inactive, shut down: %s',
                    self.__inner_dst_shut_down)
             if not self.__inner_dst_shut_down:
@@ -521,7 +537,7 @@ class _SplittingBuffer(_ForwardingBuffer):
                         raise
                 self.__inner_dst_shut_down = True
         if (((not self.__src_open) or self.__got_outer_eof) and
-            len(self.__outer_buffer) == 0):
+                len(self.__outer_buffer) == 0):
             _debug('...outer inactive, shut down: %s',
                    self.__outer_dst_shut_down)
             if not self.__outer_dst_shut_down:
@@ -534,6 +550,7 @@ class _SplittingBuffer(_ForwardingBuffer):
                         raise
                 self.__outer_dst_shut_down = True
 
+
 class DoubleTLSClient(object):
     '''A client "socket" that allows creating a nested TLS session.
 
@@ -542,7 +559,7 @@ class DoubleTLSClient(object):
 
     '''
 
-    __connection_refused_exit_code = 43 # universe and everything... +1!
+    __connection_refused_exit_code = 43  # universe and everything... +1!
     __unrecoverable_error_exit_code = 44
 
     def __init__(self, config, hostname, port, cert_nickname):
@@ -638,8 +655,8 @@ class DoubleTLSClient(object):
                     raise InnerCertificateNotFound('Certificate \'%s\' is not '
                                                    'available' % cert_nickname)
                 raise
-            self.__inner.set_client_auth_data_callback \
-                (utils.nss_client_auth_callback_single, cert)
+            self.__inner.set_client_auth_data_callback(
+                utils.nss_client_auth_callback_single, cert)
             self.__inner.set_hostname(hostname)
             self.__inner.reset_handshake(False)
             self.__inner.force_handshake()
@@ -677,7 +694,10 @@ class DoubleTLSClient(object):
             self.__inner.force_handshake()
             self.peercert = self.__inner.get_peer_certificate()
             assert self.peercert is not None
-            logging.info('Connection from {0!s}'.format(repr(self.peercert.subject)))
+            logging.info(
+                'Connection from {0!s}'.format(
+                    repr(
+                        self.peercert.subject)))
         except:
             self.__inner.close()
             self.__inner = None
@@ -742,7 +762,7 @@ class DoubleTLSClient(object):
                                                             fileno())
             outer_pipe_fd = nss.io.Socket.import_tcp_socket(child_outer_pipe.
                                                             fileno())
-            utils.nss_init(self.__config) # May raise utils.NSSInitError
+            utils.nss_init(self.__config)  # May raise utils.NSSInitError
             socket_fd = nss.ssl.SSLSocket(nss.io.PR_AF_INET)
             socket_fd.set_ssl_option(nss.ssl.SSL_REQUEST_CERTIFICATE, True)
             socket_fd.set_ssl_option(nss.ssl.SSL_REQUIRE_CERTIFICATE, True)
@@ -750,11 +770,13 @@ class DoubleTLSClient(object):
                 cert = nss.nss.find_cert_from_nickname(self.__cert_nickname)
             except nss.error.NSPRError as e:
                 if e.errno == nss.error.SEC_ERROR_BAD_DATABASE:
-                    raise utils.NSSInitError('Certificate \'%s\' is not '
-                                             'available' % self.__cert_nickname)
+                    raise utils.NSSInitError(
+                        'Certificate \'%s\' is not '
+                        'available' %
+                        self.__cert_nickname)
                 raise
-            socket_fd.set_client_auth_data_callback \
-                (utils.nss_client_auth_callback_single, cert)
+            socket_fd.set_client_auth_data_callback(
+                utils.nss_client_auth_callback_single, cert)
             socket_fd.set_hostname(self.__hostname)
             addr_info = nss.io.AddrInfo(self.__hostname, nss.io.PR_AF_INET,
                                         nss.io.PR_AI_ADDRCONFIG)
@@ -768,13 +790,15 @@ class DoubleTLSClient(object):
                         first_error = e
             if first_error is not None:
                 if (isinstance(first_error, nss.error.NSPRError) and
-                    first_error.errno == nss.error.PR_CONNECT_RESET_ERROR):
+                        first_error.errno == nss.error.PR_CONNECT_RESET_ERROR):
                     raise ChildConnectionRefusedError()
                 raise first_error
             socket_fd.force_handshake()
 
-            inner_pipe_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, True)
-            outer_pipe_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, True)
+            inner_pipe_fd.set_socket_option(
+                nss.io.PR_SockOpt_Nonblocking, True)
+            outer_pipe_fd.set_socket_option(
+                nss.io.PR_SockOpt_Nonblocking, True)
             socket_fd.set_socket_option(nss.io.PR_SockOpt_Nonblocking, True)
             buf_1 = _CombiningBuffer(inner_pipe_fd, outer_pipe_fd, socket_fd)
             buf_2 = _SplittingBuffer(socket_fd, inner_pipe_fd, outer_pipe_fd)
@@ -799,7 +823,7 @@ class DoubleTLSClient(object):
             else:
                 logging.warning('Exception in child', exc_info=True)
             logging.shutdown()
-            os._exit(1) # Nothing that extraordinary
+            os._exit(1)  # Nothing that extraordinary
         except utils.NSSInitError as e:
             logging.error(str(e))
             logging.shutdown()
@@ -812,6 +836,7 @@ class DoubleTLSClient(object):
             logging.warning('Exception in child', exc_info=True)
             logging.shutdown()
             os._exit(self.__unrecoverable_error_exit_code)
+
 
 class OuterBuffer(object):
 
@@ -861,8 +886,8 @@ class OuterBuffer(object):
             _debug('o%s: header %08X', _id(self), v)
             if (v & _chunk_inner_mask) != 0:
                 self.__inner_packets += header
-                self.__inner_packets += self.__recv_exact(v &
-                                                          ~_chunk_inner_mask)
+                self.__inner_packets += self.__recv_exact(
+                    v & ~_chunk_inner_mask)
                 _debug('o%s: added %d inner bytes, total %d', _id(self),
                        v & ~_chunk_inner_mask, len(self.__inner_packets))
             else:
@@ -911,6 +936,7 @@ class OuterBuffer(object):
         _debug('o%s: accepted %d bytes of outer data (total %d)', _id(self),
                len(data), len(self.__outer_data))
 
+
 class _InnerBridgingBuffer(_ForwardingBuffer):
     '''A buffer that forwards the inner stream, saving outer stream packets.'''
 
@@ -923,7 +949,7 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
         self.__header_buffer = ''
         self.__buffer = inner_packets
         self.__buffer_dropped = False
-        self.__src_open = True # FIXME: closed in inner_packets?
+        self.__src_open = True  # FIXME: closed in inner_packets?
         self.__dst_shut_down = False
         self.__outer_data = ''
 
@@ -968,8 +994,8 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
                 self.__buffer = ''
 
     def _send(self, poll_descs):
-        if (poll_descs.get(self.__dst, 0) &
-            (nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
+        if (poll_descs.get(self.__dst, 0) & (
+                nss.io.PR_POLL_WRITE | _POLL_PROBLEM)) == nss.io.PR_POLL_WRITE:
             _debug('b%s: sending to %s: %d', _id(self), _id(self.__dst),
                    len(self.__buffer))
             sent = self.__dst.send(self.__buffer)
@@ -1011,7 +1037,8 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
                 data = data[run:]
                 _debug('... deferred %d outer', run)
             if self.__inner_bytes_left == 0 and self.__outer_bytes_left == 0:
-                run = min(utils.u32_size - len(self.__header_buffer), len(data))
+                run = min(utils.u32_size -
+                          len(self.__header_buffer), len(data))
                 self.__header_buffer += data[:run]
                 data = data[run:]
                 _debug('... consumed %d header', run)
@@ -1039,6 +1066,7 @@ class _InnerBridgingBuffer(_ForwardingBuffer):
                 _debug('... sending inner EOF')
                 self.__buffer += utils.u32_pack(_chunk_inner_mask)
                 self.__dst_shut_down = True
+
 
 def bridge_inner_stream(client_buf, server_buf):
     '''Transfer data between until the inner stream ends.'''

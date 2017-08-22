@@ -21,11 +21,13 @@ import sys
 import server_common
 import utils
 
+
 class AddAdminConfiguration(server_common.ServerBaseConfiguration):
 
     def _read_configuration(self, parser):
         super(AddAdminConfiguration, self)._read_configuration(parser)
         self.batch_mode = False
+
 
 def main():
     parser = utils.create_basic_parser('Add an administrator to the signing '
