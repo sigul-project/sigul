@@ -553,7 +553,7 @@ class SHA512HMACWriter(_DigestsWriter):
         self._write_fn(auth)
 
 # Protocol utilities
-protocol_version = 0
+protocol_version = 1
 
 
 class InvalidFieldsError(Exception):
