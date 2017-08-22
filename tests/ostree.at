@@ -19,134 +19,9 @@ AT_SETUP([OSTree check])
 
 AT_SKIP_IF([grep "have_ostree = 'no'" $SIGULPATH/settings.py])
 
-mkdir ca client bridge server gnupg rpm
-chmod 700 gnupg
-
-AT_DATA([nss_password_file], [[nss-pw
-]])
-AT_DATA([pkcs12_password_file], [[pk12-pw
-]])
-
-# Set up a CA and create all certificates
-AT_CHECK([certutil -d ca -N -f nss_password_file])
-# Specify serial number (-m) explicitly because it is time-based by default,
-# and creating certificates quickly can result in a collision.
-AT_CHECK([certutil -d ca -S -f nss_password_file -z /dev/null -n my-ca \
-		-s 'CN=My CA' -t CT,, -x -v 120 -m 1], , , [ignore])
-AT_CHECK([certutil -d ca -L -n my-ca -a > ca.pem])
-AT_CHECK([certutil -d ca -S -f nss_password_file -z /dev/null \
-		-n sigul-bridge-cert -s 'CN=localhost,OU=bridge' -c my-ca \
-		-t u,, -v 120 -m 2], , , [ignore])
-AT_CHECK([pk12util -d ca -o bridge.p12 -n sigul-bridge-cert \
-		-k nss_password_file -w pkcs12_password_file], , [ignore])
-AT_CHECK([certutil -d ca -S -f nss_password_file -z /dev/null \
-		-n sigul-server-cert -s 'CN=localhost,OU=server' -c my-ca \
-		-t u,, -v 120 -m 3], , , [ignore])
-AT_CHECK([pk12util -d ca -o server.p12 -n sigul-server-cert \
-		-k nss_password_file -w pkcs12_password_file], , [ignore])
-AT_CHECK([certutil -d ca -S -f nss_password_file -z /dev/null \
-		-n sigul-client-cert -s 'CN=root' -c my-ca -t u,, -v 120 -m 4],
-	 , , [ignore])
-AT_CHECK([pk12util -d ca -o client.p12 -n sigul-client-cert \
-		-k nss_password_file -w pkcs12_password_file], , [ignore])
-
-
-# Set up and start bridge:
-AT_CHECK([certutil -d bridge -N -f nss_password_file])
-AT_CHECK([certutil -d bridge -A -n my-ca -t CT,, -a -i ca.pem])
-AT_CHECK([pk12util -d bridge -i bridge.p12 -k nss_password_file \
-		-w pkcs12_password_file], , [ignore])
-rm bridge.p12
-
-[cat > bridge/bridge.conf <<EOF
-[bridge]
-required-fas-group:
-[daemon]
-unix-user:
-unix-group:
-[nss]
-nss-dir: $(pwd)/bridge
-nss-password: nss-pw
-EOF]
-
-AT_CHECK([sigul_bridge -c bridge/bridge.conf -d -v -v \
-		--internal-log-dir="$(pwd)/bridge" \
-		--internal-pid-dir="$(pwd)/bridge"])
-
-
-# Set up and start server:
-AT_CHECK([certutil -d server -N -f nss_password_file])
-AT_CHECK([certutil -d server -A -n my-ca -t CT,, -a -i ca.pem])
-AT_CHECK([pk12util -d server -i server.p12 -k nss_password_file \
-		-w pkcs12_password_file], , [ignore])
-rm server.p12
-
-mkdir server/gnupg/
-[cat > server/server.conf <<EOF
-[server]
-bridge-hostname: localhost
-# This check is lenient here since we try different usernames
-lenient-username-check: yes
-[database]
-database-path: $(pwd)/server/server.sqlite
-[gnupg]
-gnupg-home: $(pwd)/server/gnupg
-gnupg-key-type: RSA
-gnupg-key-usage: sign
-[daemon]
-unix-user:
-unix-group:
-[nss]
-nss-dir: $(pwd)/server
-nss-password: nss-pw
-[binding]
-enabled: test
-EOF]
-
-AT_CHECK([sigul_server_create_db -c server/server.conf -v -v])
-AT_CHECK([printf 'rootroot\0' | \
-		sigul_server_add_admin -c server/server.conf --batch -v -v \
-		-n root])
-
-AT_CHECK([sigul_server -c server/server.conf -d -v -v \
-		--internal-log-dir="$(pwd)/server" \
-		--internal-pid-dir="$(pwd)/server"])
-
-
-# Set up client
-AT_CHECK([certutil -d client -N -f nss_password_file])
-AT_CHECK([certutil -d client -A -n my-ca -t CT,, -a -i ca.pem])
-AT_CHECK([pk12util -d client -i client.p12 -k nss_password_file \
-		-w pkcs12_password_file], , [ignore])
-rm client.p12
-
-[cat > client/client.conf <<EOF
-[client]
-bridge-hostname: localhost
-server-hostname: localhost
-user-name: root
-[nss]
-nss-dir: $(pwd)/client
-nss-password: nss-pw
-[binding]
-enabled: test
-EOF]
-
-# Import test key
-AT_CHECK([printf 'rootroot\0imported\0imported-key-pw\0' | \
- 		sigul -c client/client.conf --batch -v -v \
-		import-key imported-key \
-		"$abs_srcdir/tests/imported-secret-key.asc"])
-AT_CHECK([printf 'rootroot\0' | \
-		sigul -c client/client.conf --batch -v -v \
-		list-keys], ,
-[imported-key
-])
-AT_CHECK([printf 'imported-key-pw\0' | \
-		sigul -c client/client.conf --batch -v -v \
-		get-public-key imported-key > public.asc])
-AT_CHECK([gpg -q --homedir gnupg --import public.asc])
-rm public.asc
+m4_include([include_setup.at])
+m4_include([include_start.at])
+m4_include([include_importedkey.at])
 
 
 # sign-ostree
@@ -171,8 +46,5 @@ AT_CHECK([ostree show --repo=repo --gpg-homedir=gnupg \
         | grep "Good signature"], 0, [ignore])
 rm ostree.commit.b64
 
-# Terminate daemons
-AT_CHECK([kill "$(cat server/sigul_server.pid)"])
-AT_CHECK([kill -QUIT "$(cat bridge/sigul_bridge.pid)"])
 
-AT_CLEANUP
+m4_include([include_cleanup.at])

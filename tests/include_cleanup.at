@@ -15,42 +15,8 @@
 #
 # Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
 
-AT_SETUP([Huge files (>4GB) check])
+# Terminate daemons
+AT_CHECK([kill "$(cat server/sigul_server.pid)"])
+AT_CHECK([kill -QUIT "$(cat bridge/sigul_bridge.pid)"])
 
-
-m4_include([include_setup.at])
-[cat > server/server.conf <<EOF
-[server]
-bridge-hostname: localhost
-max-file-payload-size: 1099511627776
-[database]
-database-path: $(pwd)/server/server.sqlite
-[gnupg]
-gnupg-home: $(pwd)/server/gnupg
-gnupg-key-type: RSA
-gnupg-key-usage: sign
-[daemon]
-unix-user:
-unix-group:
-[nss]
-nss-dir: $(pwd)/server
-nss-password: nss-pw
-[binding]
-enabled: test
-EOF]
-m4_include([include_start.at])
-m4_include([include_importedkey.at])
-
-
-# Create huge file
-AT_CHECK([truncate -s 5G sparsefile])
-
-# Sign it
-AT_CHECK([printf 'imported-key-pw\0' | \
-		sigul -c client/client.conf --batch -v -v \
-		sign-data imported-key sparsefile -o sparsefile.asc], , , )
-
-AT_CHECK([gpg -q --homedir gnupg --verify sparsefile.asc sparsefile], , , [ignore])
-
-
-m4_include([include_cleanup.at])
+AT_CLEANUP

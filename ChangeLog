@@ -1,5 +1,8 @@
 2017-08-22  Patrick Uiterwijk  <puiterwijk@redhat.com>
+	* tests/*.at: Split out some common test code into include_*.at
+
 	* tests/basic.at: Split sign-rpms test from basic
+
 	* various: Made python3 compatible
 
 2017-08-21  Patrick Uiterwijk  <puiterwijk@redhat.com>
