@@ -29,7 +29,6 @@ import struct
 import subprocess
 import shutil
 from six import StringIO
-import six.moves.configparser as configparser
 import sys
 import tempfile
 import time
