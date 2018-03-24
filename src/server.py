@@ -1605,14 +1605,14 @@ class SignRPMsRequestThread(utils.WorkerThread):
                 rpm.verify()
                 rpm.read_header(payload_file)
             except RPMFileError:
-                conn.send_error(rpm.status)
+                self.__conn.send_error(rpm.status)
         finally:
             payload_file.close()
 
         try:
             rpm.authenticate(fields.get, authenticated)
         except RPMFileError:
-            conn.send_error(rpm.status)
+            self.__conn.send_error(rpm.status)
 
         return (rpm, size)
 

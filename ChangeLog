@@ -1,3 +1,6 @@
+2018-03-24  Patrick Uiterwijk  <puiterwijk@redhat.com>
+	* src/server.py: Fix RPMFileError error handling
+
 2017-08-22  Patrick Uiterwijk  <puiterwijk@redhat.com>
 	* various: replaced asserts with if+raise
 
