@@ -1,4 +1,6 @@
 2018-04-23  Patrick Uiterwijk  <puiterwijk@redhat.com>
+	* src/*: Add decrypt method
+
 	* tests/: Updates for the new RPM signature status output
 
 	* src/server_common.py: Rename gpg_decrypt to gpg_decrypt_symmetric

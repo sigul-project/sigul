@@ -1071,6 +1071,7 @@ request_types = {
     'sign-data': RT((SF('key'),
                      BoolField('armor', optional=True)),
                     max_payload=1024 * 1024 * 1024 * 1024),
+    'decrypt': RT((SF('key'),), max_payload=1024 * 1024 * 1024),
     'sign-git-tag': RT((SF('key'),),
                        max_payload=1024 * 1024 * 1024),
     'sign-container': RT((SF('key'),

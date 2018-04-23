@@ -1077,6 +1077,43 @@ def cmd_sign_data(conn, args):
                 o2.output, e.strerror))
 
 
+def cmd_decrypt(conn, args):
+    p2 = optparse.OptionParser(usage='%prog decrypt [options] input_file',
+                               description='Decrypt a file')
+    p2.add_option('-o', '--output', metavar='FILE',
+                  help='Write output to this file')
+    (o2, args) = p2.parse_args(args)
+    if len(args) != 2:
+        p2.error('key name and input file path expected')
+    if o2.output is None and sys.stdout.isatty():
+        p2.error('won\'t write output to a TTY, specify a file name')
+
+    passphrase = read_key_passphrase(conn.config)
+    try:
+        f = open(args[1], 'rb')
+    except IOError as e:
+        raise ClientError(
+            'Error opening {0!s}: {1!s}'.format(
+                args[1], e.strerror))
+
+    try:
+        conn.connect('decrypt', {'key': safe_string(args[0])})
+        conn.send_payload_from_file(f)
+    finally:
+        f.close()
+    conn.send_inner({'passphrase': passphrase})
+    conn.read_response()
+    try:
+        if o2.output is None:
+            conn.write_payload_to_file(sys.stdout)
+        else:
+            utils.write_new_file(o2.output, conn.write_payload_to_file)
+    except IOError as e:
+        raise ClientError(
+            'Error writing to {0!s}: {1!s}'.format(
+                o2.output, e.strerror))
+
+
 def call_git(args, stdin=None, ignore_error=False, strip_newline=False):
     cmd = ['git']
     cmd.extend(args)
@@ -1583,6 +1620,7 @@ command_handlers = {
     'change-passphrase': (cmd_change_passphrase, 'Change key passphrase'),
     'sign-text': (cmd_sign_text, 'Output a cleartext signature of a text'),
     'sign-data': (cmd_sign_data, 'Create a detached signature'),
+    'decrypt': (cmd_decrypt, 'Decrypt an encrypted file'),
     'sign-git-tag': (cmd_sign_git_tag, 'Sign a git tag'),
     'sign-container': (cmd_sign_container, 'Sign an atomic docker container'),
     'sign-ostree': (cmd_sign_ostree, 'Sign an OSTree commit object'),

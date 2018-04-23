@@ -1,0 +1,79 @@
+# Copyright (C) 2018 Red Hat, Inc.  All rights reserved.
+#
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the GNU
+# General Public License v.2.  This program is distributed in the hope that it
+# will be useful, but WITHOUT ANY WARRANTY expressed or implied, including the
+# implied warranties of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.  You should have
+# received a copy of the GNU General Public License along with this program; if
+# not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth
+# Floor, Boston, MA 02110-1301, USA.  Any Red Hat trademarks that are
+# incorporated in the source code or documentation are not subject to the GNU
+# General Public License and may only be used or replicated with the express
+# permission of Red Hat, Inc.
+#
+# Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
+
+AT_SETUP([Decrypt check])
+
+m4_include([include_setup.at])
+m4_include([include_start.at])
+m4_include([include_importedkey.at])
+
+# Import new-key-substitute.asc
+AT_CHECK([[printf 'rootroot\0keyroot\0imported-key-pw\0' | \
+ 		sigul -c client/client.conf --batch -v -v \
+		import-key secondary-key \
+		"$abs_srcdir/tests/new-key-substitute.asc"]])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-keys], ,
+[imported-key
+secondary-key
+])
+AT_CHECK([gpg -q --homedir gnupg --import \
+	$abs_srcdir/tests/imported-public-key.asc])
+
+# Correctly decrypt armored text
+AT_CHECK([printf 'imported-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		decrypt imported-key $abs_srcdir/tests/encrypted-armored.asc],
+		0,
+		[Some foo Text bar
+],
+		[])
+
+# Correctly decrypt binary text
+AT_CHECK([printf 'imported-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		decrypt imported-key $abs_srcdir/tests/encrypted-raw.asc],
+		0,
+		[Some other encrypted text
+],
+		[])
+
+# NOTE: BE CAREFUL: The following two tests need to always be identical in
+# their returned error message/code. Otherwise, a malicious user could make
+# conclusions regarding which keys this sigul server has or does not have.
+
+# Fail decrypting encrypted for wrong key
+AT_CHECK([printf 'imported-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		decrypt imported-key $abs_srcdir/tests/encrypted-wrongkey.asc],
+		1,
+		[],
+		[Error: Decryption failed
+])
+
+# Fail decrypting encrypted for unknown key altogether
+AT_CHECK([printf 'imported-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		decrypt imported-key $abs_srcdir/tests/encrypted-unknown.asc],
+		1,
+		[],
+		[Error: Decryption failed
+])
+
+
+m4_include([include_cleanup.at])

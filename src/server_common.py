@@ -69,9 +69,19 @@ class ServerBaseConfiguration(utils.DaemonIDConfiguration,
                 'not an existing file' %
                 self.database_path)
 
+
+# General utilities
+def _handle_errlist(errlist):
+    if len(errlist) == 1:
+        raise errlist[0]
+    elif len(errlist) == 0:
+        logging.error('Raising original')
+        raise
+    elif len(errlist) > 1:
+        raise Exception('Multiple errors occured: %s' % errlist)
+
+
 # Database
-
-
 class User(object):
 
     def __init__(self, name, clear_password=None, admin=False):
@@ -309,11 +319,25 @@ def _gpg_open(config):
     return ctx
 
 
-def _gpg_set_passphrase(ctx, passphrase):
+def _gpg_set_passphrase(ctx, passphrase, fingerprint=None, errlist=None):
     '''Let ctx use passphrase.'''
-    def cb(unused_uid_int, unused_info, prev_was_bad, fd):
+    def cb(unused_uid_int, info, prev_was_bad, fd):
         if prev_was_bad:
-            return gpgme.ERR_CANCELED
+            if fingerprint:
+                correct_key = False
+                for kid in info.split()[:2]:
+                    if fingerprint.endswith(kid):
+                        correct_key = True
+                        break
+                if not correct_key:
+                    error = GPGError(
+                        'Requested key %s not in unlocked keys %s'
+                        % (fingerprint, info))
+                    if errlist is not None:
+                        errlist.append(error)
+                    raise error
+            else:
+                raise GPGError('Key passphrase incorrect?')
         data = passphrase + '\n'
         while len(data) > 0:
             run = os.write(fd, data)
@@ -558,12 +582,31 @@ def gpg_signature(config, signature_file, cleartext_file, fingerprint,
 
     '''
     ctx = _gpg_open(config)
-    _gpg_set_passphrase(ctx, passphrase)
+    _gpg_set_passphrase(ctx, passphrase, fingerprint)
     key = ctx.get_key(fingerprint, True)
     ctx.signers = (key,)
     ctx.armor = armor
     ctx.textmode = False
     ctx.sign(cleartext_file, signature_file, gpgme.SIG_MODE_NORMAL)
+
+
+def gpg_decrypt(config, cleartext_file, encrypted_file, fingerprint,
+                passphrase):
+    '''Decrypt an encrypted file.
+
+    Decrypt contents of encrypyted_file, write the cleartext to cleartext_file.
+    Use key with fingerprint and passphrase.
+
+    '''
+    errlist = []
+    ctx = _gpg_open(config)
+    _gpg_set_passphrase(ctx, passphrase, fingerprint, errlist)
+    key = ctx.get_key(fingerprint, True)
+    ctx.textmode = False
+    try:
+        ctx.decrypt(encrypted_file, cleartext_file)
+    except:
+        _handle_errlist(errlist)
 
 
 def gpg_clearsign(
@@ -579,7 +622,7 @@ def gpg_clearsign(
 
     '''
     ctx = _gpg_open(config)
-    _gpg_set_passphrase(ctx, passphrase)
+    _gpg_set_passphrase(ctx, passphrase, fingerprint)
     key = ctx.get_key(fingerprint, True)
     ctx.signers = (key,)
     ctx.sign(cleartext_file, signed_file, gpgme.SIG_MODE_CLEAR)
@@ -594,7 +637,7 @@ def gpg_detached_signature(config, signature_file, cleartext_file, fingerprint,
 
     '''
     ctx = _gpg_open(config)
-    _gpg_set_passphrase(ctx, passphrase)
+    _gpg_set_passphrase(ctx, passphrase, fingerprint)
     key = ctx.get_key(fingerprint, True)
     ctx.signers = (key,)
     ctx.armor = armor

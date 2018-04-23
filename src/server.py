@@ -1369,6 +1369,27 @@ def cmd_sign_data(db, conn):
 
 
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
+def cmd_decrypt(db, conn):
+    (access, key_passphrase) = conn.authenticate_user(db)
+    cleartext_file = tempfile.TemporaryFile()
+    try:
+        server_common.gpg_decrypt(conn.config,
+                                  cleartext_file,
+                                  conn.payload_file,
+                                  access.key.fingerprint,
+                                  key_passphrase)
+        logging.info('Decrypted data with key %s',
+                     access.key.name)
+        conn.send_reply_header(errors.OK, {})
+        conn.send_reply_payload_from_file(cleartext_file)
+    except (server_common.GPGError, gpgme.GpgmeError):
+        conn.send_reply_header(errors.DECRYPT_FAILED, {})
+        conn.send_reply_ok_only()
+    finally:
+        cleartext_file.close()
+
+
+@request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_git_tag(db, conn):
     # An annotated tag object looks like:
     # object xxxxxxx
