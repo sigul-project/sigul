@@ -143,7 +143,9 @@ class KeyAccess(object):
 
     def set_passphrase(self, config, key_passphrase, user_passphrase,
                        bind_params):
-        key_passphrase = utils.bind_passphrase(key_passphrase, bind_params)
+        key_passphrase = utils.bind_passphrase(config,
+                                               key_passphrase,
+                                               bind_params)
         self.encrypted_passphrase = gpg_encrypt_symmetric(config,
                                                           key_passphrase,
                                                           user_passphrase)

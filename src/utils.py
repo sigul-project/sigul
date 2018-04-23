@@ -1084,7 +1084,10 @@ class BindingConfiguration(Configuration):
 
     def _add_defaults(self, defaults):
         super(BindingConfiguration, self)._add_defaults(defaults)
-        defaults.update({'enabled': ''})
+        defaults.update({'enabled': '',
+                         'forced-binding-methods': '',
+                         'forced-binding-methods-position': 'first',
+                         'default-binding-methods': ''})
 
     def _add_sections(self, sections):
         super(BindingConfiguration, self)._add_sections(sections)
@@ -1100,6 +1103,17 @@ class BindingConfiguration(Configuration):
                 if module not in self.binding_config:
                     self.binding_config[module] = {}
                 self.binding_config[module][param] = value
+
+        # Parse forced and default binding methods
+        self.forced_binding_methods = bind_list_to_object(
+            parser.get('binding', 'forced-binding-methods').split('\n'))
+        forced_pos = parser.get('binding', 'forced-binding-methods-position')
+        if forced_pos not in ('first', 'last'):
+            raise ValueError('forced-binding-methods-position must be "first" '
+                             'or "last"')
+        self.forced_binding_methods_first = forced_pos == 'first'
+        self.default_binding_methods = bind_list_to_object(
+            parser.get('binding', 'default-binding-methods').split('\n'))
 
 
 class BindingMethodRegistry(MethodRegistry):
@@ -1158,6 +1172,8 @@ def bind_list_to_object(bind_list):
         return None
     bindings = []
     for entry in bind_list:
+        if len(entry.strip()) == 0:
+            continue
         methods = []
         for method in entry.split('|'):
             method, _, args = method.partition(',')
@@ -1215,7 +1231,7 @@ def unbind_passphrase(bound_passphrase):
     return str(bound_passphrase)
 
 
-def bind_passphrase(passphrase, bind_params):
+def bind_passphrase(config, passphrase, bind_params):
     """Bind the passphrase to the hardware.
 
     This takes bind_params, which is a list of ways used to bind the
@@ -1250,8 +1266,18 @@ def bind_passphrase(passphrase, bind_params):
     Endorsement Key public component to identify the TPM bound to.
     """
     if bind_params is None:
-        # If we have no binding methods, just don't bind
+        # This is None in new-key and import-key, during which we cannot
+        # request binding. Only add the forced bindings.
         bind_params = []
+    elif len(bind_params) == 0:
+        # If we have no binding methods, use the default
+        bind_params = config.default_binding_methods
+
+    # Always add the forced binding
+    if config.forced_binding_methods_first:
+        bind_params = config.forced_binding_methods + bind_params
+    else:
+        bind_params = bind_params + config.forced_binding_methods
 
     for entry in bind_params:
         if not isinstance(entry, list):

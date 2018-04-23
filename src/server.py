@@ -1237,7 +1237,7 @@ def cmd_grant_key_access(db, conn):
     try:
         a2.set_passphrase(conn.config, key_passphrase=key_passphrase,
                           user_passphrase=new_passphrase,
-                          bind_params=server_binding)
+                          bind_params=server_binding or [])
     except NotImplementedError():
         raise InvalidRequestError(
             'Non-implemented binding mechanism requested')
@@ -1321,7 +1321,7 @@ def cmd_change_passphrase(db, conn):
             'Unable to decode binding args: {0!s}'.format(ex))
     access.set_passphrase(conn.config, key_passphrase=key_passphrase,
                           user_passphrase=new_passphrase,
-                          bind_params=server_binding)
+                          bind_params=server_binding or [])
     db.commit()
     conn.send_reply_ok_only()
 

@@ -21,10 +21,14 @@ m4_include([include_setup.at])
 [cat >> server/server.conf <<EOF
 [binding]
 enabled: test
+default-binding-methods: test,may_unbind=0
 EOF]
 [cat >> client/client.conf <<EOF
 [binding]
 enabled: test
+forced-binding-methods-position: last
+forced-binding-methods: test,may_unbind=1
+	test,may_unbind=1|test,may_unbind=0
 EOF]
 m4_include([include_start.at])
 m4_include([include_importedkey.at])
@@ -42,6 +46,9 @@ AT_CHECK([printf 'rootroot\0pass3\0' | \
 AT_CHECK([printf 'rootroot\0pass4\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		new-user user4])
+AT_CHECK([printf 'rootroot\0pass5\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-user user5])
 
 # Test list-binding
 AT_CHECK([printf 'rootroot\0' | \
@@ -73,6 +80,10 @@ AT_CHECK([printf 'imported-key-pw\0' | \
 		grant-key-access imported-key user4 \
         -c test,may_unbind=1 -b 'test,may_unbind=0|test,may_unbind=1' -w passphrase4.dat])
 AT_CHECK([printf 'imported-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		grant-key-access imported-key user5 \
+        -c test,may_unbind=1 -w passphrase5.dat])
+AT_CHECK([printf 'imported-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-key-users imported-key], ,
 [root
@@ -80,6 +91,7 @@ user1
 user2
 user3
 user4
+user5
 ])
 
 # Test using an unbindable passphrase
@@ -99,6 +111,12 @@ AT_CHECK([sigul -c client/client.conf --batch -v -v \
 Unable to unbind the passphrase on the client
 ])
 
+# Make sure that whatever was specified in the request, there's also
+# may_unbind 1 and may_unbind 0 entries at top level
+# This comes from forced-binding-methods
+AT_CHECK([cat passphrase2.dat | grep '"may_unbind": "1"'], 0, [ignore], [])
+AT_CHECK([cat passphrase2.dat | grep '"may_unbind": "0"'], 0, [ignore], [])
+
 # Test using a server-side non-unbindable passphrase
 AT_CHECK([sigul -c client/client.conf --batch \
 		-u user3 -f passphrase3.dat sign-text -o data.asc \
@@ -115,5 +133,11 @@ AT_CHECK([sigul -c client/client.conf --batch -v -v \
 AT_CHECK([gpg -q --homedir gnupg --verify data.asc], , , [ignore])
 rm data.asc
 
+# Test using a server-side defaulted non-unbindable passphrase
+AT_CHECK([sigul -c client/client.conf --batch \
+		-u user5 -f passphrase5.dat sign-text -o data.asc \
+        imported-key data], 1, ,
+[Error: Authentication failed
+])
 
 m4_include([include_cleanup.at])

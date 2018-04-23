@@ -851,7 +851,8 @@ def cmd_grant_key_access(conn, args):
     passphrase = read_key_passphrase(conn.config)
     if o2.passphrase_file:
         new_passphrase = utils.random_passphrase(conn.config.passphrase_length)
-        bound_passphrase = utils.bind_passphrase(new_passphrase,
+        bound_passphrase = utils.bind_passphrase(conn.config,
+                                                 new_passphrase,
                                                  client_binding)
     else:
         new_passphrase = read_new_password(conn.config,
@@ -978,7 +979,8 @@ def cmd_change_passphrase(conn, args):
     passphrase = read_key_passphrase(conn.config)
     if o2.passphrase_file:
         new_passphrase = utils.random_passphrase(conn.config.passphrase_length)
-        bound_passphrase = utils.bind_passphrase(new_passphrase,
+        bound_passphrase = utils.bind_passphrase(conn.config,
+                                                 new_passphrase,
                                                  client_binding)
     else:
         new_passphrase = read_new_password(conn.config,
