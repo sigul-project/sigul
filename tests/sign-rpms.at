@@ -46,10 +46,13 @@ AT_CHECK([printf 'imported-key-pw\0' | \
 		sign-rpms -o signed imported-key unsigned/*])
 for i in $(seq 1 S_NUM_RPMS); do
     echo "signed/testrpm$i.rpm: rsa sha1 (md5) pgp md5 OK"
+done | LC_ALL=C sort > expected-old
+for i in $(seq 1 S_NUM_RPMS); do
+    echo "signed/testrpm$i.rpm: digests signatures OK"
 done | LC_ALL=C sort > expected
 AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed/* | LC_ALL=C sort > output])
-AT_CHECK([diff -u expected output])
-rm -r expected output signed unsigned
+AT_CHECK([diff -u expected output || diff -u expected-old output])
+rm -r expected expected-old output signed unsigned
 mkdir unsigned signed
 touch unsigned/empty.rpm
 AT_CHECK([printf 'imported-key-pw\0' | \

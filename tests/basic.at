@@ -404,16 +404,12 @@ AT_CHECK([create_rpm 0])
 AT_CHECK([printf 'root-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		sign-rpm -o signed.rpm key testrpm0.rpm])
-AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed.rpm], ,
-[signed.rpm: rsa sha1 (md5) pgp md5 OK
-])
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" -Kv signed.rpm | grep Signature], , [ignore])
 rm signed.rpm
 AT_CHECK([printf 'root-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		sign-rpm --v3-signature -o signed3.rpm key testrpm0.rpm])
-AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed3.rpm], ,
-[signed3.rpm: rsa sha1 (md5) pgp md5 OK
-])
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" -Kv signed3.rpm | grep Signature], , [ignore])
 rm testrpm0.rpm signed3.rpm
 touch empty.rpm
 AT_CHECK([printf 'root-key-pw\0' | \
