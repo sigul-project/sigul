@@ -1,3 +1,6 @@
+2018-04-22  Patrick Uiterwijk  <puiterwijk@redhat.com>
+	* src/server_common.py: Rename gpg_decrypt to gpg_decrypt_symmetric
+
 2018-03-24  Patrick Uiterwijk  <puiterwijk@redhat.com>
 	* src/server.py: Fix RPMFileError error handling
 

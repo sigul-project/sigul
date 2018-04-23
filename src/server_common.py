@@ -121,9 +121,9 @@ class KeyAccess(object):
             encrypted_passphrase = self.encrypted_passphrase
 
         try:
-            passphrase = gpg_decrypt(config,
-                                     encrypted_passphrase,
-                                     user_passphrase)
+            passphrase = gpg_decrypt_symmetric(config,
+                                               encrypted_passphrase,
+                                               user_passphrase)
         except gpgme.GpgmeError:
             return None
         passphrase = utils.unbind_passphrase(passphrase)
@@ -540,7 +540,7 @@ def gpg_encrypt_symmetric(config, cleartext, passphrase):
     return data.getvalue()
 
 
-def gpg_decrypt(config, ciphertext, passphrase):
+def gpg_decrypt_symmetric(config, ciphertext, passphrase):
     '''Return ciphertext encrypted using passphrase.'''
     ctx = _gpg_open(config)
     _gpg_set_passphrase(ctx, passphrase)
