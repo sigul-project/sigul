@@ -447,6 +447,7 @@ class _ChangePasswordResponder(object):
         self.passwd_cmd_sent = False
         self.quit_cmd_sent = False
         self.want_new_passphrase = None
+        self.sent_old_pw = False
         # pygpgme overrides any exceptions in the callback, store them here
         self.exception = None
 
@@ -460,11 +461,12 @@ class _ChangePasswordResponder(object):
                 else:
                     self.quit_cmd_sent = True
                     return "save"
-            elif status in (ourgpg.constants.STATUS_GOT_IT,
-                            ourgpg.constants.STATUS_USERID_HINT,
+            elif status in (ourgpg.constants.STATUS_USERID_HINT,
                             ourgpg.constants.STATUS_GOOD_PASSPHRASE,
                             ourgpg.constants.STATUS_KEYEXPIRED,
                             ourgpg.constants.STATUS_SIGEXPIRED,
+                            ourgpg.constants.STATUS_KEY_CONSIDERED,
+                            ourgpg.constants.STATUS_INQUIRE_MAXLEN,
                             ourgpg.constants.STATUS_EOF,
                             ''  # The new STATUS_EOF
                             ):
@@ -473,9 +475,14 @@ class _ChangePasswordResponder(object):
                 self.want_new_passphrase = False
             elif status == ourgpg.constants.STATUS_GET_HIDDEN:
                 if not self.want_new_passphrase:
+                    self.sent_old_pw = True
                     return self.old_passphrase
                 else:
                     return self.new_passphrase
+            elif status == ourgpg.constants.STATUS_GOT_IT:
+                # This is what GPG2 sends us
+                if self.sent_old_pw:
+                    self.want_new_passphrase = True
             elif status == ourgpg.constants.STATUS_NEED_PASSPHRASE_SYM:
                 self.want_new_passphrase = True
             elif status == ourgpg.constants.STATUS_BAD_PASSPHRASE:

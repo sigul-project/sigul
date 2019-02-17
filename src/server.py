@@ -1103,7 +1103,11 @@ def cmd_new_key(db, conn):
         if (line == '' or line == '[GNUPG:] GOOD_PASSPHRASE' or
                 line.startswith('[GNUPG:] PROGRESS')):
             continue
-        if not line.startswith('[GNUPG:] KEY_CREATED'):
+        elif line.startswith('[GNUPG:] KEY_CREATED'):
+            pass
+        elif line.startswith('[GNUPG:] KEY_CONSIDERED'):
+            pass
+        else:
             logging.error('Unrecognized GPG stdout: %s', repr(line))
             conn.send_error(errors.UNKNOWN_ERROR)
         fingerprint = line.split(' ')[-1]
