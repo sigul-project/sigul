@@ -1,3 +1,13 @@
+2019-02-18  Patrick Uiterwijk  <puiterwijk@redhat.com>
+	* tests/basic.at: Add workaround for rpmbuild bug
+	* tests/include_setup.at: Make sure to pass nss_password_file to CA
+	import
+	* tests/key-expiration.at: Update for new GPG behavior with
+	expirations
+	* src/server.py, src/server_common.py, src/server_gpg.py: Include
+	abstraction and test python-gpg
+	* src/server.py, src/server_common.py: Begin with GPG2 support
+
 2018-04-24  Patrick Uiterwijk  <puiterwijk@redhat.com>
 	* src/utils.py: Implement default and forced binding
 
