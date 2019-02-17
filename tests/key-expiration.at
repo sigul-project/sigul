@@ -51,7 +51,7 @@ AT_CHECK([printf 'imported-key-pw\0' | \
         change-key-expiration expired-key --expire-date 2030-01-01], 0, [], [])
 
 AT_CHECK([GNUPGHOME=server/gnupg gpg --list-keys | grep expires], 0,
-         [pub   1024R/97CDF37F 2017-02-26 [[expires: 2030-01-01]]
+         [pub   1024R/97CDF37F 2017-02-26 [[expires: 2029-12-31]]
 ], [ignore])
 
 # Set expiration for subkey
@@ -61,8 +61,8 @@ AT_CHECK([printf 'imported-key-pw\0' | \
         0, [], [])
 
 AT_CHECK([GNUPGHOME=server/gnupg gpg --list-keys | grep expires], 0,
-         [pub   1024R/97CDF37F 2017-02-26 [[expires: 2030-01-01]]
-sub   1024R/D35479F8 2017-02-26 [[expires: 2030-01-01]]
+         [pub   1024R/97CDF37F 2017-02-26 [[expires: 2029-12-31]]
+sub   1024R/D35479F8 2017-02-26 [[expires: 2029-12-31]]
 ], [ignore])
 
 # Clear expiration for primary key
@@ -72,7 +72,7 @@ AT_CHECK([printf 'imported-key-pw\0' | \
         0, [], [])
 
 AT_CHECK([GNUPGHOME=server/gnupg gpg --list-keys | grep expires], 0,
-         [sub   1024R/D35479F8 2017-02-26 [[expires: 2030-01-01]]
+         [sub   1024R/D35479F8 2017-02-26 [[expires: 2029-12-31]]
 ], [ignore])
 
 # Clear expiration for subkey
