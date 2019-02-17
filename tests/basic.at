@@ -400,7 +400,10 @@ rm data data.sig
 
 
 # sign-rpm
-AT_CHECK([create_rpm 0])
+# Because of course RPM added a warning when you rpmbuild without post scripts....
+# https://bugzilla.redhat.com/show_bug.cgi?id=1540971
+# @ignatenkobrain: "It's just a warning, ignore it ;). We will solve it at some point."
+AT_CHECK([create_rpm 0], 0, [], [ignore])
 AT_CHECK([printf 'root-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		sign-rpm -o signed.rpm key testrpm0.rpm])

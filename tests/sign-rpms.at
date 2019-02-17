@@ -38,9 +38,13 @@ AT_CHECK([rpm --dbpath "$(pwd)/rpm" --import \
 
 # sign-rpms
 mkdir unsigned signed
+# Because of course RPM added a warning when you rpmbuild without post scripts....
+# https://bugzilla.redhat.com/show_bug.cgi?id=1540971
+# @ignatenkobrain: "It's just a warning, ignore it ;). We will solve it at some point."
+AT_CHECK([create_rpm 0], 0, [], [ignore])
 AT_CHECK([cd unsigned; \
 	  for i in $(seq 1 ]S_NUM_RPMS[); do create_rpm "$i"; done; \
-	  cd ..])
+	  cd ..], 0, [], [ignore])
 AT_CHECK([printf 'imported-key-pw\0' | \
 		sigul -c client/client.conf --batch \
 		sign-rpms -o signed imported-key unsigned/*])
