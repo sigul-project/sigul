@@ -33,7 +33,6 @@ import sys
 import tempfile
 import time
 
-import gpgme
 import nss.error
 import nss.nss
 import pexpect
@@ -41,6 +40,7 @@ import pexpect
 import double_tls
 import errors
 import server_common
+import server_gpg as ourgpg
 import settings
 import utils
 
@@ -1279,25 +1279,33 @@ def cmd_change_key_expiration(db, conn):
     states = []
     if subkey is not None:
         keyarg = 'KEY {0:d}'.format(int(subkey))
-        states.extend([(gpgme.STATUS_GET_LINE, 'keyedit.prompt', keyarg),
-                       (gpgme.STATUS_GOT_IT, None, None)])
-    states.extend([(gpgme.STATUS_GET_LINE, 'keyedit.prompt', 'EXPIRE'),
-                   (gpgme.STATUS_GOT_IT, None, None),
-                   (gpgme.STATUS_GET_LINE, 'keygen.valid', expire),
-                   (gpgme.STATUS_GOT_IT, None, None),
-                   (gpgme.STATUS_USERID_HINT, None, None),
-                   (gpgme.STATUS_NEED_PASSPHRASE, None, None),
-                   (gpgme.STATUS_GET_HIDDEN, 'passphrase.enter', passphrase),
-                   (gpgme.STATUS_GOT_IT, None, None),
-                   (gpgme.STATUS_GOOD_PASSPHRASE, None, None),
-                   (gpgme.STATUS_GET_LINE, 'keyedit.prompt', 'SAVE'),
-                   (gpgme.STATUS_GOT_IT, None, None),
-                   (gpgme.STATUS_EOF, None, None)])
+        states.extend([(ourgpg.constants.STATUS_GET_LINE,
+                        'keyedit.prompt',
+                        keyarg),
+                       (ourgpg.constants.STATUS_GOT_IT, None, None)])
+    states.extend([(ourgpg.constants.STATUS_GET_LINE,
+                    'keyedit.prompt',
+                    'EXPIRE'),
+                   (ourgpg.constants.STATUS_GOT_IT, None, None),
+                   (ourgpg.constants.STATUS_GET_LINE, 'keygen.valid', expire),
+                   (ourgpg.constants.STATUS_GOT_IT, None, None),
+                   (ourgpg.constants.STATUS_USERID_HINT, None, None),
+                   (ourgpg.constants.STATUS_NEED_PASSPHRASE, None, None),
+                   (ourgpg.constants.STATUS_GET_HIDDEN,
+                    'passphrase.enter',
+                    passphrase),
+                   (ourgpg.constants.STATUS_GOT_IT, None, None),
+                   (ourgpg.constants.STATUS_GOOD_PASSPHRASE, None, None),
+                   (ourgpg.constants.STATUS_GET_LINE,
+                    'keyedit.prompt',
+                    'SAVE'),
+                   (ourgpg.constants.STATUS_GOT_IT, None, None),
+                   (ourgpg.constants.STATUS_EOF, None, None)])
     server_common.gpg_edit_key(conn.config,
                                access.key.fingerprint,
                                states,
-                               [gpgme.STATUS_KEYEXPIRED,
-                                gpgme.STATUS_SIGEXPIRED])
+                               [ourgpg.constants.STATUS_KEYEXPIRED,
+                                ourgpg.constants.STATUS_SIGEXPIRED])
     db.commit()
     conn.send_reply_ok_only()
 
@@ -1382,7 +1390,7 @@ def cmd_decrypt(db, conn):
                      access.key.name)
         conn.send_reply_header(errors.OK, {})
         conn.send_reply_payload_from_file(cleartext_file)
-    except (server_common.GPGError, gpgme.GpgmeError):
+    except (server_common.GPGError, ourgpg.GPGMEError):
         conn.send_reply_header(errors.DECRYPT_FAILED, {})
         conn.send_reply_ok_only()
     finally:

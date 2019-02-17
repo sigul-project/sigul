@@ -18,7 +18,6 @@
 
 import copy
 import crypt
-import json
 import logging
 import os
 from six import StringIO
@@ -26,11 +25,12 @@ import shutil
 import subprocess
 import tempfile
 
-import gpgme
 import nss.nss
 import sqlalchemy
 import sqlalchemy.orm
 
+import server_gpg as ourgpg
+from server_gpg import GPGError
 import settings
 import utils
 
@@ -134,7 +134,7 @@ class KeyAccess(object):
             passphrase = gpg_decrypt_symmetric(config,
                                                encrypted_passphrase,
                                                user_passphrase)
-        except gpgme.GpgmeError:
+        except ourgpg.GPGMEError:
             return None
         passphrase = utils.unbind_passphrase(passphrase)
         if passphrase is None:
@@ -259,11 +259,6 @@ def call_ostree_helper(args, stdin=None):
 # GPG utilities
 
 
-class GPGError(Exception):
-    '''Error performing a GPG operation.'''
-    pass
-
-
 class GPGEditError(GPGError):
     '''Error performing a GPG edit operation.'''
 
@@ -314,37 +309,11 @@ def gpg_modify_environ(config):
 
 def _gpg_open(config):
     '''Return a configured gpgme context.'''
-    ctx = gpgme.Context()
-    ctx.protocol = gpgme.PROTOCOL_OpenPGP
-    ctx.set_engine_info(gpgme.PROTOCOL_OpenPGP, settings.gnupg_bin,
+    ctx = ourgpg.Context()
+    ctx.protocol = ourgpg.constants.PROTOCOL_OpenPGP
+    ctx.set_engine_info(ourgpg.constants.PROTOCOL_OpenPGP, settings.gnupg_bin,
                         config.gnupg_home)
     return ctx
-
-
-def _gpg_set_passphrase(ctx, passphrase, fingerprint=None, errlist=None):
-    '''Let ctx use passphrase.'''
-    def cb(unused_uid_int, info, prev_was_bad, fd):
-        if prev_was_bad:
-            if fingerprint:
-                correct_key = False
-                for kid in info.split()[:2]:
-                    if fingerprint.endswith(kid):
-                        correct_key = True
-                        break
-                if not correct_key:
-                    error = GPGError(
-                        'Requested key %s not in unlocked keys %s'
-                        % (fingerprint, info))
-                    if errlist is not None:
-                        errlist.append(error)
-                    raise error
-            else:
-                raise GPGError('Key passphrase incorrect?')
-        data = passphrase + '\n'
-        while len(data) > 0:
-            run = os.write(fd, data)
-            data = data[run:]
-    ctx.passphrase_cb = cb
 
 
 def gpg_public_key(config, fingerprint):
@@ -390,7 +359,7 @@ def gpg_edit_key(config, fingerprint, input_states, ignored_states):
         out_fd.seek(0)
         out_fd.truncate()
 
-    def edit_callback(status, arg, in_fd):
+    def edit_callback(status, arg):
         if status in ignored_states:
             return
 
@@ -402,6 +371,8 @@ def gpg_edit_key(config, fingerprint, input_states, ignored_states):
             errors.append(error)
             raise error
         expected_status, expected_arg, answer = states.pop(0)
+        if expected_status == ourgpg.constants.STATUS_EOF:
+            expected_status = ''
         if expected_status != status:
             error = GPGEditError('Mismatched status',
                                  expected_status, status, expected_arg, arg)
@@ -413,21 +384,14 @@ def gpg_edit_key(config, fingerprint, input_states, ignored_states):
             errors.append(error)
             raise error
         if answer is not None:
-            if in_fd == -1:
-                error = GPGEditError('No input fd when trying to answer',
-                                     expected_status, status, expected_arg,
-                                     arg)
-                errors.append(error)
-                raise error
-            else:
-                os.write(in_fd, '{0!s}\n'.format(answer))
+            return '{0!s}'.format(answer)
 
     # We are done setting everything up... Now let's do this
     ctx = _gpg_open(config)
     key = ctx.get_key(fingerprint, True)
     try:
         ctx.edit(key, edit_callback, out_fd)
-    except gpgme.GpgmeError as ex:
+    except ourgpg.GPGMEError as ex:
         # This is because gpgme hides all errors: every error we throw gets
         # thrown up to the edit call as gpgme.GpgmeError('General error')
         if len(errors) != 0:
@@ -458,32 +422,18 @@ def gpg_import_key(config, key_file):
     # We can't parse key_file to see whether it is acceptable, so just back
     # up the database and restore it if necessary.
     tmp_dir = tempfile.mkdtemp()
-    import_ok = False
+    keyfpr = None
     try:
         backup_dir = os.path.join(tmp_dir, 'gnupghome-backup')
         shutil.copytree(config.gnupg_home, backup_dir)
         ctx = _gpg_open(config)
-        r = ctx.import_(key_file)
-        if (r.imported == 0 and r.secret_imported == 0 and
-                len(r.imports) == 1 and
-                (r.imports[0][2] & gpgme.IMPORT_NEW) == 0):
-            raise GPGError('Key already exists')
-        if (r.imported != 1 or r.secret_imported != 1 or len(r.imports) != 2 or
-            set((r.imports[0][2], r.imports[1][2])) !=
-            set((gpgme.IMPORT_NEW, gpgme.IMPORT_NEW | gpgme.IMPORT_SECRET)) or
-                r.imports[0][0] != r.imports[1][0]):
-            raise GPGError('Unexpected import file contents')
-        if r.imports[0][1] is not None:
-            raise r.imports[0][1]
-        if r.imports[1][1] is not None:
-            raise r.imports[1][1]
-        import_ok = True
+        keyfpr = ctx.sigul_import(key_file)
     finally:
-        if not import_ok:
+        if keyfpr is None:
             _restore_gnupg_home(config, backup_dir)
         # If _restore_gnupg_home raises an exception, tmp_dir won't be removed.
         shutil.rmtree(tmp_dir)
-    return r.imports[0][0]
+    return keyfpr
 
 # In LISP a nested function that modifies upper-level variables would be enough
 # Python requires an object
@@ -500,36 +450,42 @@ class _ChangePasswordResponder(object):
         # pygpgme overrides any exceptions in the callback, store them here
         self.exception = None
 
-    def callback(self, status, args, fd):
+    def callback(self, status, args):
         try:
-            if status == gpgme.STATUS_GET_LINE and args == 'keyedit.prompt':
+            if (status == ourgpg.constants.STATUS_GET_LINE and
+                    args == 'keyedit.prompt'):
                 if not self.passwd_cmd_sent:
-                    os.write(fd, 'passwd\n')
                     self.passwd_cmd_sent = True
+                    return "passwd"
                 else:
-                    os.write(fd, 'save\n')
                     self.quit_cmd_sent = True
-            elif status in (gpgme.STATUS_GOT_IT, gpgme.STATUS_USERID_HINT,
-                            gpgme.STATUS_GOOD_PASSPHRASE, gpgme.STATUS_EOF):
+                    return "save"
+            elif status in (ourgpg.constants.STATUS_GOT_IT,
+                            ourgpg.constants.STATUS_USERID_HINT,
+                            ourgpg.constants.STATUS_GOOD_PASSPHRASE,
+                            ourgpg.constants.STATUS_KEYEXPIRED,
+                            ourgpg.constants.STATUS_SIGEXPIRED,
+                            ourgpg.constants.STATUS_EOF,
+                            ''  # The new STATUS_EOF
+                            ):
                 pass
-            elif status == gpgme.STATUS_NEED_PASSPHRASE:
+            elif status == ourgpg.constants.STATUS_NEED_PASSPHRASE:
                 self.want_new_passphrase = False
-            elif status == gpgme.STATUS_GET_HIDDEN:
+            elif status == ourgpg.constants.STATUS_GET_HIDDEN:
                 if not self.want_new_passphrase:
-                    os.write(fd, self.old_passphrase + '\n')
+                    return self.old_passphrase
                 else:
-                    os.write(fd, self.new_passphrase + '\n')
-            elif status == gpgme.STATUS_NEED_PASSPHRASE_SYM:
+                    return self.new_passphrase
+            elif status == ourgpg.constants.STATUS_NEED_PASSPHRASE_SYM:
                 self.want_new_passphrase = True
-            elif status == gpgme.STATUS_BAD_PASSPHRASE:
-                self.exception = GPGError('Invalid passphrase')
-                return gpgme.ERR_GENERAL
+            elif status == ourgpg.constants.STATUS_BAD_PASSPHRASE:
+                raise GPGError("Invalid passphrase")
             else:
-                logging.error('Unexpected GPG edit callback: (%s, %s, %s)',
-                              repr(status), repr(args), repr(fd))
+                logging.error('Unexpected GPG edit callback: (%s, %s)',
+                              repr(status), repr(args))
                 self.exception = NotImplementedError()
-                return gpgme.ERR_GENERAL
-            return gpgme.ERR_NO_ERROR
+                raise NotImplementedError()
+            return None
         except Exception as e:
             self.exception = e
             raise  # Will return gpgme.ERR_GENERAL
@@ -546,7 +502,7 @@ def gpg_change_password(config, fingerprint, old_passphrase, new_passphrase):
     responder = _ChangePasswordResponder(old_passphrase, new_passphrase)
     try:
         ctx.edit(key, responder.callback, StringIO())
-    except gpgme.GpgmeError:
+    except ourgpg.GPGMEError:
         if responder.exception is not None:
             raise responder.exception
         raise
@@ -559,20 +515,13 @@ def gpg_change_password(config, fingerprint, old_passphrase, new_passphrase):
 def gpg_encrypt_symmetric(config, cleartext, passphrase):
     '''Return cleartext encrypted using passphrase.'''
     ctx = _gpg_open(config)
-    _gpg_set_passphrase(ctx, passphrase)
-    data = StringIO()
-    ctx.encrypt(None, 0, StringIO(cleartext),
-                data)
-    return data.getvalue()
+    return ctx.sigul_encrypt_symmetric(cleartext, passphrase)
 
 
 def gpg_decrypt_symmetric(config, ciphertext, passphrase):
     '''Return ciphertext encrypted using passphrase.'''
     ctx = _gpg_open(config)
-    _gpg_set_passphrase(ctx, passphrase)
-    data = StringIO()
-    ctx.decrypt(StringIO(ciphertext), data)
-    return data.getvalue()
+    return ctx.sigul_decrypt_symmetric(ciphertext, passphrase)
 
 
 def gpg_signature(config, signature_file, cleartext_file, fingerprint,
@@ -584,12 +533,12 @@ def gpg_signature(config, signature_file, cleartext_file, fingerprint,
 
     '''
     ctx = _gpg_open(config)
-    _gpg_set_passphrase(ctx, passphrase, fingerprint)
+    ctx.sigul_set_passphrase(passphrase, fingerprint=fingerprint)
     key = ctx.get_key(fingerprint, True)
     ctx.signers = (key,)
     ctx.armor = armor
     ctx.textmode = False
-    ctx.sign(cleartext_file, signature_file, gpgme.SIG_MODE_NORMAL)
+    ctx.sign(cleartext_file, signature_file, ourgpg.constants.SIG_MODE_NORMAL)
 
 
 def gpg_decrypt(config, cleartext_file, encrypted_file, fingerprint,
@@ -602,8 +551,8 @@ def gpg_decrypt(config, cleartext_file, encrypted_file, fingerprint,
     '''
     errlist = []
     ctx = _gpg_open(config)
-    _gpg_set_passphrase(ctx, passphrase, fingerprint, errlist)
-    key = ctx.get_key(fingerprint, True)
+    ctx.sigul_set_passphrase(passphrase, fingerprint, errlist)
+    ctx.get_key(fingerprint, True)
     ctx.textmode = False
     try:
         ctx.decrypt(encrypted_file, cleartext_file)
@@ -624,10 +573,10 @@ def gpg_clearsign(
 
     '''
     ctx = _gpg_open(config)
-    _gpg_set_passphrase(ctx, passphrase, fingerprint)
+    ctx.sigul_set_passphrase(passphrase, fingerprint)
     key = ctx.get_key(fingerprint, True)
     ctx.signers = (key,)
-    ctx.sign(cleartext_file, signed_file, gpgme.SIG_MODE_CLEAR)
+    ctx.sign(cleartext_file, signed_file, ourgpg.constants.SIG_MODE_CLEAR)
 
 
 def gpg_detached_signature(config, signature_file, cleartext_file, fingerprint,
@@ -639,9 +588,9 @@ def gpg_detached_signature(config, signature_file, cleartext_file, fingerprint,
 
     '''
     ctx = _gpg_open(config)
-    _gpg_set_passphrase(ctx, passphrase, fingerprint)
+    ctx.sigul_set_passphrase(passphrase, fingerprint)
     key = ctx.get_key(fingerprint, True)
     ctx.signers = (key,)
     ctx.armor = armor
     ctx.textmode = False
-    ctx.sign(cleartext_file, signature_file, gpgme.SIG_MODE_DETACH)
+    ctx.sign(cleartext_file, signature_file, ourgpg.constants.SIG_MODE_DETACH)
