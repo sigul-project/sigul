@@ -49,7 +49,7 @@ AT_CHECK([pk12util -d ca -o client.p12 -n sigul-client-cert \
 
 # Set up bridge:
 AT_CHECK([certutil -d bridge -N -f nss_password_file])
-AT_CHECK([certutil -d bridge -A -n my-ca -t CT,, -a -i ca.pem])
+AT_CHECK([certutil -d bridge -A -f nss_password_file -n my-ca -t CT,, -a -i ca.pem])
 AT_CHECK([pk12util -d bridge -i bridge.p12 -k nss_password_file \
 		-w pkcs12_password_file], , [ignore])
 rm bridge.p12
@@ -68,7 +68,7 @@ EOF]
 
 # Set up server:
 AT_CHECK([certutil -d server -N -f nss_password_file])
-AT_CHECK([certutil -d server -A -n my-ca -t CT,, -a -i ca.pem])
+AT_CHECK([certutil -d server -A -f nss_password_file -n my-ca -t CT,, -a -i ca.pem])
 AT_CHECK([pk12util -d server -i server.p12 -k nss_password_file \
 		-w pkcs12_password_file], , [ignore])
 rm server.p12
@@ -112,7 +112,7 @@ AT_CHECK([printf 'rootroot\0' | \
 
 # Set up client
 AT_CHECK([certutil -d client -N -f nss_password_file])
-AT_CHECK([certutil -d client -A -n my-ca -t CT,, -a -i ca.pem])
+AT_CHECK([certutil -d client -A -f nss_password_file -n my-ca -t CT,, -a -i ca.pem])
 AT_CHECK([pk12util -d client -i client.p12 -k nss_password_file \
 		-w pkcs12_password_file], , [ignore])
 rm client.p12
