@@ -124,7 +124,7 @@ def optparse_add_config_file_option(parser, default):
 def optparse_add_verbosity_option(parser):
     '''Add --verbose option to parser.'''
     parser.add_option(
-        '-v', '--verbose', action='count',
+        '-v', '--verbose', action='count', default=0,
         help='More verbose output (twice for debugging messages)')
 
 
@@ -213,6 +213,7 @@ class KojiConfiguration(Configuration):
 class KojiError(Exception):
     pass
 
+
 _u8_format = '!B'
 
 
@@ -222,6 +223,7 @@ def u8_pack(v):
 
 def u8_unpack(data):
     return struct.unpack(_u8_format, data)[0]
+
 
 u8_size = struct.calcsize(_u8_format)
 
@@ -235,6 +237,7 @@ def u32_pack(v):
 def u32_unpack(data):
     return struct.unpack(_u32_format, data)[0]
 
+
 u32_size = struct.calcsize(_u32_format)
 
 _u64_format = '!Q'
@@ -246,6 +249,7 @@ def u64_pack(v):
 
 def u64_unpack(data):
     return struct.unpack(_u64_format, data)[0]
+
 
 u64_size = struct.calcsize(_u64_format)
 
@@ -331,7 +335,7 @@ def koji_connect(koji_config, authenticate, proxyuser=None):
 def koji_disconnect(session):
     try:
         session.logout()
-    except:
+    except Exception:
         pass
 
 # Crypto utilities
@@ -410,6 +414,7 @@ def nss_init(config):
         raise ValueError('Min version of TLS must be at least TLS1.2')
     nss.ssl.set_default_ssl_version_range(min_tls, max_tls)
     nss.ssl.config_server_session_id_cache()
+
 
 _derivation_counter_1 = u32_pack(1)
 
@@ -556,6 +561,7 @@ class SHA512HMACWriter(_DigestsWriter):
             raise ValueError('HMAC length incorrect')
         self._write_fn(auth)
 
+
 # Protocol utilities
 protocol_version = 1
 
@@ -581,7 +587,7 @@ def read_fields(read_fn):
         size = u8_unpack(buf)
         if size == 0 or size > 255:
             raise InvalidFieldsError('Invalid field key length')
-        key = read_fn(size)
+        key = read_fn(size).decode('utf-8')
         if not string_is_safe(key):
             raise InvalidFieldsError('Unprintable key value')
         buf = read_fn(u8_size)
@@ -606,7 +612,7 @@ def format_fields(fields):
         if len(key) > 255:
             raise ValueError('Key name {0!s} too long'.format(key))
         data += u8_pack(len(key))
-        data += key
+        data += key.encode('utf-8')
         if isinstance(value, bool):
             if value:
                 value = u8_pack(1)
@@ -614,7 +620,11 @@ def format_fields(fields):
                 value = u8_pack(0)
         elif isinstance(value, int):
             value = u32_pack(value)
-        elif not isinstance(value, str):
+        elif isinstance(value, str):
+            value = value.encode('utf-8')
+        elif isinstance(value, bytes):
+            pass
+        else:
             raise ValueError('Unknown value type of {0!s}'.format(repr(value)))
         if len(value) > 255:
             raise ValueError('Value {0!s} too long'.format(repr(value)))
@@ -646,17 +656,18 @@ def string_is_safe(s, filename=False):
     for c in s:
         if ord(c) < 0x20 or ord(c) > 0x7F:
             return False
-        if filename and not ((ord(c) >= 0x41 and ord(c) <= 0x5A) or
-                             (ord(c) >= 0x61 and ord(c) <= 0x7A) or
-                             (ord(c) >= 0x30 and ord(c) <= 0x39) or
-                             (ord(c) in [0x2E])):
+        if filename and not ((ord(c) >= 0x41 and ord(c) <= 0x5A)
+                             or (ord(c) >= 0x61 and ord(c) <= 0x7A)
+                             or (ord(c) >= 0x30 and ord(c) <= 0x39)
+                             or (ord(c) in [0x2E])):
             return False
     # Don't allow a period at the start, to avoid ".."
     if filename and s[0] == '.':
         return False
     return True
 
-_date_re = re.compile('^\d\d\d\d-\d\d-\d\d$')
+
+_date_re = re.compile(r'^\d\d\d\d-\d\d-\d\d$')
 
 
 def yyyy_mm_dd_is_valid(s):
@@ -675,7 +686,7 @@ def is_int(s):
     try:
         int(s)
         return True
-    except:
+    except Exception:
         return False
 
 # Threading utilities
@@ -687,9 +698,9 @@ class WorkerQueueOrphanedError(Exception):
 
 
 class WorkerQueue(object):
-    '''A synchronized queue similar to Queue.Queue, except that it can be marked
-    as orphaned; if so, attempts to put more items into the queue will never
-    block, but may raise WorkerQueueOrphanedError.
+    '''A synchronized queue similar to Queue.Queue, except that it can be
+    marked as orphaned; if so, attempts to put more items into the queue will
+    never block, but may raise WorkerQueueOrphanedError.
 
     (Note that the writer is not guaranteed to get WorkerQueueOrphanedError for
     all unprocessed items because the queue may become orphaned after putting
@@ -757,7 +768,7 @@ class WorkerThread(threading.Thread):
         try:
             try:
                 self._real_run()
-            except:
+            except Exception:
                 logging.error('Worker %s (%s) encountered an error processing',
                               self.name, self.description,
                               exc_info=True)
@@ -770,10 +781,10 @@ class WorkerThread(threading.Thread):
                     except WorkerQueueOrphanedError:
                         logging.debug('%s: Sending queue EOF failed, queue '
                                       'already orphaned', self.name)
-                    except:
+                    except Exception:
                         logging.warning('%s: Error sending queue EOF',
                                         self.name, exc_info=True)
-        except:
+        except Exception:
             self.exc_info = sys.exc_info()
             if not isinstance(self.exc_info[1], self.ignored_exception_types):
                 log_exception(
@@ -873,7 +884,7 @@ def set_regid(config):
     if config.daemon_gid is not None:
         try:
             os.setregid(config.daemon_gid, config.daemon_gid)
-        except:
+        except Exception:
             logging.error('Error switching to group %d: %s', config.daemon_gid,
                           sys.exc_info()[1])
             raise
@@ -884,7 +895,7 @@ def set_reuid(config):
     if config.daemon_uid is not None:
         try:
             os.setreuid(config.daemon_uid, config.daemon_uid)
-        except:
+        except Exception:
             logging.error('Error switching to user %d: %s', config.daemon_uid,
                           sys.exc_info()[1])
             raise
@@ -1025,7 +1036,7 @@ def write_new_file(path, write_fn):
     remove_tmp_path = True
     f = None
     try:
-        f = os.fdopen(fd, 'w')
+        f = os.fdopen(fd, 'wb')
         write_fn(f)
         try:
             st = os.stat(path)

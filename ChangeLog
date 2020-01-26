@@ -1,3 +1,9 @@
+2020-06-08  Patrick Uiterwijk  <puiterwijk@redhat.com>
+	* Everywhere: Added support for GPGv2 and Python3
+	* Everywhere: Bumped protocol version to wire version 1
+
+	* config.ac: Release 1.0a1
+
 2019-02-18  Patrick Uiterwijk  <puiterwijk@redhat.com>
 	* tests/basic.at: Add workaround for rpmbuild bug
 	* tests/include_setup.at: Make sure to pass nss_password_file to CA

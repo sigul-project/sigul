@@ -73,10 +73,6 @@ AT_CHECK([pk12util -d server -i server.p12 -k nss_password_file \
 		-w pkcs12_password_file], , [ignore])
 rm server.p12
 
-mkdir server/gnupg/
-#[cat > server/gnupg/gpg.conf <<EOF
-#pinentry-mode loopback
-#EOF]
 [cat > server/server.conf <<EOF
 [server]
 bridge-hostname: localhost

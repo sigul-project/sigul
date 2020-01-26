@@ -40,11 +40,12 @@ def main():
         utils.set_regid(config)
         utils.set_reuid(config)
         utils.update_HOME_for_uid(config)
-    except:
+    except Exception:
         # The failing function has already logged the exception
         sys.exit(1)
 
     server_common.db_create(config)
+
 
 if __name__ == '__main__':
     main()

@@ -33,7 +33,7 @@ import threading
 try:
     import fedora.client
     have_fas = True
-except:
+except ImportError:
     have_fas = False
 import nss.error
 import nss.io
@@ -139,6 +139,7 @@ class ForwardingError(Exception):
 def copy_file_data(dest, src, size):
     '''Copy size bytes from file-like src to file-like dst.'''
     utils.copy_data(dest.write, src.read, size)
+
 
 _fas_connection = None
 
@@ -248,10 +249,12 @@ class StringField(Field):
 
     def validate(self, value):
         super(StringField, self).validate(value)
-        if value is not None and not utils.string_is_safe(value):
-            raise InvalidRequestError(
-                'Field {0!s} is not printable'.format(
-                    self.name))
+        if value is not None:
+            value = value.decode('utf-8')
+            if not utils.string_is_safe(value):
+                raise InvalidRequestError(
+                    'Field {0!s} is not printable'.format(
+                        self.name))
 
 
 class BoolField(Field):
@@ -259,8 +262,8 @@ class BoolField(Field):
 
     def validate(self, value):
         super(BoolField, self).validate(value)
-        if value is not None and (len(value) != utils.u8_size or
-                                  utils.u8_unpack(value) not in (0, 1)):
+        if value is not None and (len(value) != utils.u8_size
+                                  or utils.u8_unpack(value) not in (0, 1)):
             raise InvalidRequestError(
                 'Field {0!s} is not a boolean'.format(
                     self.name))
@@ -271,9 +274,11 @@ class YYYYMMDDField(Field):
 
     def validate(self, value):
         super(YYYYMMDDField, self).validate(value)
-        if value is not None and not utils.yyyy_mm_dd_is_valid(value):
-            raise InvalidRequestError('Field {0!s} is not a valid date'.format(
-                                      self.name))
+        if value is not None:
+            value = value.decode('utf-8')
+            if not utils.yyyy_mm_dd_is_valid(value):
+                raise InvalidRequestError(
+                    'Field {0!s} is not a valid date'.format(self.name))
 
 
 class RequestValidator(object):
@@ -432,8 +437,8 @@ class KojiClient(object):
             raise ForwardingError(
                 'Koji connection failed: {0!s}'.format(
                     str(e)))
-        return (self.__koji_pathinfo.build(build) + '/' +
-                self.__koji_pathinfo.rpm(rpm_info))
+        return (self.__koji_pathinfo.build(build) + '/'
+                + self.__koji_pathinfo.rpm(rpm_info))
 
     def add_signature(self, rpm_info, path):
         '''Add signature for rpm_info from path using session.
@@ -653,7 +658,7 @@ class SignRPMsReadRequestThread(utils.WorkerThread):
                 raise InvalidRequestError('Total payload size too large')
             (fd, rpm.tmp_path) = tempfile.mkstemp(text=False,
                                                   dir=self.__tmp_dir)
-            dst = os.fdopen(fd, 'w+')
+            dst = os.fdopen(fd, 'w+b')
             try:
                 copy_file_data(dst, self.__conn.client_buf, payload_size)
                 # Count whole blocks to avoid millions of 1-byte files filling
@@ -800,7 +805,7 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
                 if rpm is None:
                     break
                 self.__dest.put(rpm)
-        except:
+        except Exception:
             # This is a pretty horrible hack. If we stop reading replies from
             # the server (e.g. because this thread or one of its consumers
             # fails), the server will eventually block when the TCP buffers
@@ -890,7 +895,7 @@ class SignRPMsReadReplyThread(utils.WorkerThread):
         if rpm.tmp_path is not None:
             raise ForwardingError('RPM handled twice')
         (fd, rpm.tmp_path) = tempfile.mkstemp(text=False, dir=self.__tmp_dir)
-        dst = os.fdopen(fd, 'w+')
+        dst = os.fdopen(fd, 'w+b')
         try:
             copy_file_data(dst, self.__server_buf, rpm.reply_payload_size)
         finally:
@@ -938,9 +943,9 @@ class SignRPMsKojiReplyThread(utils.WorkerThread):
         logging.debug('%s: Started handling reply %s', self.name,
                       utils.readable_fields(rpm.reply_fields))
         # Zero-length response should happen only on error.
-        if (rpm.reply_payload_size != 0 and
-            (self.__conn.request_fields.get('import-signature') ==
-             utils.u8_pack(1))):
+        if (rpm.reply_payload_size != 0
+            and (self.__conn.request_fields.get('import-signature')
+                 == utils.u8_pack(1))):
             rpm.add_signature_to_koji(koji_client)
 
 
@@ -1038,6 +1043,7 @@ class RT(object):
         self.validator = RequestValidator(fields, max_payload)
         self.handler = handler
 
+
 SF = StringField
 request_types = {
     'list-users': RT(()),
@@ -1110,7 +1116,7 @@ class StoringProxy(object):
 
     def __init__(self, buf):
         self.__buf = buf
-        self.__stored = ''
+        self.__stored = b''
 
     def stored_read(self, size):
         '''Read size bytes from the buffer and store the result.'''
@@ -1126,7 +1132,7 @@ class StoringProxy(object):
 
         '''
         res = self.__stored
-        self.__stored = ''
+        self.__stored = b''
         return res
 
 
@@ -1142,9 +1148,9 @@ class BridgeConnection(object):
             raise ForwardingError('No client certificate')
         user_name = cert.subject_common_name
         logging.info('Client with CN %s connected', repr(user_name))
-        if (config.required_fas_group is not None and
-            not fas_user_is_in_group(config, user_name,
-                                     config.required_fas_group)):
+        if (config.required_fas_group is not None
+                and not fas_user_is_in_group(config, user_name,
+                                             config.required_fas_group)):
             raise InvalidRequestError(
                 'User {0!s} not allowed to connect'.format(
                     repr(user_name)))
@@ -1202,7 +1208,7 @@ class BridgeConnection(object):
 
         logging.info('Request: %s', utils.readable_fields(self.request_fields))
         try:
-            op = self.request_fields['op']
+            op = self.request_fields['op'].decode('utf-8')
         except KeyError:
             raise InvalidRequestError('op field missing')
         try:
@@ -1225,9 +1231,9 @@ class BridgeConnection(object):
         StringField('koji-instance', optional=True).validate(instance)
         if instance is not None and instance in self.config.koji_fas_groups:
             group = self.config.koji_fas_groups[instance]
-            if (group is not None and
-                    not fas_user_is_in_group(self.config, self.user_name,
-                                             group)):
+            if (group is not None
+                    and not fas_user_is_in_group(self.config, self.user_name,
+                                                 group)):
                 raise InvalidRequestError(
                     'User %s not allowed to use Koji '
                     'instance %s' %
@@ -1371,7 +1377,7 @@ def main():
             fedora.client.baseclient.SESSION_FILE = \
                 os.path.join(fedora.client.baseclient.SESSION_DIR,
                              '.fedora_session')
-        except:
+        except Exception:
             logging.error('Error switching to user %d: %s', config.daemon_uid,
                           sys.exc_info()[1])
             sys.exit(1)
@@ -1403,13 +1409,14 @@ def main():
                                    client_listen_sock)
         except (KeyboardInterrupt, SystemExit):
             pass  # Silence is golden
-        except:
+        except Exception:
             logging.error('Unexpected exception', exc_info=True)
             sys.exit(1)
     finally:
         if config.daemon_uid is not None:
             os.seteuid(os.getuid())
         utils.delete_pid_file(options, 'sigul_bridge')
+
 
 if __name__ == '__main__':
     main()

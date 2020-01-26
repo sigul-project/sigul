@@ -107,7 +107,7 @@ rm data.asc
 AT_CHECK([sigul -c client/client.conf --batch -v -v \
 		-u user2 -f passphrase2.dat sign-text -o data.asc \
         imported-key data], 1, ,
-[WARNING: Failed to unbind with any of the following: method: test, args: {u'may_unbind': u'0'}
+[WARNING: Failed to unbind with any of the following: method: test, args: {'may_unbind': '0'}
 Unable to unbind the passphrase on the client
 ])
 

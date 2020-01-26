@@ -17,6 +17,7 @@
 
 AT_SETUP([OSTree check])
 
+AT_SKIP_IF([! ostree --version])
 AT_SKIP_IF([grep "have_ostree = 'no'" $SIGULPATH/settings.py])
 
 m4_include([include_setup.at])
@@ -41,7 +42,10 @@ AT_CHECK([ostree init --repo=repo --mode=archive-z2])
 AT_CHECK([mkdir repo/objects/43])
 AT_CHECK([mv ostree.commit repo/objects/43/520b4605aca8994b4c8253ead261d18dec9eca25f82aed507204b15bb52b6a.commit])
 AT_CHECK([mv ostree.commitmeta repo/objects/43/520b4605aca8994b4c8253ead261d18dec9eca25f82aed507204b15bb52b6a.commitmeta])
-AT_CHECK([ostree show --repo=repo --gpg-homedir=gnupg \
+# Because of course ostree uses gpg1 to check (i.e. gpg2 import doesn't work)
+AT_CHECK([ostree remote add --repo=repo test nowhere --gpg-import=$abs_srcdir/tests/imported-public-key.asc], , [Imported 1 GPG key to remote "test"
+], [ignore])
+AT_CHECK([ostree show --repo=repo \
         43520b4605aca8994b4c8253ead261d18dec9eca25f82aed507204b15bb52b6a \
         | grep "Good signature"], 0, [ignore])
 rm ostree.commit.b64

@@ -33,7 +33,7 @@ try:
             raise NotImplementedError("readcb not implemented!")
 
         def writecb(data, hook=None):
-            ioval.write(data)
+            ioval.write(data.decode('utf-8'))
             return len(data)
 
         def seekcb(offset, whence, hook=None):
@@ -50,45 +50,54 @@ try:
     constants = gpg.constants
 
     class Context(gpg.core.Context):
+        @property
+        def is_gpgv2(self):
+            return self.engine_info.version[0] == "2"
+
         def delete(self, key, delete_secret):
             return self.op_delete(key, delete_secret)
 
         def edit(self, key, func, sink):
             def wrapper(*args, **kwargs):
                 res = func(*args)
-                if isinstance(res, str):  # TODO: Fix for py3
+                if isinstance(res, bytes):
                     res = res.decode('utf-8')
                 return res
 
+            def pass_cb(unused_uid_int, info, prev_was_bad, hook=None, *args):
+                return func(
+                    gpg.constants.STATUS_GET_HIDDEN,
+                    "passphrase.enter"
+                )
+
+            self.set_passphrase_cb(pass_cb)
             self.interact(key, wrapper, wrapsio(sink))
 
         def export(self, fingerprint, data):
-            import logging
-            logging.info("Export requested for fpr %s", fingerprint)
             res = self.op_export(fingerprint, 0, wrapsio(data))
-            logging.info("Res: %s", res)
             return res
 
         def sigul_import(self, key_file):
             self.op_import(key_file)
             r = self.op_import_result()
-            if (r.imported == 0 and r.secret_imported == 0 and
-                    len(r.imports) == 1 and
-                    (r.imports[0].status & gpg.constants.IMPORT_NEW) == 0):
+            if (r.imported == 0 and r.secret_imported == 0
+                    and len(r.imports) == 1
+                    and (r.imports[0].status & gpg.constants.IMPORT_NEW) == 0):
                 raise GPGError('Key already exists')
-            if (r.imported != 1 or r.secret_imported != 1 or
-                len(r.imports) != 2 or
-                set((r.imports[0].status, r.imports[1].status)) !=
-                set((gpg.constants.IMPORT_NEW,
-                     gpg.constants.IMPORT_NEW |
-                     gpg.constants.IMPORT_SECRET)) or
-                    r.imports[0].fpr != r.imports[1].fpr):
+            if (r.imported != 1 or r.secret_imported != 1
+                or len(r.imports) != 2
+                or set((r.imports[0].status, r.imports[1].status))
+                != set((gpg.constants.IMPORT_NEW,
+                        gpg.constants.IMPORT_NEW
+                        | gpg.constants.IMPORT_SECRET))
+                    or r.imports[0].fpr != r.imports[1].fpr):
                 raise GPGError('Unexpected import file contents')
             gpg.errors.errorcheck(r.imports[0].result)
             gpg.errors.errorcheck(r.imports[1].result)
             return r.imports[0].fpr
 
         def sigul_encrypt_symmetric(self, cleartext, passphrase):
+            cleartext = cleartext.encode('utf-8')
             enc, _, _ = self.encrypt(cleartext,
                                      passphrase=passphrase,
                                      sign=False)
@@ -97,6 +106,7 @@ try:
         def sigul_decrypt_symmetric(self, ciphertext, passphrase):
             dec, _, _ = self.decrypt(ciphertext,
                                      passphrase=passphrase)
+            dec = dec.decode('utf-8')
             return dec
 
         def sigul_set_passphrase(self,
@@ -104,7 +114,7 @@ try:
                                  fingerprint=None,
                                  errlist=None):
             '''Let ctx use passphrase.'''
-            def cb(unused_uid_int, info, prev_was_bad, hook=None):
+            def cb(unused_uid_int, info, prev_was_bad, hook=None, *args):
                 if prev_was_bad:
                     if fingerprint:
                         correct_key = False
@@ -136,6 +146,13 @@ except ImportError:
     constants = gpgme
 
     class Context(gpgme.Context):
+        @property
+        def is_gpgv2(self):
+            return False
+
+        def set_empty_passphrase_cb(self):
+            pass
+
         def sigul_encrypt_symmetric(self, cleartext, passphrase):
             self.sigul_set_passphrase(passphrase)
             data = StringIO()
@@ -184,16 +201,16 @@ except ImportError:
 
         def sigul_import(self, key_file):
             r = self.import_(key_file)
-            if (r.imported == 0 and r.secret_imported == 0 and
-                    len(r.imports) == 1 and
-                    (r.imports[0][2] & gpgme.IMPORT_NEW) == 0):
+            if (r.imported == 0 and r.secret_imported == 0
+                    and len(r.imports) == 1
+                    and (r.imports[0][2] & gpgme.IMPORT_NEW) == 0):
                 raise GPGError('Key already exists')
-            if (r.imported != 1 or r.secret_imported != 1 or
-                len(r.imports) != 2 or
-                set((r.imports[0][2], r.imports[1][2])) !=
-                set((gpgme.IMPORT_NEW,
-                     gpgme.IMPORT_NEW | gpgme.IMPORT_SECRET)) or
-                    r.imports[0][0] != r.imports[1][0]):
+            if (r.imported != 1 or r.secret_imported != 1
+                or len(r.imports) != 2
+                or set((r.imports[0][2], r.imports[1][2]))
+                != set((gpgme.IMPORT_NEW,
+                        gpgme.IMPORT_NEW | gpgme.IMPORT_SECRET))
+                    or r.imports[0][0] != r.imports[1][0]):
                 raise GPGError('Unexpected import file contents')
             if r.imports[0][1] is not None:
                 raise r.imports[0][1]

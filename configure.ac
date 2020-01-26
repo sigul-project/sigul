@@ -1,5 +1,5 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT([sigul], [0.207], [puiterwijk@redhat.com], ,
+AC_INIT([sigul], [1.0a1], [puiterwijk@redhat.com], ,
         [https://pagure.io/sigul/])
 AC_COPYRIGHT(
 [Copyright (C) 2009-2017 Red Hat, Inc.  All rights reserved.
@@ -25,8 +25,7 @@ AC_CONFIG_TESTDIR([.], [src])
 AM_INIT_AUTOMAKE([dist-bzip2 no-define -Wall])
 
 dnl Checks for programs.
-AM_PATH_PYTHON([2.4])
-dnl Not gpg2, it cannot receive passphrases from gpgme
+AM_PATH_PYTHON([3.4])
 AC_PATH_PROG([GPG], [gpg])
 AC_ARG_VAR([GPG])
 # This interface seems to be undocumented, but bison uses it ;-)

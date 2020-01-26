@@ -48,7 +48,7 @@ def main():
         utils.set_regid(config)
         utils.set_reuid(config)
         utils.update_HOME_for_uid(config)
-    except:
+    except Exception:
         # The failing function has already logged the exception
         sys.exit(1)
 
@@ -75,6 +75,7 @@ def main():
     user = server_common.User(name, clear_password=password, admin=True)
     db.add(user)
     db.commit()
+
 
 if __name__ == '__main__':
     main()

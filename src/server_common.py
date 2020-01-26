@@ -62,8 +62,8 @@ class ServerBaseConfiguration(utils.DaemonIDConfiguration,
     def _read_configuration(self, parser):
         super(ServerBaseConfiguration, self)._read_configuration(parser)
         self.database_path = parser.get('database', 'database-path')
-        if (not self.__allow_missing_database_path and
-                not os.path.isfile(self.database_path)):
+        if (not self.__allow_missing_database_path
+                and not os.path.isfile(self.database_path)):
             raise utils.ConfigurationError(
                 '[database] database-path \'%s\' is '
                 'not an existing file' %
@@ -98,9 +98,10 @@ class User(object):
         random = nss.nss.generate_random(self.__salt_length)
         salt = '$6$'
         for i in range(self.__salt_length):
-            salt += self.__salt_characters[ord(random[i]) %
+            salt += self.__salt_characters[random[i] %
                                            len(self.__salt_characters)]
-        self.sha512_password = crypt.crypt(clear_password, salt)
+        self.sha512_password = crypt.crypt(
+            clear_password, salt).encode('utf-8')
     clear_password = property(fset=__set_clear_password,
                               doc='Setting this attribute updates '
                               'sha512_password')
@@ -149,6 +150,7 @@ class KeyAccess(object):
         self.encrypted_passphrase = gpg_encrypt_symmetric(config,
                                                           key_passphrase,
                                                           user_passphrase)
+
 
 sa = sqlalchemy
 _db_metadata = sa.MetaData()
@@ -223,8 +225,8 @@ def _db_get_engine(config):
 
     if _db_engine is None:
         # Use echo=True for development
-        _db_engine = sqlalchemy.create_engine('sqlite:///' +
-                                              config.database_path)
+        _db_engine = sqlalchemy.create_engine('sqlite:///'
+                                              + config.database_path)
     return _db_engine
 
 
@@ -295,6 +297,34 @@ class GPGConfiguration(utils.Configuration):
         self.gnupg_home = parser.get('gnupg', 'gnupg-home')
 
 
+def generate_gpg_config(homedir):
+    """
+    Generate a GPG config to ensure loopback PIN is allowed.
+    """
+    try:
+        pinfo = os.stat(homedir)
+        if pinfo.st_mode & 0o077:
+            raise Exception("gnupg home directory is openable by another user")
+    except FileNotFoundError:
+        os.makedirs(homedir, mode=0o700)
+
+    if os.path.exists(os.path.join(homedir, "gpg.conf")):
+        return
+    with open(os.path.join(homedir, "gpg.conf"), "w") as confw:
+        confw.write("use-agent\npinentry-mode loopback\n")
+    with open(os.path.join(homedir, "gpg-agent.conf"), "w") as confw:
+        confw.write(
+            """
+allow-loopback-pinentry
+no-allow-external-cache
+ignore-cache-for-signing
+default-cache-ttl 1
+default-cache-ttl-ssh 1
+max-cache-ttl 1
+max-cache-ttl-ssh 1
+""")
+
+
 def gpg_modify_environ(config):
     '''Modify os.envion based on config.
 
@@ -305,6 +335,7 @@ def gpg_modify_environ(config):
         # Otherwise the passphrase callbacks are ignored
         del os.environ['GPG_AGENT_INFO']
     os.environ['GNUPGHOME'] = config.gnupg_home
+    generate_gpg_config(config.gnupg_home)
 
 
 def _gpg_open(config):
@@ -313,6 +344,9 @@ def _gpg_open(config):
     ctx.protocol = ourgpg.constants.PROTOCOL_OpenPGP
     ctx.set_engine_info(ourgpg.constants.PROTOCOL_OpenPGP, settings.gnupg_bin,
                         config.gnupg_home)
+    if ctx.is_gpgv2:
+        generate_gpg_config(config.gnupg_home)
+        ctx.set_pinentry_mode(ourgpg.constants.PINENTRY_MODE_LOOPBACK)
     return ctx
 
 
@@ -453,8 +487,8 @@ class _ChangePasswordResponder(object):
 
     def callback(self, status, args):
         try:
-            if (status == ourgpg.constants.STATUS_GET_LINE and
-                    args == 'keyedit.prompt'):
+            if (status == ourgpg.constants.STATUS_GET_LINE
+                    and args == 'keyedit.prompt'):
                 if not self.passwd_cmd_sent:
                     self.passwd_cmd_sent = True
                     return "passwd"
@@ -513,8 +547,8 @@ def gpg_change_password(config, fingerprint, old_passphrase, new_passphrase):
         if responder.exception is not None:
             raise responder.exception
         raise
-    if (not responder.passwd_cmd_sent or not responder.want_new_passphrase or
-            not responder.quit_cmd_sent):
+    if (not responder.passwd_cmd_sent or not responder.want_new_passphrase
+            or not responder.quit_cmd_sent):
         logging.error('Unexpected state when changing GPG key password')
         raise NotImplementedError()
 
@@ -528,6 +562,8 @@ def gpg_encrypt_symmetric(config, cleartext, passphrase):
 def gpg_decrypt_symmetric(config, ciphertext, passphrase):
     '''Return ciphertext encrypted using passphrase.'''
     ctx = _gpg_open(config)
+    if isinstance(ciphertext, str):
+        ciphertext = ciphertext.encode('utf-8')
     return ctx.sigul_decrypt_symmetric(ciphertext, passphrase)
 
 
@@ -563,7 +599,7 @@ def gpg_decrypt(config, cleartext_file, encrypted_file, fingerprint,
     ctx.textmode = False
     try:
         ctx.decrypt(encrypted_file, cleartext_file)
-    except:
+    except Exception:
         _handle_errlist(errlist)
 
 

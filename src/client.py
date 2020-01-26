@@ -159,6 +159,8 @@ class ClientsConnection(object):
 
     def send_payload(self, data):
         '''Send data as payload.'''
+        if isinstance(data, str):
+            data = data.encode("utf-8")
         self.__send_payload_size(len(data))
         self.__request_payload_writer.write(data)
 
@@ -244,9 +246,13 @@ class ClientsConnection(object):
         self.__authenticate_reply_payload()
         return data
 
-    def write_payload_to_file(self, f):
+    def write_payload_to_file(self, f, decoding=None):
         '''Write server's payload to f.'''
-        utils.copy_data(f.write, self.__reply_payload_reader.read,
+        def writer(out):
+            if decoding is not None:
+                out = out.decode("utf-8")
+            f.write(out)
+        utils.copy_data(writer, self.__reply_payload_reader.read,
                         self.__payload_size)
         self.__authenticate_reply_payload()
 
@@ -399,7 +405,7 @@ def bool_to_text(val):
 
 def print_list_in_payload(conn, num_field_name):
     '''Read payload from conn and print is as a list of strings.'''
-    payload = conn.read_payload()
+    payload = conn.read_payload().decode('utf-8')
     start = 0
     for _ in range(conn.response_field_int(num_field_name)):
         try:
@@ -725,7 +731,7 @@ def cmd_new_key(conn, args):
     conn.empty_payload()
     conn.send_inner({'password': password, 'passphrase': passphrase})
     conn.read_response()
-    pubkey = conn.read_payload()
+    pubkey = conn.read_payload().decode('utf-8')
     if not utils.string_is_safe(pubkey.replace('\n', '')):
         raise InvalidResponseError('Public key is not safely printable')
     print(pubkey, end='')
@@ -818,18 +824,18 @@ def cmd_grant_key_access(conn, args):
                                description='Grant key access to a user')
     p2.add_option('-b', '--server-binding-method', action='append',
                   dest='server_binding_methods',
-                  help='Method used to bind this passphrase to server (' +
-                       'use sigul get-server-binding-methods to get ' +
-                       'available methods)')
+                  help=('Method used to bind this passphrase to server ('
+                        'use sigul get-server-binding-methods to get '
+                        'available methods)'))
     p2.add_option('-c', '--client-binding-method', action='append',
                   dest='client_binding_methods',
-                  help='client used to bind this passphrase to server (' +
-                       'use sigul get-binding-methods to get ' +
-                       'available methods)')
+                  help=('client used to bind this passphrase to server ('
+                        'use sigul get-binding-methods to get '
+                        'available methods)'))
     p2.add_option('-w', '--write-passphrase-file', action='store',
                   dest='passphrase_file',
-                  help='File to store bound passphrase (works only with ' +
-                       '--client-bind-method, and is required if used)')
+                  help=('File to store bound passphrase (works only with '
+                        '--client-bind-method, and is required if used)'))
     (o2, args) = p2.parse_args(args)
     if len(args) != 2:
         p2.error('key name and user name expected')
@@ -935,7 +941,7 @@ def cmd_get_public_key(conn, args):
     conn.empty_payload()
     conn.send_inner(inner_f)
     conn.read_response()
-    pubkey = conn.read_payload()
+    pubkey = conn.read_payload().decode("utf-8")
     if not utils.string_is_safe(pubkey.replace('\n', '')):
         raise InvalidResponseError('Public key is not safely printable')
     print(pubkey, end='')
@@ -946,18 +952,18 @@ def cmd_change_passphrase(conn, args):
                                description='Change key passphrase')
     p2.add_option('-b', '--server-binding-method', action='append',
                   dest='server_binding_methods',
-                  help='Method used to bind this passphrase to server (' +
-                       'use sigul get-server-binding-methods to get ' +
-                       'available methods)')
+                  help=('Method used to bind this passphrase to server ('
+                        'use sigul get-server-binding-methods to get '
+                        'available methods)'))
     p2.add_option('-c', '--client-binding-method', action='append',
                   dest='client_binding_methods',
-                  help='client used to bind this passphrase to server (' +
-                       'use sigul get-binding-methods to get ' +
-                       'available methods)')
+                  help=('client used to bind this passphrase to server ('
+                        'use sigul get-binding-methods to get '
+                        'available methods)'))
     p2.add_option('-w', '--write-passphrase-file', action='store',
                   dest='passphrase_file',
-                  help='File to store bound passphrase (works only with ' +
-                       '--client-bind-method, and is required if used)')
+                  help=('File to store bound passphrase (works only with '
+                        '--client-bind-method, and is required if used)'))
     (o2, args) = p2.parse_args(args)
     if len(args) != 1:
         p2.error('key name expected')
@@ -1015,7 +1021,7 @@ def cmd_sign_text(conn, args):
 
     passphrase = read_key_passphrase(conn.config)
     try:
-        f = open(args[1])
+        f = open(args[1], "rb")
     except IOError as e:
         raise ClientError(
             'Error opening {0!s}: {1!s}'.format(
@@ -1030,7 +1036,7 @@ def cmd_sign_text(conn, args):
     conn.read_response()
     try:
         if o2.output is None:
-            conn.write_payload_to_file(sys.stdout)
+            conn.write_payload_to_file(sys.stdout, decoding="utf-8")
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError as e:
@@ -1070,7 +1076,7 @@ def cmd_sign_data(conn, args):
     conn.read_response()
     try:
         if o2.output is None:
-            conn.write_payload_to_file(sys.stdout)
+            conn.write_payload_to_file(sys.stdout, decoding="utf-8")
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError as e:
@@ -1107,7 +1113,7 @@ def cmd_decrypt(conn, args):
     conn.read_response()
     try:
         if o2.output is None:
-            conn.write_payload_to_file(sys.stdout)
+            conn.write_payload_to_file(sys.stdout, decoding="utf-8")
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError as e:
@@ -1132,6 +1138,7 @@ def call_git(args, stdin=None, ignore_error=False, strip_newline=False):
                                                     proc.returncode,
                                                     stdout,
                                                     stderr))
+    stdout = stdout.decode("utf-8")
     if strip_newline:
         stdout = stdout.replace('\n', '')
     return stdout
@@ -1160,7 +1167,7 @@ def cmd_sign_git_tag(conn, args):
     conn.read_response()
 
     signature = conn.read_payload()
-    signed_obj = unsigned_obj + signature
+    signed_obj = unsigned_obj.encode("utf-8") + signature
     signed_oid = call_git(['hash-object', '-t', 'tag', '-w', '--stdin'],
                           stdin=signed_obj, strip_newline=True)
     call_git(['update-ref', 'refs/tags/{0!s}'.format(args[1]), signed_oid,
@@ -1182,7 +1189,7 @@ def cmd_sign_container(conn, args):
     passphrase = read_key_passphrase(conn.config)
 
     try:
-        f = open(args[1], 'r')
+        f = open(args[1], 'rb')
     except IOError as e:
         raise ClientError(
             'Error opening {0!s}: {1!s}'.format(
@@ -1200,7 +1207,7 @@ def cmd_sign_container(conn, args):
     conn.read_response()
     try:
         if o2.output is None:
-            conn.write_payload_to_file(sys.stdout)
+            conn.write_payload_to_file(sys.stdout, decoding="utf-8")
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError as e:
@@ -1239,7 +1246,7 @@ def cmd_sign_ostree(conn, args):
     conn.read_response()
     try:
         if o2.output is None:
-            conn.write_payload_to_file(sys.stdout)
+            conn.write_payload_to_file(sys.stdout, decoding="utf-8")
         else:
             utils.write_new_file(o2.output, conn.write_payload_to_file)
     except IOError as e:
@@ -1572,8 +1579,8 @@ def cmd_sign_rpms(conn, args):
 
 def cmd_list_binding_methods(conn, args):
     p2 = optparse.OptionParser(usage='%prog list-binding-methods',
-                               description='List binding methods supported ' +
-                                           'by client')
+                               description=('List binding methods supported '
+                                            'by client'))
     (_, args) = p2.parse_args(args)
     if len(args) != 0:
         p2.error('unexpected arguments')
@@ -1583,8 +1590,8 @@ def cmd_list_binding_methods(conn, args):
 
 def cmd_list_server_binding_methods(conn, args):
     p2 = optparse.OptionParser(usage='%prog list-server-binding-methods',
-                               description='List binding methods supported ' +
-                                           'by the server')
+                               description=('List binding methods supported '
+                                            'by the server'))
     (_, args) = p2.parse_args(args)
     if len(args) != 0:
         p2.error('unexpected arguments')
@@ -1741,9 +1748,10 @@ def main():
         sys.exit(1)
     except SystemExit:
         raise  # Don't consider this an unexpected exception
-    except:
+    except Exception:
         logging.error('Unexpected exception', exc_info=True)
         sys.exit(1)
+
 
 if __name__ == '__main__':
     main()
