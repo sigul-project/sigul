@@ -45,7 +45,7 @@ python_PYTHON = src/bridge.py \
 	src/client.py \
 	src/double_tls.py \
 	src/errors.py \
-	src/server.py src/server_add_admin.py src/server_common.py \
+	src/server.py src/server_add_admin.py src/server_common.py src/server_gpg.py \
 	src/server_create_db.py \
 	src/utils.py
 nodist_python_PYTHON = src/settings.py
