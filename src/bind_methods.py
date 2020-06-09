@@ -43,6 +43,7 @@ def tpm_bind(value, pcrs=None):
         for pcr in pcrs.split(','):
             cmd.extend(['--pcr', pcr])
     proc = subprocess.Popen(cmd,
+                            encoding="utf-8",
                             stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
@@ -67,6 +68,7 @@ def tpm_unbind(value):
     else:
         cmd.append('--srk-well-known')
     proc = subprocess.Popen(cmd,
+                            encoding="utf-8",
                             stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
@@ -111,6 +113,7 @@ def pkcs11_bind(value, token):
 
     cmd = ['openssl', 'smime', '-encrypt', '-aes-256-cbc', pubkey]
     proc = subprocess.Popen(cmd,
+                            encoding="utf-8",
                             stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
@@ -149,6 +152,7 @@ def pkcs11_unbind(value, token):
     cmd = ['openssl', 'smime', '-decrypt', '-keyform', 'engine', '-passin',
            'stdin', '-engine', 'pkcs11', '-inkey', privkey]
     proc = subprocess.Popen(cmd,
+                            encoding="utf-8",
                             stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
