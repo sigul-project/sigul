@@ -849,6 +849,8 @@ class RPMFile(object):
                 rpm_value = self.__header[tag]
                 if rpm_value is None:
                     rpm_value = b''
+            if isinstance(rpm_value, bytes):
+                rpm_value = rpm_value.decode("utf-8")
             if field_value != str(rpm_value):
                 raise InvalidRequestError('RPM mismatch')
 
