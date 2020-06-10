@@ -362,6 +362,8 @@ class KojiClient(object):
         if self.__koji_config is None:
             instance = self.__conn.request_fields.get('koji-instance')
             StringField('koji-instance', optional=True).validate(instance)
+            if isinstance(instance, bytes):
+                instance = instance.decode("utf-8")
             try:
                 self.__koji_config = utils.koji_read_config(self.__conn.config,
                                                             instance)
