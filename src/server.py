@@ -836,6 +836,8 @@ class RPMFile(object):
             field_value = get_field(field)
             if field_value is None:
                 continue
+            if isinstance(field_value, bytes):
+                field_value = field_value.decode("utf-8")
             if not utils.string_is_safe(field_value):
                 raise InvalidRequestError(
                     'Field {0!s} has unsafe value'.format(
@@ -847,7 +849,7 @@ class RPMFile(object):
                 rpm_value = self.__header[tag]
                 if rpm_value is None:
                     rpm_value = b''
-            if field_value != str(rpm_value):
+            if field_value != rpm_value.decode("utf-8"):
                 raise InvalidRequestError('RPM mismatch')
 
         field_value = get_field('rpm-sigmd5')

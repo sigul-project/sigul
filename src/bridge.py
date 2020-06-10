@@ -405,6 +405,8 @@ class KojiClient(object):
         d = {}
         for (key, field) in six.iteritems(self.__rpm_info_map):
             v = fields.get(field.name)
+            if isinstance(v, bytes):
+                v = v.decode("utf-8")
             field.validate(v)
             d[key] = v
         try:
@@ -475,7 +477,10 @@ class KojiClient(object):
                 raise ForwardingError('A different signature was already '
                                       'imported')
             if len(sigs) == 0:
-                session.addRPMSig(rpm_info['id'], base64.encodestring(sighdr))
+                session.addRPMSig(
+                    rpm_info['id'],
+                    base64.b64encode(sighdr).encode("utf-8")
+                )
         except (utils.KojiError, koji.GenericError) as e:
             raise ForwardingError(
                 'Koji connection failed: {0!s}'.format(
