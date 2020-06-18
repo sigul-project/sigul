@@ -532,7 +532,7 @@ class SignRPMRequestHandler(RequestHandler):
                 'import-signature') == utils.u8_pack(1)):
             (fd, self.__rpm.tmp_path) = tempfile.mkstemp(text=False)
             try:
-                tmp_file = os.fdopen(fd, 'w+')
+                tmp_file = os.fdopen(fd, 'w+b')
                 try:
                     copy_file_data(tmp_file, conn.server_buf,
                                    conn.reply_payload_size)
