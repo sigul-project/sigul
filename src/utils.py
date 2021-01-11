@@ -1175,7 +1175,7 @@ class BindingMethodRegistry(MethodRegistry):
 
 
 def random_passphrase(length):
-    return str(base64.urlsafe_b64encode(os.urandom(length))[:length])
+    return base64.urlsafe_b64encode(os.urandom(length))[:length].decode('utf8')
 
 
 def bind_list_to_object(bind_list):

@@ -26,6 +26,8 @@ import shutil
 import subprocess
 import tempfile
 
+import cryptography.hazmat.primitives.asymmetric.ec
+
 import nss.nss
 import sqlalchemy
 import sqlalchemy.orm
@@ -156,6 +158,7 @@ class KeyAccess(object):
 
 class KeyTypeEnum(enum.Enum):
     gnupg = 1
+    ECC = 2
 
 
 sa = sqlalchemy
@@ -295,7 +298,14 @@ class GPGConfiguration(utils.Configuration):
 
     def _add_defaults(self, defaults):
         super(GPGConfiguration, self)._add_defaults(defaults)
-        defaults.update({'gnupg-home': settings.default_gnupg_home})
+        defaults.update({
+            'gnupg-home': settings.default_gnupg_home,
+            'gnupg-key-type': 'RSA',
+            'gnupg-key-length': 2048,
+            'gnupg-subkey-type': 'RSA',
+            'gnupg-subkey-length': 2048,
+            'gnupg-key-usage': 'sign',
+        })
 
     def _add_sections(self, sections):
         super(GPGConfiguration, self)._add_sections(sections)
@@ -304,6 +314,37 @@ class GPGConfiguration(utils.Configuration):
     def _read_configuration(self, parser):
         super(GPGConfiguration, self)._read_configuration(parser)
         self.gnupg_home = parser.get('gnupg', 'gnupg-home')
+        self.gnupg_key_type = parser.get('gnupg', 'gnupg-key-type')
+        self.gnupg_key_length = parser.getint('gnupg', 'gnupg-key-length')
+        self.gnupg_subkey_type = parser.get('gnupg', 'gnupg-subkey-type')
+        if self.gnupg_subkey_type == '':
+            self.gnupg_subkey_type = None
+        else:
+            self.gnupg_subkey_length = parser.getint('gnupg',
+                                                     'gnupg-subkey-length')
+        self.gnupg_key_usage = parser.get('gnupg', 'gnupg-key-usage')
+
+
+class KeysConfiguration(utils.Configuration):
+
+    def _add_defaults(self, defaults):
+        super(KeysConfiguration, self)._add_defaults(defaults)
+        defaults.update({
+            'allowed-key-types': 'ECC',
+            'ecc-default-curve': 'SECP256R1',
+            'keys-storage': settings.default_keys_storage,
+        })
+
+    def _add_sections(self, sections):
+        super(KeysConfiguration, self)._add_sections(sections)
+        sections.add('keys')
+
+    def _read_configuration(self, parser):
+        super(KeysConfiguration, self)._read_configuration(parser)
+        self.keys_allowed = parser.get('keys', 'allowed-key-types').strip().split(',')
+        ecc_default_curve = parser.get('keys', 'ecc-default-curve')
+        self.ecc_default_curve = getattr(cryptography.hazmat.primitives.asymmetric.ec, ecc_default_curve)
+        self.keys_storage = parser.get('keys', 'keys-storage')
 
 
 def generate_gpg_config(homedir):

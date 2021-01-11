@@ -23,6 +23,7 @@ _default_storage_path = '@serverdatadir@'
 default_server_nss_path = _default_storage_path
 default_database_path = os.path.join(_default_storage_path, 'server.sqlite')
 default_gnupg_home = os.path.join(_default_storage_path, 'gnupg')
+default_keys_storage = os.path.join(_default_storage_path, 'keys')
 koji_do_proxy_auth = True
 have_ostree = '@have_ostree@'
 log_dir = '@logdir@'

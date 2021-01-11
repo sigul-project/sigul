@@ -33,6 +33,10 @@ import sys
 import tempfile
 import time
 
+import cryptography.hazmat.primitives.serialization as crypto_serialization
+import cryptography.hazmat.primitives.asymmetric.ec as crypto_ec
+from cryptography.hazmat.backends import default_backend as crypto_default_backend
+
 import nss.error
 import nss.nss
 import pexpect
@@ -60,16 +64,12 @@ User = server_common.User
 
 
 class ServerConfiguration(server_common.GPGConfiguration,
+                          server_common.KeysConfiguration,
                           server_common.ServerBaseConfiguration):
 
     def _add_defaults(self, defaults):
         super(ServerConfiguration, self)._add_defaults(defaults)
         defaults.update({'bridge-port': 44333,
-                         'gnupg-key-type': 'RSA',
-                         'gnupg-key-length': 2048,
-                         'gnupg-subkey-type': 'RSA',
-                         'gnupg-subkey-length': 2048,
-                         'gnupg-key-usage': 'sign',
                          'max-file-payload-size': 1024 * 1024 * 1024,
                          'max-memory-payload-size': 1024 * 1024,
                          'max-rpms-payloads-size': 10 * 1024 * 1024 * 1024,
@@ -85,15 +85,6 @@ class ServerConfiguration(server_common.GPGConfiguration,
 
     def _read_configuration(self, parser):
         super(ServerConfiguration, self)._read_configuration(parser)
-        self.gnupg_key_type = parser.get('gnupg', 'gnupg-key-type')
-        self.gnupg_key_length = parser.getint('gnupg', 'gnupg-key-length')
-        self.gnupg_subkey_type = parser.get('gnupg', 'gnupg-subkey-type')
-        if self.gnupg_subkey_type == '':
-            self.gnupg_subkey_type = None
-        else:
-            self.gnupg_subkey_length = parser.getint('gnupg',
-                                                     'gnupg-subkey-length')
-        self.gnupg_key_usage = parser.get('gnupg', 'gnupg-key-usage')
         self.passphrase_length = parser.getint('gnupg', 'passphrase-length')
         self.bridge_hostname = parser.get('server', 'bridge-hostname')
         self.bridge_port = parser.getint('server', 'bridge-port')
@@ -1125,6 +1116,56 @@ def gnupg_new_key(db, conn):
     return (fingerprint, key_passphrase)
 
 
+def non_gnupg_new_key(db, conn, keytype):
+    key_passphrase = utils.random_passphrase(conn.config.passphrase_length)
+    key_passphrase = bytes(key_passphrase, 'utf8')
+    if keytype == KeyTypeEnum.ECC:
+        logging.error("Key storage dir: %s" % conn.config.keys_storage)
+        curve = conn.config.ecc_default_curve()
+        key = crypto_ec.generate_private_key(curve, crypto_default_backend())
+        serialized_key = key.private_bytes(
+            crypto_serialization.Encoding.PEM,
+            crypto_serialization.PrivateFormat.PKCS8,
+            crypto_serialization.BestAvailableEncryption(key_passphrase),
+        )
+        pubkey = key.public_key()
+        serialized_pubkey = pubkey.public_bytes(
+            crypto_serialization.Encoding.PEM,
+            crypto_serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+
+        pubkey_der = pubkey.public_bytes(
+            crypto_serialization.Encoding.DER,
+            crypto_serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        fingerprint = hashlib.sha1(pubkey_der).hexdigest()
+
+        keypaths = non_gnupg_key_paths(conn.config, fingerprint)
+
+        with open(os.open(keypaths['private'], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode=0o600), 'wb') as keyfile:
+            keyfile.write(serialized_key)
+
+        with open(keypaths['public'], 'wb') as pubkeyfile:
+            pubkeyfile.write(serialized_pubkey)
+
+        return (serialized_pubkey, fingerprint, key_passphrase)
+
+    conn.send_error(errors.UNSUPPORTED_KEYTYPE)
+
+
+def non_gnupg_key_paths(config, fingerprint):
+    return {
+        'private': os.path.join(config.keys_storage, '%s.pem' % fingerprint),
+        'public': os.path.join(config.keys_storage, '%s.public.pem' % fingerprint),
+    }
+
+
+def remove_non_gnupg_key(config, fingerprint):
+    keypaths = non_gnupg_key_paths(config, fingerprint)
+    os.remove(keypaths['private'])
+    os.remove(keypaths['public'])
+
+
 @request_handler()
 def cmd_new_key(db, conn):
     conn.authenticate_admin(db)
@@ -1151,8 +1192,9 @@ def cmd_new_key(db, conn):
 
     if keytype == server_common.KeyTypeEnum.gnupg:
         (fingerprint, key_passphrase) = gnupg_new_key(db, conn)
+        pubkey = server_common.gpg_public_key(conn.config, fingerprint)
     else:
-        raise NotImplementedError()
+        (pubkey, fingerprint, key_passphrase) = non_gnupg_new_key(db, conn, keytype)
 
     try:
         key = Key(key_name, keytype, fingerprint)
@@ -1164,11 +1206,13 @@ def cmd_new_key(db, conn):
         db.add(access)
         db.commit()
     except Exception:
-        server_common.gpg_delete_key(conn.config, fingerprint)
+        if keytype == KeyTypeEnum.gnupg:
+            server_common.gpg_delete_key(conn.config, fingerprint)
+        else:
+            remove_non_gnupg_key(conn.config, fingerprint)
         raise
-    payload = server_common.gpg_public_key(conn.config, fingerprint)
     conn.send_reply_header(errors.OK, {})
-    conn.send_reply_payload(payload)
+    conn.send_reply_payload(pubkey)
 
 
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
@@ -1234,8 +1278,7 @@ def cmd_delete_key(db, conn):
     if key.keytype == KeyTypeEnum.gnupg:
         server_common.gpg_delete_key(conn.config, key.fingerprint)
     else:
-        logging.info('Deleting keys will come later for non-gnupg keys')
-        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
+        remove_non_gnupg_key(conn.config, key.fingerprint)
     for a in key.key_accesses:
         db.delete(a)
     db.delete(key)
@@ -1320,8 +1363,13 @@ def cmd_revoke_key_access(db, conn):
 
 @request_handler()
 def cmd_get_public_key(db, conn):
-    (_, key) = conn.authenticate_admin_or_user(db)
-    payload = server_common.gpg_public_key(conn.config, str(key.fingerprint))
+    (access, key) = conn.authenticate_admin_or_user(db)
+    if key.keytype == KeyTypeEnum.gnupg:
+        payload = server_common.gpg_public_key(conn.config, str(key.fingerprint))
+    else:
+        keypaths = non_gnupg_key_paths(conn.config, str(key.fingerprint))
+        with open(keypaths['public'], 'rb') as pubkeyfile:
+            payload = pubkeyfile.read()
     conn.send_reply_header(errors.OK, {})
     conn.send_reply_payload(payload)
 

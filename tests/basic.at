@@ -147,10 +147,16 @@ AT_CHECK([[
 		--gnupg-name-comment Comment --gnupg-name-email key@example.com \
 		--gnupg-expire-date 2030-12-31 key > key-pubkey.asc
 ]])
+AT_CHECK([[
+	printf 'rootroot\0root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-key --key-admin root --key-type ECC ecckey > ecc-key-pubkey.asc
+]])
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
-[key (gnupg)
+[ecckey (ECC)
+key (gnupg)
 ])
 
 
@@ -175,7 +181,8 @@ AT_CHECK([printf 'rootroot\0imported\0imported-key-pw\0' | \
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
-[imported-key (gnupg)
+[ecckey (ECC)
+imported-key (gnupg)
 key (gnupg)
 ])
 
@@ -188,7 +195,8 @@ AT_CHECK([printf 'rootroot\0imported\0imported-key-pw\0' | \
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
-[imported-key (gnupg)
+[ecckey (ECC)
+imported-key (gnupg)
 key (gnupg)
 ])
 
@@ -200,7 +208,8 @@ AT_CHECK([printf 'rootroot\0' | \
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
-[imported-key (gnupg)
+[ecckey (ECC)
+imported-key (gnupg)
 keyX (gnupg)
 ])
 AT_CHECK([printf 'rootroot\0' | \
@@ -209,7 +218,8 @@ AT_CHECK([printf 'rootroot\0' | \
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
-[imported-key (gnupg)
+[ecckey (ECC)
+imported-key (gnupg)
 key (gnupg)
 ])
 
@@ -306,7 +316,12 @@ AT_CHECK([printf 'imported-key-pw\0' | \
 		get-public-key imported-key > public.asc])
 AT_CHECK([grep -v 'Version: ' < public.asc | \
 		cmp - "$abs_srcdir/tests/imported-public-key.asc"])
-rm public.asc
+
+AT_CHECK([printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		get-public-key ecckey > eccpublic.pem])
+AT_CHECK([grep 'BEGIN PUBLIC KEY' eccpublic.pem], 0, [ignore])
+rm public.asc eccpublic.pem
 
 
 # delete-key
@@ -319,7 +334,8 @@ AT_CHECK([printf 'rootroot\0' | \
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
-[key (gnupg)
+[ecckey (ECC)
+key (gnupg)
 ])
 
 

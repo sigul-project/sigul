@@ -30,7 +30,7 @@ AT_CHECK([printf 'rootroot\0imported\0imported-key-pw\0' | \
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
-[expired-key
+[expired-key (gnupg)
 ])
 AT_CHECK([printf 'imported-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \

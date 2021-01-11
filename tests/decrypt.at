@@ -29,8 +29,8 @@ AT_CHECK([[printf 'rootroot\0keyroot\0imported-key-pw\0' | \
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
-[imported-key
-secondary-key
+[imported-key (gnupg)
+secondary-key (gnupg)
 ])
 AT_CHECK([gpg -q --homedir gnupg --import \
 	$abs_srcdir/tests/imported-public-key.asc])

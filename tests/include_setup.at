@@ -87,6 +87,8 @@ gnupg-key-usage: sign
 # This is too small for normal use, but for a test suite its okay
 gnupg-key-length: 1024
 gnupg-subkey-length: 1024
+[keys]
+keys-storage: $(pwd)/server/keys
 [daemon]
 unix-user:
 unix-group:
@@ -94,6 +96,7 @@ unix-group:
 nss-dir: $(pwd)/server
 nss-password: wrong-nss-pw
 EOF]
+mkdir server/keys
 
 AT_CHECK([sigul_server_create_db -c server/server.conf -v -v])
 AT_CHECK([printf 'rootroot\0' | \
