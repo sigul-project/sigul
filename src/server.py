@@ -907,7 +907,7 @@ class SigningContext(object):
 
         '''
         try:
-            child = pexpect.spawn('rpm', self.__argv + ['--addsign', rpm.path],
+            child = pexpect.spawn('rpmsign', self.__argv + ['--addsign', rpm.path],
                                   env=self.__env,
                                   timeout=config.signing_timeout,
                                   encoding="utf-8")
