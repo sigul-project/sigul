@@ -18,6 +18,7 @@
 
 import copy
 import crypt
+import enum
 import logging
 import os
 from six import StringIO
@@ -109,8 +110,9 @@ class User(object):
 
 class Key(object):
 
-    def __init__(self, name, fingerprint):
+    def __init__(self, name, keytype, fingerprint):
         self.name = name
+        self.keytype = keytype
         self.fingerprint = fingerprint
 
 
@@ -152,6 +154,10 @@ class KeyAccess(object):
                                                           user_passphrase)
 
 
+class KeyTypeEnum(enum.Enum):
+    gnupg = 1
+
+
 sa = sqlalchemy
 _db_metadata = sa.MetaData()
 
@@ -178,6 +184,9 @@ _db_keys_table = sa.Table(
               sa.Text,
               nullable=False,
               unique=True),
+    sa.Column('keytype',
+              sa.Enum(KeyTypeEnum),
+              nullable=False),
     sa.Column('fingerprint',
               sa.Text,
               nullable=False,

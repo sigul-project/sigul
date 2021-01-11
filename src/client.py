@@ -701,32 +701,38 @@ def cmd_new_key(conn, args):
                                description='Add a key')
     p2.add_option('--key-admin', metavar='USER',
                   help='Initial key administrator')
-    p2.add_option('--name-real', help='Real name of key subject')
-    p2.add_option('--name-comment', help='A comment about of key subject')
-    p2.add_option('--name-email', help='E-mail of key subject')
-    p2.add_option('--expire-date', metavar='YYYY-MM-DD',
+    p2.add_option('--key-type', metavar='KEYTYPE',
+                  help='Key type to create', default='gnupg')
+    # GPG Key Type options
+    p2.add_option('--gnupg-name-real', help='Real name of key subject')
+    p2.add_option('--gnupg-name-comment', help='A comment about of key subject')
+    p2.add_option('--gnupg-name-email', help='E-mail of key subject')
+    p2.add_option('--gnupg-expire-date', metavar='YYYY-MM-DD',
                   help='Key expiration date')
     (o2, args) = p2.parse_args(args)
     if len(args) != 1:
         p2.error('key name expected')
-    if o2.expire_date is not None:
-        if not utils.yyyy_mm_dd_is_valid(o2.expire_date):
+    if o2.gnupg_expire_date is not None:
+        if not utils.yyyy_mm_dd_is_valid(o2.gnupg_expire_date):
             p2.error('invalid --expire-date')
     password = read_admin_password(conn.config)
     passphrase = read_new_password(conn.config, 'Passphrase for the new key: ',
                                    'Passphrase for the new key (again): ')
 
-    f = {'key': safe_string(args[0])}
+    f = {
+        'key': safe_string(args[0]),
+        'keytype': o2.key_type,
+    }
     if o2.key_admin is not None:
         f['initial-key-admin'] = safe_string(o2.key_admin)
-    if o2.name_real is not None:
-        f['name-real'] = safe_string(o2.name_real)
-    if o2.name_comment is not None:
-        f['name-comment'] = safe_string(o2.name_comment)
-    if o2.name_email is not None:
-        f['name-email'] = safe_string(o2.name_email)
-    if o2.expire_date is not None:
-        f['expire-date'] = o2.expire_date
+    if o2.gnupg_name_real is not None:
+        f['name-real'] = safe_string(o2.gnupg_name_real)
+    if o2.gnupg_name_comment is not None:
+        f['name-comment'] = safe_string(o2.gnupg_name_comment)
+    if o2.gnupg_name_email is not None:
+        f['name-email'] = safe_string(o2.gnupg_name_email)
+    if o2.gnupg_expire_date is not None:
+        f['expire-date'] = o2.gnupg_expire_date
     conn.connect('new-key', f)
     conn.empty_payload()
     conn.send_inner({'password': password, 'passphrase': passphrase})

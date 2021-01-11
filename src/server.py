@@ -40,6 +40,7 @@ import pexpect
 import double_tls
 import errors
 import server_common
+from server_common import KeyTypeEnum
 import server_gpg as ourgpg
 import settings
 import utils
@@ -655,7 +656,7 @@ class ServersConnection(object):
             self.auth_fail('user is not a key administrator')
         return (user, key)
 
-    def authenticate_user(self, db):
+    def authenticate_user(self, db, key_field='key', passphrase_field='passphrase'):
         '''Check the request is a valid key access request.
 
         Return a (access, key passphrase).  Raise RequestHandled (on permission
@@ -666,12 +667,12 @@ class ServersConnection(object):
         if user is None:
             self.auth_fail('user field missing')
         self._verify_username(user)
-        key = self.safe_outer_field('key')
+        key = self.safe_outer_field(key_field)
         if key is None:
-            self.auth_fail('key field missing')
-        user_passphrase = self.inner_field('passphrase')
+            self.auth_fail('key field (%s) missing' % key_field)
+        user_passphrase = self.inner_field(passphrase_field)
         if user_passphrase is None:
-            self.auth_fail('passphrase field missing')
+            self.auth_fail('passphrase field (%s) missing' & passphrase_field)
         user = db.query(User).filter_by(name=user).first()
         key = db.query(Key).filter_by(name=key).first()
         access = None
@@ -1055,23 +1056,11 @@ def cmd_list_keys(db, conn):
     conn.send_reply_header(errors.OK, {'num-keys': len(keys)})
     payload = ''
     for user in keys:
-        payload += user.name + '\x00'
+        payload += user.name + ' (' + user.keytype.name + ')' + '\x00'
     conn.send_reply_payload(payload)
 
 
-@request_handler()
-def cmd_new_key(db, conn):
-    conn.authenticate_admin(db)
-    key_name = conn.safe_outer_field('key', required=True)
-    # FIXME: is this check atomic?
-    if db.query(Key).filter_by(name=key_name).first() is not None:
-        conn.send_error(errors.ALREADY_EXISTS)
-    admin_name = conn.safe_outer_field('initial-key-admin')
-    if admin_name is None:
-        admin_name = conn.safe_outer_field('user', required=True)
-    admin = db.query(User).filter_by(name=admin_name).first()
-    if admin is None:
-        conn.send_error(errors.USER_NOT_FOUND)
+def gnupg_new_key(db, conn):
     key_attrs = ('Key-Type: {0!s}\n'.format(conn.config.gnupg_key_type)
                  + 'Key-Length: {0:d}\n'.format(conn.config.gnupg_key_length)
                  + 'Key-Usage: {0!s}\n'.format(conn.config.gnupg_key_usage))
@@ -1096,8 +1085,6 @@ def cmd_new_key(db, conn):
         if not utils.yyyy_mm_dd_is_valid(expire):
             raise InvalidRequestError('Invalid expiration date')
         key_attrs += 'Expire-Date: {0!s}\n'.format(expire)
-    user_passphrase = conn.inner_field('passphrase', required=True)
-    user_passphrase = user_passphrase.decode('utf-8')
 
     env = dict(os.environ)  # Shallow copy, uses our $GNUPGHOME
     env['LC_ALL'] = 'C'
@@ -1135,8 +1122,40 @@ def cmd_new_key(db, conn):
         logging.error('Can not find fingerprint of a new key in gpg output')
         conn.send_error(errors.UNKNOWN_ERROR)
 
+    return (fingerprint, key_passphrase)
+
+
+@request_handler()
+def cmd_new_key(db, conn):
+    conn.authenticate_admin(db)
+    key_name = conn.safe_outer_field('key', required=True)
+    # FIXME: is this check atomic?
+    if db.query(Key).filter_by(name=key_name).first() is not None:
+        conn.send_error(errors.ALREADY_EXISTS)
+    admin_name = conn.safe_outer_field('initial-key-admin')
+    if admin_name is None:
+        admin_name = conn.safe_outer_field('user', required=True)
+    keytype = conn.safe_outer_field('keytype')
+    if keytype is None:
+        keytype = 'gnupg'
     try:
-        key = Key(key_name, fingerprint)
+        keytype = server_common.KeyTypeEnum[keytype]
+    except KeyError:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
+    admin = db.query(User).filter_by(name=admin_name).first()
+    if admin is None:
+        conn.send_error(errors.USER_NOT_FOUND)
+
+    user_passphrase = conn.inner_field('passphrase', required=True)
+    user_passphrase = user_passphrase.decode('utf-8')
+
+    if keytype == server_common.KeyTypeEnum.gnupg:
+        (fingerprint, key_passphrase) = gnupg_new_key(db, conn)
+    else:
+        raise NotImplementedError()
+
+    try:
+        key = Key(key_name, keytype, fingerprint)
         db.add(key)
         access = KeyAccess(key, admin, key_admin=True)
         access.set_passphrase(conn.config, key_passphrase=key_passphrase,
@@ -1159,6 +1178,17 @@ def cmd_import_key(db, conn):
     # FIXME: is this check atomic?
     if db.query(Key).filter_by(name=key_name).first() is not None:
         conn.send_error(errors.ALREADY_EXISTS)
+    keytype = conn.safe_outer_field('keytype')
+    if keytype is None:
+        keytype = 'gnupg'
+    try:
+        keytype = server_common.KeyTypeEnum[keytype]
+    except KeyError:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
+    if keytype != KeyTypeEnum.gnupg:
+        # TODO: Importing non-gnupg keys
+        logging.info('Importing non-gnupg keys is coming later')
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
     admin_name = conn.safe_outer_field('initial-key-admin')
     if admin_name is None:
         admin_name = conn.safe_outer_field('user', required=True)
@@ -1183,7 +1213,7 @@ def cmd_import_key(db, conn):
         except server_common.GPGError as e:
             conn.send_error(errors.IMPORT_PASSPHRASE_ERROR)
 
-        key = Key(key_name, fingerprint)
+        key = Key(key_name, server_common.KeyTypeEnum.gnupg.name, fingerprint)
         db.add(key)
         access = KeyAccess(key, admin, key_admin=True)
         access.set_passphrase(conn.config, key_passphrase=new_key_passphrase,
@@ -1201,7 +1231,11 @@ def cmd_import_key(db, conn):
 def cmd_delete_key(db, conn):
     conn.authenticate_admin(db)
     key = key_by_name(db, conn)
-    server_common.gpg_delete_key(conn.config, key.fingerprint)
+    if key.keytype == KeyTypeEnum.gnupg:
+        server_common.gpg_delete_key(conn.config, key.fingerprint)
+    else:
+        logging.info('Deleting keys will come later for non-gnupg keys')
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
     for a in key.key_accesses:
         db.delete(a)
     db.delete(key)
@@ -1295,6 +1329,8 @@ def cmd_get_public_key(db, conn):
 @request_handler()
 def cmd_change_key_expiration(db, conn):
     (access, passphrase) = conn.authenticate_key_admin(db)
+    if access.key.keytype != KeyTypeEnum.gnupg:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
     expire = conn.safe_outer_field('expire-date')
     if expire is None:
         # This means to mark the key as non-expiring
@@ -1363,6 +1399,8 @@ def cmd_change_passphrase(db, conn):
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_text(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
+    if access.key.keytype != KeyTypeEnum.gnupg:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
     signed_file = tempfile.TemporaryFile()
     try:
         server_common.gpg_clearsign(
@@ -1383,6 +1421,8 @@ def cmd_sign_text(db, conn):
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_data(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
+    if access.key.keytype != KeyTypeEnum.gnupg:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
     signature_file = tempfile.TemporaryFile()
     armor = conn.outer_field_bool('armor')
     if armor is None:
@@ -1405,6 +1445,8 @@ def cmd_sign_data(db, conn):
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_decrypt(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
+    if access.key.keytype != KeyTypeEnum.gnupg:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
     cleartext_file = tempfile.TemporaryFile()
     try:
         server_common.gpg_decrypt(conn.config,
@@ -1433,6 +1475,8 @@ def cmd_sign_git_tag(db, conn):
     #
     # Tag message
     (access, key_passphrase) = conn.authenticate_user(db)
+    if access.key.keytype != KeyTypeEnum.gnupg:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
 
     tag_lines = conn.payload_file.readlines()
     tag_lines = [line.decode("utf-8") for line in tag_lines]
@@ -1472,6 +1516,8 @@ def cmd_sign_git_tag(db, conn):
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_ostree(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
+    if access.key.keytype != KeyTypeEnum.gnupg:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
 
     if settings.have_ostree != 'yes':
         raise InvalidRequestError('OSTree support not enabled')
@@ -1524,6 +1570,8 @@ def cmd_sign_ostree(db, conn):
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
 def cmd_sign_container(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
+    if access.key.keytype != KeyTypeEnum.gnupg:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
 
     checksum = hashlib.sha256(conn.payload_file.read()).hexdigest()
 
@@ -1571,6 +1619,8 @@ def cmd_sign_container(db, conn):
                  payload_auth_optional=True)
 def cmd_sign_rpm(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
+    if access.key.keytype != KeyTypeEnum.gnupg:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
 
     rpm = RPMFile(conn.payload_path, conn.payload_sha512_digest)
     try:
@@ -1774,6 +1824,9 @@ class SignRPMsReplyThread(utils.WorkerThread):
 @request_handler()
 def cmd_sign_rpms(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db)
+    if access.key.keytype != KeyTypeEnum.gnupg:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
+
     mech = nss.nss.CKM_GENERIC_SECRET_KEY_GEN
     slot = nss.nss.get_best_slot(mech)
     buf = conn.inner_field('subrequest-header-auth-key', required=True)

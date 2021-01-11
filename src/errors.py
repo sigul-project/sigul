@@ -31,6 +31,7 @@ UNAUTHENTICATED_RPM = 12
 INVALID_IMPORT = 13
 IMPORT_PASSPHRASE_ERROR = 14
 DECRYPT_FAILED = 15
+UNSUPPORTED_KEYTYPE = 16
 
 _messages = {
     OK: 'No error',
@@ -49,6 +50,7 @@ _messages = {
     INVALID_IMPORT: 'Invalid import file',
     IMPORT_PASSPHRASE_ERROR: 'Import passphrase does not match',
     DECRYPT_FAILED: 'Decryption failed',
+    UNSUPPORTED_KEYTYPE: 'Unsupported keytype',
 }
 
 
