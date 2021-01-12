@@ -341,9 +341,11 @@ class KeysConfiguration(utils.Configuration):
 
     def _read_configuration(self, parser):
         super(KeysConfiguration, self)._read_configuration(parser)
-        self.keys_allowed = parser.get('keys', 'allowed-key-types').strip().split(',')
+        self.keys_allowed = parser.get(
+            'keys', 'allowed-key-types').strip().split(',')
         ecc_default_curve = parser.get('keys', 'ecc-default-curve')
-        self.ecc_default_curve = getattr(cryptography.hazmat.primitives.asymmetric.ec, ecc_default_curve)
+        self.ecc_default_curve = getattr(
+            cryptography.hazmat.primitives.asymmetric.ec, ecc_default_curve)
         self.keys_storage = parser.get('keys', 'keys-storage')
 
 

@@ -380,12 +380,12 @@ def read_admin_password(config):
     return utils.read_password(config, 'Administrator\'s password: ')
 
 
-def read_key_passphrase(config):
+def read_key_passphrase(config, keyrole='Primary'):
     '''Return a key passphrase.'''
     if config.passphrase:
         return config.passphrase
     else:
-        return utils.read_password(config, 'Key passphrase: ')
+        return utils.read_password(config, '%s key passphrase: ' % keyrole)
 
 
 def read_new_password(config, prompt1, prompt2):
@@ -705,7 +705,8 @@ def cmd_new_key(conn, args):
                   help='Key type to create', default='gnupg')
     # GPG Key Type options
     p2.add_option('--gnupg-name-real', help='Real name of key subject')
-    p2.add_option('--gnupg-name-comment', help='A comment about of key subject')
+    p2.add_option('--gnupg-name-comment',
+                  help='A comment about of key subject')
     p2.add_option('--gnupg-name-email', help='E-mail of key subject')
     p2.add_option('--gnupg-expire-date', metavar='YYYY-MM-DD',
                   help='Key expiration date')
@@ -1268,6 +1269,9 @@ def cmd_sign_rpm(conn, args):
     p2.add_option('-o', '--output', metavar='FILE',
                   help='Write output to this file instead of overwriting the '
                   'input file')
+    p2.add_option('--file-signing-key', metavar='FILE_SIGNING_KEY',
+                  help='Add file signatures to the RPM contents '
+                       '(this needs to be a non-gnupg key)')
     p2.add_option('--store-in-koji', action='store_true',
                   help='Store the generated RPM signature to Koji')
     p2.add_option('--koji-only', action='store_true',
@@ -1294,7 +1298,13 @@ def cmd_sign_rpm(conn, args):
 
     # See conn.send_outer_fields() later
     conn.connect(None, None)
+    inner = {'passphrase': passphrase}
     f = {'key': safe_string(args[0])}
+    if o2.file_signing_key:
+        f['file-signing-key'] = o2.file_signing_key
+        file_signing_key_passphrase = read_key_passphrase(
+            conn.config, keyrole='File signing')
+        inner['file-signing-key-passphrase'] = file_signing_key_passphrase
     if o2.store_in_koji:
         f['import-signature'] = True
     if o2.koji_only:
@@ -1317,7 +1327,7 @@ def cmd_sign_rpm(conn, args):
     finally:
         if rpm_file is not None:
             rpm_file.close()
-    conn.send_inner({'passphrase': passphrase},
+    conn.send_inner(inner,
                     omit_payload_auth=rpm_file is None)
     conn.read_response()
     if not o2.koji_only:
@@ -1493,6 +1503,9 @@ def cmd_sign_rpms(conn, args):
                                description='Sign one or more RPMs')
     p2.add_option('-o', '--output', metavar='DIR',
                   help='Write output to this directory')
+    p2.add_option('--file-signing-key', metavar='FILE_SIGNING_KEY',
+                  help='Add file signatures to the RPM contents '
+                       '(this needs to be a non-gnupg key)')
     p2.add_option('--store-in-koji', action='store_true',
                   help='Store the generated RPM signatures to Koji')
     p2.add_option('--koji-only', action='store_true',
@@ -1527,6 +1540,12 @@ def cmd_sign_rpms(conn, args):
     passphrase = read_key_passphrase(conn.config)
 
     f = {'key': safe_string(args[0])}
+    inner = {'passphrase': passphrase}
+    if o2.file_signing_key:
+        f['file-signing-key'] = o2.file_signing_key
+        file_signing_key_passphrase = read_key_passphrase(
+            conn.config, keyrole='File signing')
+        inner['file-signing-key-passphrase'] = file_signing_key_passphrase
     if o2.store_in_koji:
         f['import-signature'] = True
     if o2.koji_only:
@@ -1544,12 +1563,13 @@ def cmd_sign_rpms(conn, args):
     subrequest_payload_nss_key = slot.key_gen(mech, None, 64)
     subreply_header_nss_key = slot.key_gen(mech, None, 64)
     subreply_payload_nss_key = slot.key_gen(mech, None, 64)
-    f = {'passphrase': passphrase,
-         'subrequest-header-auth-key': subrequest_header_nss_key.key_data,
-         'subrequest-payload-auth-key': subrequest_payload_nss_key.key_data,
-         'subreply-header-auth-key': subreply_header_nss_key.key_data,
-         'subreply-payload-auth-key': subreply_payload_nss_key.key_data}
-    conn.send_inner(f)
+    inner.update({
+        'subrequest-header-auth-key': subrequest_header_nss_key.key_data,
+        'subrequest-payload-auth-key': subrequest_payload_nss_key.key_data,
+        'subreply-header-auth-key': subreply_header_nss_key.key_data,
+        'subreply-payload-auth-key': subreply_payload_nss_key.key_data
+    })
+    conn.send_inner(inner)
     conn.read_response(no_payload=True)
 
     args = args[1:]

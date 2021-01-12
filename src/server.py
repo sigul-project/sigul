@@ -32,16 +32,10 @@ import sys
 import tempfile
 import time
 
-if sys.version_info.major < 3:
-    # We use some of the fancy stuff of subprocess from py32
-    # to be exact: subprocess.run and pass_fds
-    import subprocess32 as subprocess
-else:
-    import subprocess
-
 import cryptography.hazmat.primitives.serialization as crypto_serialization
 import cryptography.hazmat.primitives.asymmetric.ec as crypto_ec
-from cryptography.hazmat.backends import default_backend as crypto_default_backend
+from cryptography.hazmat.backends import default_backend \
+    as crypto_default_backend
 
 import nss.error
 import nss.nss
@@ -56,6 +50,13 @@ import utils
 
 import ctypes
 libc = ctypes.CDLL('libc.so.6')
+
+if sys.version_info.major < 3:
+    # We use some of the fancy stuff of subprocess from py32
+    # to be exact: subprocess.run and pass_fds
+    import subprocess32 as subprocess
+else:
+    import subprocess
 
 # When trying to connect to the bridge, don't repeat the connections way too
 # often.  Try MAX_FAST_RECONNECTIONS attempts FAST_RECONNECTION_SECONDS apart,
@@ -655,7 +656,8 @@ class ServersConnection(object):
             self.auth_fail('user is not a key administrator')
         return (user, key)
 
-    def authenticate_user(self, db, key_field='key', passphrase_field='passphrase'):
+    def authenticate_user(self, db,
+                          key_field='key', passphrase_field='passphrase'):
         '''Check the request is a valid key access request.
 
         Return a (access, key passphrase).  Raise RequestHandled (on permission
@@ -882,7 +884,9 @@ class SigningContext(object):
             '_signature': 'gpg',
             '_gpg_name': key.fingerprint,
             '__gpg': settings.gnupg_bin,
-            '_gpg_sign_cmd_extra_args': '--batch --pinentry-mode loopback --passphrase-fd %d' % passphrase_r,
+            '_gpg_sign_cmd_extra_args':
+                '--batch --pinentry-mode loopback '
+                '--passphrase-fd %d' % passphrase_r,
         }
         print("Passphrase_r: %d" % passphrase_r)
         self._rpm_macros_file = None
@@ -893,6 +897,14 @@ class SigningContext(object):
         self.__env = dict(os.environ)  # Shallow copy, uses our $GNUPGHOME
         self.__env['LC_ALL'] = 'C'
         self._rpm_argv = []
+        self._file_signing_key_name = None
+
+    def add_file_signing(self, conn, key, key_passphrase):
+        self._rpm_argv += ["--signfiles"]
+        keypaths = non_gnupg_key_paths(conn.config, key.fingerprint)
+        self._rpm_macros['_file_signing_key'] = keypaths['private']
+        self._rpm_macros['_file_signing_key_password'] = key_passphrase
+        self._file_signing_key_name = key.name
 
     def _build_rpm_macros_file(self):
         if self._rpm_macros_file is not None:
@@ -901,10 +913,12 @@ class SigningContext(object):
         self._rpm_macros_file = open(rpm_macros_file, 'w+', closefd=True)
 
         for macro in self._rpm_macros:
-            self._rpm_macros_file.write('%%%s %s\n' % (macro, self._rpm_macros[macro]))
+            value = self._rpm_macros[macro]
+            self._rpm_macros_file.write('%%%s %s\n' % (macro, value))
         self._rpm_macros_file.flush()
-        # This would break anything trying to set stuff on it. This is an explicit breakage, as
-        # touching _rpm_macros after this function is called is a bug.
+        # This would break anything trying to set stuff on it.
+        # This is an explicit breakage, as touching _rpm_macros after this
+        # function is called is a bug.
         self._rpm_macros = None
 
     def sign_rpm(self, config, rpm):
@@ -925,11 +939,15 @@ class SigningContext(object):
             subprocess.run(
                 [
                     'rpmsign',
-                    '--load', '/proc/self/fd/%d' % self._rpm_macros_file.fileno(),
+                    '--load',
+                    '/proc/self/fd/%d' % self._rpm_macros_file.fileno(),
                 ] + self._rpm_argv + ['--addsign', rpm.path],
-                pass_fds=(self._passphrase_reader.fileno(), self._rpm_macros_file.fileno(), ),
+                pass_fds=(
+                    self._passphrase_reader.fileno(),
+                    self._rpm_macros_file.fileno(),
+                ),
                 check=True,
-                # capture_output=True,
+                capture_output=True,
             )
         except subprocess.CalledProcessError as e:
             logging.error("Error signing RPMs", exc_info=True)
@@ -938,7 +956,14 @@ class SigningContext(object):
                 'Error signing {0!s}: status {1:d}'.format(
                     rpm.rpm_id, e.returncode))
 
-        logging.info('Signed RPM %s with key %s', rpm.rpm_id, self.__key.name)
+        if self._file_signing_key_name:
+            logging.info(
+                'Signed RPM %s with key %s including file signing with key %s',
+                rpm.rpm_id, self.__key.name, self._file_signing_key_name)
+        else:
+            logging.info(
+                'Signed RPM %s with key %s',
+                rpm.rpm_id, self.__key.name)
 
 
 # Request handlers
@@ -1110,15 +1135,14 @@ def gnupg_new_key(db, conn):
 
 def non_gnupg_new_key(db, conn, keytype):
     key_passphrase = utils.random_passphrase(conn.config.passphrase_length)
-    key_passphrase = bytes(key_passphrase, 'utf8')
     if keytype == KeyTypeEnum.ECC:
-        logging.error("Key storage dir: %s" % conn.config.keys_storage)
         curve = conn.config.ecc_default_curve()
         key = crypto_ec.generate_private_key(curve, crypto_default_backend())
         serialized_key = key.private_bytes(
             crypto_serialization.Encoding.PEM,
             crypto_serialization.PrivateFormat.PKCS8,
-            crypto_serialization.BestAvailableEncryption(key_passphrase),
+            crypto_serialization.BestAvailableEncryption(
+                key_passphrase.encode('utf8')),
         )
         pubkey = key.public_key()
         serialized_pubkey = pubkey.public_bytes(
@@ -1130,11 +1154,19 @@ def non_gnupg_new_key(db, conn, keytype):
             crypto_serialization.Encoding.DER,
             crypto_serialization.PublicFormat.SubjectPublicKeyInfo,
         )
-        fingerprint = hashlib.sha1(pubkey_der).hexdigest()
+        # nosec because this uses sha1, which is normally dangerous.
+        # But in this case it's according to common use, and it's to ensure
+        # different files have different names.
+        # It is explicitly not used for security reasons.
+        fingerprint = hashlib.sha1(pubkey_der).hexdigest()  # nosec
 
         keypaths = non_gnupg_key_paths(conn.config, fingerprint)
 
-        with open(os.open(keypaths['private'], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode=0o600), 'wb') as keyfile:
+        with open(
+                os.open(
+                    keypaths['private'],
+                    os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                    mode=0o600), 'wb') as keyfile:
             keyfile.write(serialized_key)
 
         with open(keypaths['public'], 'wb') as pubkeyfile:
@@ -1147,8 +1179,10 @@ def non_gnupg_new_key(db, conn, keytype):
 
 def non_gnupg_key_paths(config, fingerprint):
     return {
-        'private': os.path.join(config.keys_storage, '%s.pem' % fingerprint),
-        'public': os.path.join(config.keys_storage, '%s.public.pem' % fingerprint),
+        'private': os.path.join(
+            config.keys_storage, '%s.pem' % fingerprint),
+        'public': os.path.join(
+            config.keys_storage, '%s.public.pem' % fingerprint),
     }
 
 
@@ -1186,7 +1220,8 @@ def cmd_new_key(db, conn):
         (fingerprint, key_passphrase) = gnupg_new_key(db, conn)
         pubkey = server_common.gpg_public_key(conn.config, fingerprint)
     else:
-        (pubkey, fingerprint, key_passphrase) = non_gnupg_new_key(db, conn, keytype)
+        (pubkey, fingerprint, key_passphrase) = non_gnupg_new_key(
+            db, conn, keytype)
 
     try:
         key = Key(key_name, keytype, fingerprint)
@@ -1357,7 +1392,8 @@ def cmd_revoke_key_access(db, conn):
 def cmd_get_public_key(db, conn):
     (access, key) = conn.authenticate_admin_or_user(db)
     if key.keytype == KeyTypeEnum.gnupg:
-        payload = server_common.gpg_public_key(conn.config, str(key.fingerprint))
+        payload = server_common.gpg_public_key(
+            conn.config, str(key.fingerprint))
     else:
         keypaths = non_gnupg_key_paths(conn.config, str(key.fingerprint))
         with open(keypaths['public'], 'rb') as pubkeyfile:
@@ -1662,6 +1698,15 @@ def cmd_sign_rpm(db, conn):
     if access.key.keytype != KeyTypeEnum.gnupg:
         conn.send_error(errors.UNSUPPORTED_KEYTYPE)
 
+    file_key_access = None
+    file_key_passphrase = None
+    if conn.safe_outer_field('file-signing-key'):
+        # We were asked to add file signing, let's check that we have access
+        (file_key_access, file_key_passphrase) = conn.authenticate_user(
+            db,
+            'file-signing-key',
+            'file-signing-key-passphrase')
+
     rpm = RPMFile(conn.payload_path, conn.payload_sha512_digest)
     try:
         rpm.verify()
@@ -1671,6 +1716,9 @@ def cmd_sign_rpm(db, conn):
         conn.send_error(rpm.status)
 
     ctx = SigningContext(conn, access.key, key_passphrase)
+    if file_key_access is not None:
+        ctx.add_file_signing(conn, file_key_access.key, file_key_passphrase)
+
     try:
         ctx.sign_rpm(conn.config, rpm)
     except RPMFileError as e:
@@ -1867,6 +1915,15 @@ def cmd_sign_rpms(db, conn):
     if access.key.keytype != KeyTypeEnum.gnupg:
         conn.send_error(errors.UNSUPPORTED_KEYTYPE)
 
+    file_key_access = None
+    file_key_passphrase = None
+    if conn.safe_outer_field('file-signing-key'):
+        # We were asked to add file signing, let's check that we have access
+        (file_key_access, file_key_passphrase) = conn.authenticate_user(
+            db,
+            'file-signing-key',
+            'file-signing-key-passphrase')
+
     mech = nss.nss.CKM_GENERIC_SECRET_KEY_GEN
     slot = nss.nss.get_best_slot(mech)
     buf = conn.inner_field('subrequest-header-auth-key', required=True)
@@ -1899,6 +1956,10 @@ def cmd_sign_rpms(db, conn):
         slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
         nss.nss.SecItem(buf))
     signing_ctx = SigningContext(conn, access.key, key_passphrase)
+    if file_key_access is not None:
+        signing_ctx.add_file_signing(
+            conn, file_key_access.key, file_key_passphrase)
+
     conn.send_reply_ok_only()
 
     tmp_dir = tempfile.mkdtemp()
