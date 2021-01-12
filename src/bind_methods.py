@@ -18,6 +18,7 @@
 from getpass import getpass
 import logging
 import subprocess
+import warnings
 
 # Binding to a TPM1.2
 tpm_srk = None
@@ -201,3 +202,40 @@ def test_unbind(bound, may_unbind):
 
 def test():
     return (test_bind, test_unbind)
+
+
+def keyring_bind(value):
+    raise NotImplementedError("keyring bind is not an implemented feature")
+
+
+def keyring_unbind(keyname):
+    cmd = ['keyctl', 'search', '@s', 'user', 'sigul:%s' % keyname]
+    proc = subprocess.Popen(cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    (stdout, stderr) = proc.communicate()
+    if proc.returncode != 0:
+        logging.error('Unable to find key with keyname %s' % keyname)
+        return None
+    keyid = stdout.strip()
+    cmd = ['keyctl', 'print', keyid]
+    proc = subprocess.Popen(cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    (stdout, stderr) = proc.communicate()
+    if proc.returncode != 0:
+        logging.error('Unable to read key %s' % keyid)
+        return None
+    return stdout.strip().decode("utf-8")
+
+
+def keyring():
+    return (keyring_bind, keyring_unbind)
+
+
+def keyctl():
+    warnings.warn(
+        "keyctl bind method is deprecated, use keyring instead",
+        DeprecationWarning,
+    )
+    return keyring()

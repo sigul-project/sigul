@@ -1,0 +1,103 @@
+# Copyright (C) 2020 Red Hat, Inc.  All rights reserved.
+#
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the GNU
+# General Public License v.2.  This program is distributed in the hope that it
+# will be useful, but WITHOUT ANY WARRANTY expressed or implied, including the
+# implied warranties of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.  You should have
+# received a copy of the GNU General Public License along with this program; if
+# not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth
+# Floor, Boston, MA 02110-1301, USA.  Any Red Hat trademarks that are
+# incorporated in the source code or documentation are not subject to the GNU
+# General Public License and may only be used or replicated with the express
+# permission of Red Hat, Inc.
+#
+# Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
+
+AT_SETUP([Bound passphrases - Keyring - check])
+
+AT_SKIP_IF([! keyctl new_session])
+keyctl new_session
+
+m4_include([include_setup.at])
+[cat >> client/client.conf <<EOF
+[binding]
+enabled: keyring,keyctl
+EOF]
+m4_include([include_start.at])
+m4_include([include_importedkey.at])
+
+
+AT_CHECK([printf 'rootroot\0pass1\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-user user1])
+AT_CHECK([printf 'rootroot\0pass2\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-user user2])
+AT_CHECK([printf 'rootroot\0pass3\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-user user3])
+
+# Test list-binding
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-binding-methods], ,
+[keyring
+keyctl
+])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-server-binding-methods], ,
+[])
+
+# Test adding a bound passphrase
+AT_CHECK([printf 'imported-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		grant-key-access imported-key user1 \
+        -c keyring -w passphrase1.dat 2>&1 | grep "Error: "], , [NotImplementedError: keyring bind is not an implemented feature
+])
+
+# Create a manually bound passphrase file
+AT_DATA([passphrase.dat], [[{"method": "keyring", "value": "testkey"}
+]])
+# There was an earlier version of this patch that used "keyctl", so let's make sure
+# we allow that name too.
+AT_DATA([passphrase_legacy.dat], [[{"method": "keyctl", "value": "testkey"}
+]])
+AT_DATA([data], [[abracadabra
+]])
+
+# Test using the keyring passphrase (there's no key in the keyring)
+AT_CHECK([sigul -c client/client.conf --batch -v -v \
+		-f passphrase.dat sign-text -o data.asc \
+        imported-key data], 1, [], [ERROR: Unable to find key with keyname testkey
+WARNING: Failed to unbind with any of the following: method: keyring, args: {}
+Unable to unbind the passphrase on the client
+])
+AT_CHECK([sigul -c client/client.conf --batch -v -v \
+		-f passphrase_legacy.dat sign-text -o data.asc \
+        imported-key data], 1, [], [ERROR: Unable to find key with keyname testkey
+WARNING: Failed to unbind with any of the following: method: keyctl, args: {}
+Unable to unbind the passphrase on the client
+])
+
+# Insert a key into the keyring
+AT_CHECK([keyctl add user "sigul:testkey" "imported-key-pw" @s], , [ignore])
+
+# Test using the keyring passphrase
+AT_CHECK([sigul -c client/client.conf --batch -v -v \
+		-f passphrase.dat sign-text -o data.asc \
+        imported-key data])
+AT_CHECK([gpg -q --homedir gnupg --verify data.asc], , , [ignore])
+rm data.asc
+
+# Test using the keyring passphrase using the legacy name
+AT_CHECK([sigul -c client/client.conf --batch -v -v \
+		-f passphrase_legacy.dat sign-text -o data.asc \
+        imported-key data])
+AT_CHECK([gpg -q --homedir gnupg --verify data.asc], , , [ignore])
+rm data.asc
+
+
+m4_include([include_cleanup.at])
