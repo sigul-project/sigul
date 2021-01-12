@@ -1,3 +1,8 @@
+2021-01-12  Patrick Uiterwijk  <puiterwijk@redhat.com>
+	* src/{server, bridge}.py: Add support for multiple key types
+	* src/server.py: Add support for ECC keys
+	* src{server, client}.py: Add support for file signing
+
 2020-06-08  Patrick Uiterwijk  <puiterwijk@redhat.com>
 	* Everywhere: Added support for GPGv2 and Python3
 	* Everywhere: Bumped protocol version to wire version 1
