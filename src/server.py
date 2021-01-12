@@ -26,12 +26,18 @@ import os
 import signal
 import socket
 import struct
-import subprocess
 import shutil
 from six import StringIO
 import sys
 import tempfile
 import time
+
+if sys.version_info.major < 3:
+    # We use some of the fancy stuff of subprocess from py32
+    # to be exact: subprocess.run and pass_fds
+    import subprocess32 as subprocess
+else:
+    import subprocess
 
 import cryptography.hazmat.primitives.serialization as crypto_serialization
 import cryptography.hazmat.primitives.asymmetric.ec as crypto_ec
@@ -39,7 +45,6 @@ from cryptography.hazmat.backends import default_backend as crypto_default_backe
 
 import nss.error
 import nss.nss
-import pexpect
 
 import double_tls
 import errors
@@ -48,6 +53,9 @@ from server_common import KeyTypeEnum
 import server_gpg as ourgpg
 import settings
 import utils
+
+import ctypes
+libc = ctypes.CDLL('libc.so.6')
 
 # When trying to connect to the bridge, don't repeat the connections way too
 # often.  Try MAX_FAST_RECONNECTIONS attempts FAST_RECONNECTION_SECONDS apart,
@@ -859,46 +867,45 @@ class RPMFile(object):
 class SigningContext(object):
     '''A tool for running rpm --addsign.'''
 
-    _rpm_sign_args_gpg_workaround = None
-
-    @staticmethod
-    def _get_rpm_sign_args_gpg_workaround():
-        """
-        This function returns the --batch --passphrase-fd 3 arguments for the
-        gpg_sign_cmd if the current version of rpm/gnupg1 needs those, and an
-        empty string otherwise.
-        """
-        if SigningContext._rpm_sign_args_gpg_workaround is None:
-            # Build
-            # Don't import rpm at the top of the file!  The rpm Python module
-            # calls NSS_NoDB_Init() during its initialization, which breaks our
-            # attempts to initialize nss with our certificate database.
-            import rpm
-            SigningContext._rpm_sign_args_gpg_workaround = \
-                '--batch' in rpm.expandMacro('%{__gpg_sign_cmd}')
-        if SigningContext._rpm_sign_args_gpg_workaround:
-            return '--batch --passphrase-fd 3 '
-        else:
-            return ''
-
     def __init__(self, conn, key, key_passphrase):
         self.__key = key
         self.__key_passphrase = key_passphrase
-        self.__argv = ['--define', '_signature gpg',
-                       '--define', '_gpg_name {0!s}'.format(key.fingerprint),
-                       '--define', '__gpg {0!s}'.format(settings.gnupg_bin)]
+
+        (passphrase_r, passphrase_w) = os.pipe2(0)
+        self._passphrase_writer = open(passphrase_w, mode='w', closefd=True)
+        # We never read from it, but we are "abusing" this in order to
+        # use the Python GC to close the file descriptor when this instance
+        # goes out of scope
+        self._passphrase_reader = open(passphrase_r, mode='r', closefd=True)
+
+        self._rpm_macros = {
+            '_signature': 'gpg',
+            '_gpg_name': key.fingerprint,
+            '__gpg': settings.gnupg_bin,
+            '_gpg_sign_cmd_extra_args': '--batch --pinentry-mode loopback --passphrase-fd %d' % passphrase_r,
+        }
+        print("Passphrase_r: %d" % passphrase_r)
+        self._rpm_macros_file = None
+
         field_value = conn.outer_field_bool('v3-signature')
         if field_value is not None and field_value:
-            # Add --force-v3-sigs to the value in
-            # redhat-rpm-config-9.0.3-3.fc10
-            self.__argv += [
-                '--define', '__gpg_sign_cmd %{__gpg} gpg --force-v3-sigs '
-                '--no-verbose --no-armor '
-                + SigningContext._get_rpm_sign_args_gpg_workaround()
-                + '--no-secmem-warning -u "%{_gpg_name}" -sbo '
-                '%{__signature_filename} %{__plaintext_filename}']
+            self._rpm_macros['_gpg_sign_cmd_extra_args'] += '--force-v3-sigs'
         self.__env = dict(os.environ)  # Shallow copy, uses our $GNUPGHOME
         self.__env['LC_ALL'] = 'C'
+        self._rpm_argv = []
+
+    def _build_rpm_macros_file(self):
+        if self._rpm_macros_file is not None:
+            return
+        rpm_macros_file = libc.memfd_create(b'rpm_macros_file', 0)
+        self._rpm_macros_file = open(rpm_macros_file, 'w+', closefd=True)
+
+        for macro in self._rpm_macros:
+            self._rpm_macros_file.write('%%%s %s\n' % (macro, self._rpm_macros[macro]))
+        self._rpm_macros_file.flush()
+        # This would break anything trying to set stuff on it. This is an explicit breakage, as
+        # touching _rpm_macros after this function is called is a bug.
+        self._rpm_macros = None
 
     def sign_rpm(self, config, rpm):
         '''Sign rpm, using config.
@@ -906,46 +913,31 @@ class SigningContext(object):
         Raise RPMFileError on error.
 
         '''
-        try:
-            child = pexpect.spawn('rpmsign', self.__argv + ['--addsign', rpm.path],
-                                  env=self.__env,
-                                  timeout=config.signing_timeout,
-                                  encoding="utf-8")
-            child.expect(['Enter pass phrase: ',
-                          'Enter passphrase: '])
-            child.sendline(self.__key_passphrase)
-            answer = child.expect([r'Pass phrase is good\.',
-                                   pexpect.EOF,
-                                   # For some insane reason, rpmsign sometimes
-                                   # asks the passphrase twice.
-                                   'Enter passphrase:',
-                                   'Pass phrase check failed',
-                                   'bad passphrase'])
-            if answer == 2:  # Passphrase asked again
-                child.sendline(self.__key_passphrase)
-                answer = child.expect([r'Pass phrase is good\.',
-                                       pexpect.EOF,
-                                       # We don't expect this again, but to
-                                       # keep the same indexes.
-                                       'Enter passphrase:',
-                                       'Pass phrase check failed',
-                                       'bad passphrase'])
+        self._build_rpm_macros_file()
+        self._rpm_macros_file.seek(0)
 
-            child.expect(pexpect.EOF)
-            child.close()
-        except pexpect.ExceptionPexpect as e:
-            # We don't want all of the pexpect dump
-            msg = str(e).splitlines()[0]
+        for i in range(2):
+            self._passphrase_writer.write('%s\n' % self.__key_passphrase)
+            self._passphrase_writer.flush()
+
+        logging.error("Starting signing operation")
+        try:
+            subprocess.run(
+                [
+                    'rpmsign',
+                    '--load', '/proc/self/fd/%d' % self._rpm_macros_file.fileno(),
+                ] + self._rpm_argv + ['--addsign', rpm.path],
+                pass_fds=(self._passphrase_reader.fileno(), self._rpm_macros_file.fileno(), ),
+                check=True,
+                # capture_output=True,
+            )
+        except subprocess.CalledProcessError as e:
+            logging.error("Error signing RPMs", exc_info=True)
             rpm.status = errors.UNKNOWN_ERROR
             raise RPMFileError(
-                'Error signing {0!s}: {1!s}, output {2!s}'.format(
-                    rpm.rpm_id, msg, child.before))
-        if (not os.WIFEXITED(child.status)
-                or os.WEXITSTATUS(child.status) != 0 or answer not in [0, 1]):
-            rpm.status = errors.UNKNOWN_ERROR
-            raise RPMFileError(
-                'Error signing {0!s}: status {1:d}, output {2!s}'.format(
-                    rpm.rpm_id, child.status, child.before))
+                'Error signing {0!s}: status {1:d}'.format(
+                    rpm.rpm_id, e.returncode))
+
         logging.info('Signed RPM %s with key %s', rpm.rpm_id, self.__key.name)
 
 

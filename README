@@ -3,7 +3,6 @@ Signing server setup
 
 Required packages
 -----------------
-pexpect
 python-fedora
 python-requests
 python-sqlalchemy >= 0.5
