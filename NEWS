@@ -1,3 +1,9 @@
+Changes in version 1.1:
+- Added keytype abstraction
+- Implemented the ECC keytype
+- Implemented RPM file signing
+- Implement keyring bind method
+
 Changes in version 1.0:
 - Added support for GPGv2
 - Added support for Python3
