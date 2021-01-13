@@ -407,9 +407,9 @@ class KojiClient(object):
         d = {}
         for (key, field) in six.iteritems(self.__rpm_info_map):
             v = fields.get(field.name)
+            field.validate(v)
             if isinstance(v, bytes):
                 v = v.decode("utf-8")
-            field.validate(v)
             d[key] = v
         try:
             info = session.getRPM(d)
@@ -481,7 +481,7 @@ class KojiClient(object):
             if len(sigs) == 0:
                 session.addRPMSig(
                     rpm_info['id'],
-                    base64.b64encode(sighdr).encode("utf-8")
+                    base64.b64encode(sighdr).decode("utf-8")
                 )
         except (utils.KojiError, koji.GenericError) as e:
             raise ForwardingError(
