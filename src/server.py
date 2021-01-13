@@ -944,15 +944,15 @@ class SigningContext(object):
             subprocess.run(
                 [
                     'rpmsign',
-                    '--load',
-                    '/proc/self/fd/%d' % self._rpm_macros_file.fileno(),
+                    '--macros',
+                    '/usr/lib/rpm/macros:/proc/self/fd/%d'
+                    % self._rpm_macros_file.fileno(),
                 ] + self._rpm_argv + ['--addsign', rpm.path],
                 pass_fds=(
                     self._passphrase_reader.fileno(),
                     self._rpm_macros_file.fileno(),
                 ),
                 check=True,
-                capture_output=True,
             )
         except subprocess.CalledProcessError as e:
             logging.error("Error signing RPMs", exc_info=True)
