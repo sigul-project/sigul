@@ -25,6 +25,16 @@ m4_include([include_setup.at])
 m4_include([include_start.at])
 m4_include([include_importedkey.at])
 
+[cat >> client/client.conf <<EOF
+[binding]
+enabled: test
+EOF]
+
+AT_DATA([key_passphrase.dat], [[{"method": "test", "value": "imported-key-pw", "may_unbind": "1"}
+]])
+AT_DATA([file_signing_key_passphrase.dat], [[{"method": "test", "value": "file-key-pw", "may_unbind": "1"}
+]])
+
 AT_CHECK([[
 	printf 'rootroot\0file-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
@@ -62,6 +72,7 @@ AT_CHECK([rpm --dbpath "$(pwd)/rpm" --import \
 # https://bugzilla.redhat.com/show_bug.cgi?id=1540971
 # @ignatenkobrain: "It's just a warning, ignore it ;). We will solve it at some point."
 AT_CHECK([create_rpm 0], 0, [], [ignore])
+AT_CHECK([create_rpm 1], 0, [], [ignore])
 
 AT_CHECK([printf 'imported-key-pw\0file-key-pw\0' | \
 		sigul -c client/client.conf --batch -v -v \
@@ -76,6 +87,21 @@ AT_CHECK([evmctl ima_verify -vvvv --sigfile --key file-key-pubkey.cert.der tmp/f
 ])
 rm -rf tmp
 
+# sign-rpm with passphrase file
+AT_CHECK([sigul -c client/client.conf --batch -v -v \
+		--passphrase-file key_passphrase.dat \
+		sign-rpm -o signed.rpm \
+		--file-signing-key file-key \
+		--file-signing-key-passphrase-file file_signing_key_passphrase.dat \
+		imported-key testrpm1.rpm])
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" -Kv signed.rpm | grep Signature], , [ignore])
+mkdir tmp
+AT_CHECK([rpm2cpio signed.rpm | cpio --extract --no-absolute-filenames], , , [ignore])
+AT_CHECK([../../testtools/target/release/extract_ima_signatures signed.rpm tmp/file1])
+AT_CHECK([evmctl ima_verify -vvvv --sigfile --key file-key-pubkey.cert.der tmp/file1 2>&1 | grep "verification is OK"], 0, [tmp/file1: verification is OK
+])
+rm -rf tmp
+
 
 # sign-rpms
 mkdir unsigned signed tmp
@@ -85,6 +111,34 @@ AT_CHECK([cd unsigned; \
 AT_CHECK([printf 'imported-key-pw\0file-key-pw\0' | \
 		sigul -c client/client.conf --batch sign-rpms \
 		--file-signing-key file-key \
+		-o signed imported-key unsigned/*])
+for i in $(seq 1 S_NUM_RPMS); do
+    echo "signed/testrpm$i.rpm: rsa sha1 (md5) pgp md5 OK"
+done | LC_ALL=C sort > expected-old
+for i in $(seq 1 S_NUM_RPMS); do
+    echo "signed/testrpm$i.rpm: digests signatures OK"
+done | LC_ALL=C sort > expected
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed/* | LC_ALL=C sort > output])
+AT_CHECK([diff -u expected output || diff -u expected-old output])
+for i in $(seq 1 S_NUM_RPMS); do
+	echo "At RPM $i"
+	AT_CHECK([rpm2cpio signed/testrpm$i.rpm | cpio --extract --no-absolute-filenames], , , [ignore])
+	AT_CHECK([../../testtools/target/release/extract_ima_signatures signed/testrpm$i.rpm tmp/file$i])
+	AT_CHECK([evmctl ima_verify -vvvv --sigfile --key file-key-pubkey.cert.der tmp/file$i 2>&1 | grep "verification is OK" | sed -E "s/file([[0-9]]+)//"], 0, [tmp/: verification is OK
+])
+done
+rm -r expected expected-old output signed unsigned
+
+# sign-rpms with passphrase file
+mkdir unsigned signed tmp
+AT_CHECK([cd unsigned; \
+	  for i in $(seq 1 ]S_NUM_RPMS[); do create_rpm "$i"; done; \
+	  cd ..], 0, [], [ignore])
+AT_CHECK([sigul -c client/client.conf --batch \
+		--passphrase-file key_passphrase.dat \
+		sign-rpms \
+		--file-signing-key file-key \
+		--file-signing-key-passphrase-file file_signing_key_passphrase.dat \
 		-o signed imported-key unsigned/*])
 for i in $(seq 1 S_NUM_RPMS); do
     echo "signed/testrpm$i.rpm: rsa sha1 (md5) pgp md5 OK"

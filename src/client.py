@@ -380,12 +380,12 @@ def read_admin_password(config):
     return utils.read_password(config, 'Administrator\'s password: ')
 
 
-def read_key_passphrase(config, keyrole='Primary'):
+def read_key_passphrase(config):
     '''Return a key passphrase.'''
     if config.passphrase:
         return config.passphrase
     else:
-        return utils.read_password(config, '%s key passphrase: ' % keyrole)
+        return utils.read_password(config, 'Key passphrase: ')
 
 
 def read_new_password(config, prompt1, prompt2):
@@ -1272,6 +1272,9 @@ def cmd_sign_rpm(conn, args):
     p2.add_option('--file-signing-key', metavar='FILE_SIGNING_KEY',
                   help='Add file signatures to the RPM contents '
                        '(this needs to be a non-gnupg key)')
+    p2.add_option('--file-signing-key-passphrase-file',
+                  metavar='FILENAME',
+                  help='File with bound passphrase for file signing key')
     p2.add_option('--store-in-koji', action='store_true',
                   help='Store the generated RPM signature to Koji')
     p2.add_option('--koji-only', action='store_true',
@@ -1302,8 +1305,14 @@ def cmd_sign_rpm(conn, args):
     f = {'key': safe_string(args[0])}
     if o2.file_signing_key:
         f['file-signing-key'] = o2.file_signing_key
-        file_signing_key_passphrase = read_key_passphrase(
-            conn.config, keyrole='File signing')
+        if o2.file_signing_key_passphrase_file:
+            file_signing_key_passphrase = get_bound_passphrase(
+                conn.config,
+                o2.file_signing_key_passphrase_file,
+            )
+        else:
+            file_signing_key_passphrase = utils.read_password(
+                conn.config, 'Key passphrase: ')
         inner['file-signing-key-passphrase'] = file_signing_key_passphrase
     if o2.store_in_koji:
         f['import-signature'] = True
@@ -1506,6 +1515,9 @@ def cmd_sign_rpms(conn, args):
     p2.add_option('--file-signing-key', metavar='FILE_SIGNING_KEY',
                   help='Add file signatures to the RPM contents '
                        '(this needs to be a non-gnupg key)')
+    p2.add_option('--file-signing-key-passphrase-file',
+                  metavar='FILENAME',
+                  help='File with bound passphrase for file signing key')
     p2.add_option('--store-in-koji', action='store_true',
                   help='Store the generated RPM signatures to Koji')
     p2.add_option('--koji-only', action='store_true',
@@ -1543,8 +1555,14 @@ def cmd_sign_rpms(conn, args):
     inner = {'passphrase': passphrase}
     if o2.file_signing_key:
         f['file-signing-key'] = o2.file_signing_key
-        file_signing_key_passphrase = read_key_passphrase(
-            conn.config, keyrole='File signing')
+        if o2.file_signing_key_passphrase_file:
+            file_signing_key_passphrase = get_bound_passphrase(
+                conn.config,
+                o2.file_signing_key_passphrase_file,
+            )
+        else:
+            file_signing_key_passphrase = utils.read_password(
+                conn.config, 'Key passphrase: ')
         inner['file-signing-key-passphrase'] = file_signing_key_passphrase
     if o2.store_in_koji:
         f['import-signature'] = True
