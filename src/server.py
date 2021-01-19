@@ -566,8 +566,9 @@ class ServersConnection(object):
         else:
             # Perform the encryption anyway to make timing attacks more
             # difficult.
-            crypted_pw = 'x'
-        if crypt.crypt(password, crypted_pw) != crypted_pw:
+            crypted_pw = 'xx'
+        if (crypt.crypt(password, crypted_pw) != crypted_pw
+                or crypted_pw == 'xx'):
             self.auth_fail('password does not match')
         if not user.admin:
             self.auth_fail('user is not a server administrator')
@@ -603,8 +604,9 @@ class ServersConnection(object):
             else:
                 # Perform the encryption anyway to make timing attacks more
                 # difficult.
-                crypted_pw = 'x'
-            if crypt.crypt(password, crypted_pw) != crypted_pw:
+                crypted_pw = 'xx'
+            if (crypt.crypt(password, crypted_pw) != crypted_pw
+                    or crypted_pw == 'xx'):
                 self.auth_fail('password does not match')
             if user is None:
                 raise InvalidRequestError('No user object')
@@ -893,7 +895,6 @@ class SigningContext(object):
                 '--batch --pinentry-mode loopback '
                 '--passphrase-fd %d' % passphrase_r,
         }
-        print("Passphrase_r: %d" % passphrase_r)
         self._rpm_macros_file = None
 
         field_value = conn.outer_field_bool('v3-signature')
