@@ -509,9 +509,21 @@ def gpg_import_key(config, key_file):
     # up the database and restore it if necessary.
     tmp_dir = tempfile.mkdtemp()
     keyfpr = None
+
+    def ignore_sockets(path, names):
+        to_ignore = []
+        for name in names:
+            if name.startswith('S.gpg-agent'):
+                to_ignore.append(name)
+        return to_ignore
+
     try:
         backup_dir = os.path.join(tmp_dir, 'gnupghome-backup')
-        shutil.copytree(config.gnupg_home, backup_dir)
+        shutil.copytree(
+            config.gnupg_home,
+            backup_dir,
+            ignore=ignore_sockets,
+        )
         ctx = _gpg_open(config)
         keyfpr = ctx.sigul_import(key_file)
     finally:
