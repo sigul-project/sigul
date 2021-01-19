@@ -12,4 +12,4 @@ path = "src/extract_ima_signatures.rs"
 
 [dependencies]
 hex = "0.4.2"
-rpm-rs = { git = "https://github.com/puiterwijk/rpm-rs.git", rev = "cef074887ede6ad1cf06b9b4128cfbd7787a7ab5" }
+rpm-rs = { git = "https://github.com/puiterwijk/rpm-rs.git", branch = "rpm_extra_args" }
