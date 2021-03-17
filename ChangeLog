@@ -772,8 +772,8 @@
 	* src/double_tls.py (DoubleTLSClient.outer_shutdown)
 	(OuterBuffer.set_full_duplex): New methods.
 	* src/bridge.py (BridgeConfiguration._add_defaults): New option
-	max-rpms-payload-size.
-	(BridgeConfiguration._read_configuration): Handle max-rpms-payload-size.
+	max-rpms-payloads-size.
+	(BridgeConfiguration._read_configuration): Handle max-rpms-payloads-size.
 	(RequestType.__init__): Add support for subheaders.
 	(RequestType.post_request_phase): New method.
 	(SubrequestMap, SignRPMsReadRequestThread, SignRPMsKojiThread)
@@ -799,8 +799,8 @@
 	(main): Allow using ClientError to exit without printing an additional
 	message.
 	* src/server.py (ServerConfiguration._add_defaults): New option
-	max-rpms-payload-size.
-	(ServerConfiguration._read_configuration): Handle max-rpms-payload-size.
+	max-rpms-payloads-size.
+	(ServerConfiguration._read_configuration): Handle max-rpms-payloads-size.
 	(ServersConnection.__send_payload_size)
 	(ServersConnection.__send_payload_from_file): Document that these
 	methods are suitable both for the primary payload and subpayloads.
@@ -813,8 +813,8 @@
 	(SignRPMsReplyThread): New classes.
 	(cmd_sign_rpms): New function.
 	* doc/protocol-design.txt: Document op="sign-rpms".
-	* config/bridge.conf (max-rpms-payload-size)
-	* config/server.conf (max-rpms-payload-size): Document new option.
+	* config/bridge.conf (max-rpms-payloads-size)
+	* config/server.conf (max-rpms-payloads-size): Document new option.
 
 	* src/client.py (SignRPMArgumentExaminer): Split from cmd_sign_rpm.
 

@@ -100,7 +100,7 @@ Changes in version 0.99:
 Changes in version 0.98:
 - Now uses sqlalchemy 0.5 (e.g. RHEL6)
 - New operation 'sign-rpms', up to 50% faster.
-  New bridge and server options max-rpms-payload-size.
+  New bridge and server options max-rpms-payloads-size.
 - Server option gnupg-key-usage has changed default to "sign" (removing
   "encrypt"), to work with DSA keys.  sigul does not provide decryption, so
   signing is all that is necessary anyway.
