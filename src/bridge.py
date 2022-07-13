@@ -250,7 +250,7 @@ class StringField(Field):
     def validate(self, value):
         super(StringField, self).validate(value)
         if value is not None:
-            value = value.decode('utf-8')
+            value = six.ensure_text(value)
             if not utils.string_is_safe(value):
                 raise InvalidRequestError(
                     'Field {0!s} is not printable'.format(
@@ -275,7 +275,7 @@ class YYYYMMDDField(Field):
     def validate(self, value):
         super(YYYYMMDDField, self).validate(value)
         if value is not None:
-            value = value.decode('utf-8')
+            value = six.ensure_text(value)
             if not utils.yyyy_mm_dd_is_valid(value):
                 raise InvalidRequestError(
                     'Field {0!s} is not a valid date'.format(self.name))
