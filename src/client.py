@@ -1721,7 +1721,7 @@ def handle_global_options():
     if options.help_commands:
         # FIXME: order of the commands
         for (name, (_, help_string)) in six.iteritems(command_handlers):
-            print('{0:<20!s}{1!s}'.format(name, help_string))
+            print('{0!s:<20}{1!s}'.format(name, help_string))
         sys.exit()
     if len(args) < 1:
         parser.error('missing command, see --help-commands')
