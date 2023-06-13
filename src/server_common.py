@@ -513,7 +513,7 @@ def gpg_import_key(config, key_file):
     def ignore_sockets(path, names):
         to_ignore = []
         for name in names:
-            if name.startswith('S.gpg-agent'):
+            if name.startswith('S.'):
                 to_ignore.append(name)
         return to_ignore
 
