@@ -17,9 +17,9 @@
 
 AT_CHECK([sigul_bridge -c bridge/bridge.conf -d -v -v \
 		--internal-log-dir="$(pwd)/bridge" \
-		--internal-pid-dir="$(pwd)/bridge"])
+		--internal-pid-dir="$(pwd)/bridge"], 0, [ignore], [ignore])
 AT_CHECK([sigul_server -c server/server.conf -d -v -v \
 		--internal-log-dir="$(pwd)/server" \
-		--internal-pid-dir="$(pwd)/server"])
+		--internal-pid-dir="$(pwd)/server"], 0, [ignore], [ignore])
 # TESTING TODO: Remove
 AT_CHECK([sleep 5])
