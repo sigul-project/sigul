@@ -174,7 +174,7 @@ _db_users_table = sa.Table(
               sa.Text,
               nullable=False,
               unique=True),
-    sa.Column('sha512_password', sa.Binary),
+    sa.Column('sha512_password', sa.BINARY),
     sa.Column('admin', sa.Boolean, nullable=False))
 
 _db_keys_table = sa.Table(
@@ -210,7 +210,7 @@ _db_key_accesses_table = sa.Table(
               sa.ForeignKey('users.id'),
               nullable=False),
     sa.Column('encrypted_passphrase',
-              sa.Binary,
+              sa.BINARY,
               nullable=False),
     sa.Column('key_admin',
               sa.Boolean,
