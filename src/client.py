@@ -38,6 +38,8 @@ import errors
 import settings
 import utils
 
+koji = utils.lazy_load("koji")
+
 MAX_SIGN_RPMS_PAYLOAD_SIZE = 9 * 1024 * 1024 * 1024
 
 
@@ -487,12 +489,6 @@ class SignRPMArgumentExaminer(object):
                         arg))
             size = utils.file_size_in_blocks(rpm_file)
         else:
-            # Don't import koji before initializing ClientsConnection!  The rpm
-            # Python module calls NSS_NoDB_Init() during its initialization,
-            # which breaks our attempts to initialize nss with our certificate
-            # database.
-            import koji
-
             try:
                 if self.__koji_session is None:
                     kc = utils.koji_read_config(self.__config,
@@ -1486,24 +1482,53 @@ class SignRPMsReplyThread(utils.WorkerThread):
                 continue
 
             if not self.__o2.koji_only:
-                arg = self.__args[arg_idx]
-                if not arg.endswith('.rpm'):
-                    arg += '.rpm'
-                output_path = os.path.join(self.__o2.output,
-                                           os.path.basename(arg))
-                try:
-                    def writer(f):
-                        self.__conn.write_subpayload_to_file(nss_key, f)
-                    utils.write_new_file(output_path, writer)
-                except IOError as e:
-                    raise ClientError(
-                        'Error writing to {0!s}: {1!s}'.format(
-                            output_path, e.strerror))
+                if self.__o2.head_signing:
+                    self._splice_rpm_results(nss_key, arg_idx)
+                else:
+                    self._store_rpm_result(nss_key, arg_idx)
+
             else:
                 self.__conn.read_empty_subpayload(nss_key, ignore_auth=True)
             self.results[arg_idx] = None  # Mark arg_idx as succesful
             logging.info('Signed %s', self.__args[arg_idx])
             server_idx += 1
+
+    def _splice_rpm_results(self, nss_key, arg_idx):
+        arg = self.__args[arg_idx]
+        if not arg.endswith('.rpm'):
+            arg += '.rpm'
+        output_path = os.path.join(self.__o2.output,
+                                   os.path.basename(arg))
+        output_sighdr_path = output_path + '.sighdr'
+        try:
+            def writer(f):
+                self.__conn.write_subpayload_to_file(nss_key, f)
+            utils.write_new_file(output_sighdr_path, writer)
+        except IOError as e:
+            raise ClientError(
+                'Error writing to {0!s}: {1!s}'.format(
+                    output_path, e.strerror))
+        with open(output_sighdr_path, 'rb') as f:
+            sighdr = f.read()
+        koji.splice_rpm_sighdr(sighdr, arg, output_path)
+        os.remove(output_sighdr_path)
+
+    def _store_rpm_result(self, nss_key, arg_idx):
+        arg = self.__args[arg_idx]
+        if not arg.endswith('.rpm'):
+            arg += '.rpm'
+        output_path = os.path.join(
+            self.__o2.output,
+            os.path.basename(arg)
+        )
+        try:
+            def writer(f):
+                self.__conn.write_subpayload_to_file(nss_key, f)
+            utils.write_new_file(output_path, writer)
+        except IOError as e:
+            raise ClientError(
+                'Error writing to {0!s}: {1!s}'.format(
+                    output_path, e.strerror))
 
 
 def cmd_sign_rpms(conn, args):
@@ -1518,6 +1543,9 @@ def cmd_sign_rpms(conn, args):
     p2.add_option('--file-signing-key-passphrase-file',
                   metavar='FILENAME',
                   help='File with bound passphrase for file signing key')
+    p2.add_option('--head-signing', action='store_true',
+                  help='Use RPM head-only signing (avoids copying the full '
+                  'RPM between bridge and server)')
     p2.add_option('--store-in-koji', action='store_true',
                   help='Store the generated RPM signatures to Koji')
     p2.add_option('--koji-only', action='store_true',
@@ -1572,6 +1600,12 @@ def cmd_sign_rpms(conn, args):
         f['koji-instance'] = safe_string(o2.koji_instance)
     if o2.v3_signature:
         f['v3-signature'] = True
+    if o2.head_signing:
+        f['head-signing'] = True
+        if o2.v3_signature:
+            raise Exception(
+                "Can't use head_signing together with v3-signature"
+            )
     conn.connect('sign-rpms', f)
     conn.empty_payload()
 

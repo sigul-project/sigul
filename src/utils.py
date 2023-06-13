@@ -21,6 +21,7 @@ import datetime
 import errno
 import getpass
 import grp
+import io
 import json
 import logging
 import optparse
@@ -971,6 +972,98 @@ def copy_data(write_fn, read_fn, size):
             size -= len(data)
 
 
+class NonClosableIO(object):
+    """
+    A class that wraps BytesIO, but does not actually allow closing.
+
+    This is a workaround for the koji bug at [1], to ensure that Koji will not
+    actually close our file when it thinks it should.
+
+    [1]: https://pagure.io/koji/pull-request/3423
+    """
+    _wrapped = None
+
+    def __init__(self, wrapped):
+        self._wrapped = wrapped
+
+    def close(self, *args, **kwargs):
+        # Actually don't close
+        if kwargs.get('really_close'):
+            del kwargs["realloy_close"]
+            self._wrapped.close(*args, **kwargs)
+        else:
+            pass
+
+    def __del__(self):
+        self.close(really_close=True)
+        del self._wrapped
+        self._wrapped = None
+
+    def __getattr__(self, name):
+        if 'wrapped' in name:
+            raise Exception("Recursive call to getattr for wrapped? %s" % name)
+        return self._wrapped.__getattribute__(name)
+
+
+HEADER_MIN_SIZE = 8 + 8
+
+
+def _buffer_contains_rpm_headers(buffer, length):
+    # Don't import koji at the top of the file!  The rpm Python module calls
+    # NSS_NoDB_Init() during its initialization, which breaks our attempts to
+    # initialize nss with our certificate database.
+    import koji
+
+    buffer.seek(0, io.SEEK_SET)
+
+    sig_hdr_start = 96
+    if length < (sig_hdr_start + HEADER_MIN_SIZE):
+        return False
+    sig_hdr_size = koji.rpm_hdr_size(buffer, sig_hdr_start, pad=True)
+
+    hdr_start = sig_hdr_start + sig_hdr_size
+    if length < (hdr_start + HEADER_MIN_SIZE):
+        return False
+    hdr_size = koji.rpm_hdr_size(buffer, hdr_start)
+
+    if length < (hdr_start + HEADER_MIN_SIZE + hdr_size):
+        return False
+
+    return True
+
+
+# 100MB should hopefully cover the header
+MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024
+
+
+def retrieve_rpm_headers(read_fn, size, buffer_fd):
+    buffer = NonClosableIO(buffer_fd)
+    downloaded = 0
+
+    while not _buffer_contains_rpm_headers(buffer, downloaded):
+        if downloaded == size:
+            raise Exception(
+                "Headers not encountered after downloading entire file"
+            )
+        if downloaded == MAX_DOWNLOAD_SIZE:
+            raise Exception(
+                "Headers not found in first %s bytes" % MAX_DOWNLOAD_SIZE
+            )
+
+        buffer.seek(0, io.SEEK_END)
+
+        if isinstance(read_fn, types.GeneratorType):
+            data = next(read_fn)
+        else:
+            data = read_fn(4096)
+
+        downloaded += len(data)
+        buffer.write(data)
+
+    buffer.seek(0, io.SEEK_SET)
+    return downloaded
+
+
 def file_size_in_blocks(fd):
     '''Return size of fd, taking into account block sizes.'''
     st = os.fstat(fd.fileno())
@@ -1313,6 +1406,43 @@ def bind_passphrase(config, passphrase, bind_params):
         passphrase = json.dumps(targets)
 
     return str(passphrase)
+
+
+def lazy_load(name):
+    """
+    Function to lazy load koji/rpm, since we can't do this before NSS init.
+
+    This is because RPM can't be imported before opening sockets, since the rpm
+    Python module calls NSS_NoDB_Init() during initialization, which breaks our
+    attempts to initialize nss with our certificate database.
+    """
+    if six.PY3:
+        import importlib.util
+
+        spec = importlib.util.find_spec(name)
+        loader = importlib.util.LazyLoader(spec.loader)
+        spec.loader = loader
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        loader.exec_module(module)
+        return module
+
+    elif six.PY2:
+        class LazyWrapper(object):
+            def __init__(self, wrapped_name):
+                self._wrapped_name = name
+
+            def __getattr__(self, attr_name):
+                module = importlib.import_module(self._wrapped_name)
+                sys.modules[self._wrapped_name] = module
+                return module.__getattribute__(attr_name)
+
+        wrapper = LazyWrapper(name)
+        sys.modules[name] = wrapper
+        return wrapper
+
+    else:
+        raise Exception("Unknown Python version")
 
 
 if six.PY2:

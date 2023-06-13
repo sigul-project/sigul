@@ -20,6 +20,7 @@ import base64
 import binascii
 import errors
 import logging
+import io
 import os
 import signal
 import shutil
@@ -44,6 +45,9 @@ import requests
 import double_tls
 import settings
 import utils
+
+koji = utils.lazy_load("koji")
+rpm = utils.lazy_load("rpm")
 
 # Infrastructure
 
@@ -197,6 +201,7 @@ class RPMObject(object):
         self.reply_payload_size = None
         self.reply_payload_digest = None
         self.tmp_path = None
+        self.tmp_path_is_hdrs = False
         self.__koji_rpm_info = None
 
     def remove_tmp_path(self):
@@ -204,6 +209,7 @@ class RPMObject(object):
         if self.tmp_path is not None:
             os.remove(self.tmp_path)
             self.tmp_path = None
+            self.tmp_path_is_hdrs = False
 
     def get_rpm_info(self, koji_client):
         '''Return information from koji, perhaps using koji_client.'''
@@ -220,7 +226,11 @@ class RPMObject(object):
     def add_signature_to_koji(self, koji_client):
         '''Add signature from self.tmp_path to koji_client.'''
         rpm_info = self.get_rpm_info(koji_client)
-        koji_client.add_signature(rpm_info, self.tmp_path)
+        koji_client.add_signature(
+            rpm_info,
+            self.tmp_path,
+            self.tmp_path_is_hdrs
+        )
 
 # Header and payload size validation
 
@@ -360,11 +370,6 @@ class KojiClient(object):
         Raise ForwardingError.
 
         '''
-        # Don't import koji before opening sockets!  The rpm Python module
-        # calls NSS_NoDB_Init() during its initialization, which breaks our
-        # attempts to initialize nss with our certificate database.
-        import koji
-
         if self.__koji_config is None:
             instance = self.__conn.request_fields.get('koji-instance')
             StringField('koji-instance', optional=True).validate(instance)
@@ -404,11 +409,6 @@ class KojiClient(object):
         Raise ForwardingError.
 
         '''
-        # Don't import koji before opening sockets!  The rpm Python module
-        # calls NSS_NoDB_Init() during its initialization, which breaks our
-        # attempts to initialize nss with our certificate database.
-        import koji
-
         session = self.__get_session()
         d = {}
         for (key, field) in six.iteritems(self.__rpm_info_map):
@@ -433,11 +433,6 @@ class KojiClient(object):
         Raise ForwardingError.
 
         '''
-        # Don't import koji before opening sockets!  The rpm Python module
-        # calls NSS_NoDB_Init() during its initialization, which breaks our
-        # attempts to initialize nss with our certificate database.
-        import koji
-
         session = self.__get_session()
         try:
             build = session.getBuild(rpm_info['build_id'])
@@ -450,31 +445,19 @@ class KojiClient(object):
         return (self.__koji_pathinfo.build(build) + '/'
                 + self.__koji_pathinfo.rpm(rpm_info))
 
-    def add_signature(self, rpm_info, path):
+    def add_signature(self, rpm_info, path, is_hdrs):
         '''Add signature for rpm_info from path using session.
 
         Raise ForwardingError.
 
         '''
-        # Don't import koji or rpm before opening sockets!  The rpm Python
-        # module calls NSS_NoDB_Init() during its initialization, which breaks
-        # our attempts to initialize nss with our certificate database.
-        import koji
-        import rpm
-
         session = self.__get_session()
-        try:
-            header_fields = koji.get_header_fields(path, ('siggpg', 'sigpgp'))
-        except rpm.error:
-            raise ForwardingError('Corrupt RPM returned by server')
-
-        sigkey = header_fields['siggpg']
-        if sigkey is None:
-            sigkey = header_fields['sigpgp']
-            if sigkey is None:
-                raise ForwardingError('Missing signature')
-        sigkey = koji.get_sigpacket_key_id(sigkey)
-        sighdr = koji.rip_rpm_sighdr(path)
+        if is_hdrs:
+            with open('rb', path) as f:
+                sighdr = f.read()
+        else:
+            sighdr = koji.rip_rpm_sighdr(path)
+        sigkey = koji.get_sighdr_key(sighdr)
         sighdr_digest = binascii.b2a_hex(nss.nss.md5_digest(sighdr))
 
         try:
@@ -522,11 +505,28 @@ class SignRPMRequestHandler(RequestHandler):
         try:
             (src, payload_size) = urlopen(url)
             try:
-                conn.server_buf.write(utils.u64_pack(payload_size))
-                utils.copy_data(conn.server_buf.write, src.iter_content(4096),
-                                payload_size)
+                hdr_path = None
+                if conn.request_fields.get('head-signing') == utils.u8_pack(1):
+                    (hdrs, hdr_path) = tempfile.mkstemp(text=False)
+                    hdr_size = utils.retrieve_rpm_headers(
+                        src.iter_content(4096),
+                        payload_size,
+                        hdrs,
+                    )
+                    conn.server_buf.write(utils.u64_pack(hdr_size))
+                    conn.server_buf.write(hdrs)
+                else:
+                    conn.server_buf.write(utils.u64_pack(payload_size))
+                    utils.copy_data(conn.server_buf.write,
+                                    src.iter_content(4096),
+                                    payload_size)
             finally:
                 src.close()
+                if hdr_path is not None:
+                    try:
+                        os.remove(hdr_path)
+                    except Exception:
+                        pass
         except requests.RequestException as e:
             raise ForwardingError(
                 'Error reading {0!s}: {1!s}'.format(
@@ -545,6 +545,8 @@ class SignRPMRequestHandler(RequestHandler):
                 finally:
                     tmp_file.close()
 
+                if conn.request_fields.get('head-signing') == utils.u8_pack(1):
+                    self.__rpm.tmp_path_is_hdrs = True
                 self.__rpm.add_signature_to_koji(self.__koji_client)
 
                 if conn.request_fields.get('return-data') != utils.u8_pack(0):
@@ -744,10 +746,11 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
 
     '''
 
-    def __init__(self, src_queue, server_buf):
+    def __init__(self, conn, src_queue, server_buf):
         super(SignRPMsSendRequestThread, self). \
             __init__('sign-rpms:send requests', 'send request thread',
                      input_queues=((src_queue, None),))
+        self.__conn = conn
         self.__src = src_queue
         self.__server_buf = server_buf
 
@@ -770,6 +773,7 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
 
         payload_size = rpm.request_payload_size
         try:
+            hdr_path = None
             if payload_size != 0:
                 src = open(rpm.tmp_path, 'rb')
                 readfn = src.read
@@ -777,10 +781,27 @@ class SignRPMsSendRequestThread(utils.WorkerThread):
                 (src, payload_size) = urlopen(rpm.request_payload_url)
                 readfn = src.iter_content(4096)
             try:
+                # If Head Signing is being used, grab just the RPMs headers
+                if (self.__conn.request_fields.get('head-signing')
+                        == utils.u8_pack(1)):
+                    (hdrs, hdr_path) = tempfile.mkstemp(text=False)
+                    hdrs = os.fdopen(hdrs, 'w+b')
+                    payload_size = utils.retrieve_rpm_headers(
+                        readfn,
+                        payload_size,
+                        hdrs,
+                    )
+                    readfn = hdrs.read
+
                 self.__server_buf.write(utils.u64_pack(payload_size))
                 utils.copy_data(self.__server_buf.write, readfn, payload_size)
             finally:
                 src.close()
+                if hdr_path is not None:
+                    try:
+                        os.remove(hdr_path)
+                    except Exception:
+                        pass
         except requests.RequestException as e:
             if payload_size != 0:
                 # This exception was not expected, let the default handling
@@ -1030,7 +1051,13 @@ class SignRPMsRequestHandler(RequestHandler):
             threads.append(SignRPMsReadRequestThread(conn, q1,
                                                      subrequest_map, tmp_dir))
             threads.append(SignRPMsKojiRequestThread(conn, q2, q1))
-            threads.append(SignRPMsSendRequestThread(q2, conn.server_buf))
+            threads.append(
+                SignRPMsSendRequestThread(
+                    conn,
+                    q2,
+                    conn.server_buf
+                )
+            )
             threads.append(SignRPMsReadReplyThread(q3, conn.server_buf,
                                                    subrequest_map, tmp_dir))
             threads.append(SignRPMsKojiReplyThread(conn, q4, q3))
@@ -1111,6 +1138,7 @@ request_types = {
                     Field('rpm-sigmd5', optional=True),
                     BoolField('import-signature', optional=True),
                     BoolField('return-data', optional=True),
+                    BoolField('head-signing', optional=True),
                     SF('koji-instance', optional=True),
                     BoolField('v3-signature', optional=True)),
                    max_payload=1024 * 1024 * 1024,
@@ -1120,7 +1148,8 @@ request_types = {
                      BoolField('import-signature', optional=True),
                      BoolField('return-data', optional=True),
                      SF('koji-instance', optional=True),
-                     BoolField('v3-signature', optional=True)),
+                     BoolField('v3-signature', optional=True),
+                     BoolField('head-signing', optional=True)),
                     handler=SignRPMsRequestHandler),
     'list-binding-methods': RT(()),
 }

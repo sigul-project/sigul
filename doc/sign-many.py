@@ -9,10 +9,17 @@ import sys
 def sign_rpm(list_file, args, passphrase):
     for rpm_id in open(list_file):
         rpm_id = rpm_id.rstrip('\n')
-        child = subprocess.Popen(['sigul', '-v', '-v', '--batch', 'sign-rpm',
-                                  '-o', '{0!s}.signed'.format(rpm_id)] + args +
-                                 [rpm_id],
-                                 stdin=subprocess.PIPE)
+        child = subprocess.Popen(
+            [
+                'sigul',
+                '-v',
+                '-v',
+                '--batch',
+                'sign-rpm',
+                '-o',
+                f'{rpm_id}.signed'
+            ] + args + [rpm_id],
+            stdin=subprocess.PIPE)
         child.stdin.write(passphrase + '\0')
         ret = child.wait()
         if ret != 0:

@@ -1,0 +1,99 @@
+# Copyright (C) 2022 Red Hat, Inc.  All rights reserved.
+#
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the GNU
+# General Public License v.2.  This program is distributed in the hope that it
+# will be useful, but WITHOUT ANY WARRANTY expressed or implied, including the
+# implied warranties of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.  You should have
+# received a copy of the GNU General Public License along with this program; if
+# not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth
+# Floor, Boston, MA 02110-1301, USA.  Any Red Hat trademarks that are
+# incorporated in the source code or documentation are not subject to the GNU
+# General Public License and may only be used or replicated with the express
+# permission of Red Hat, Inc.
+#
+# Red Hat Author: Patrick Uiterwijk <puiterwijk@redhat.com>
+
+m4_define([S_NUM_RPMS], [5])
+
+AT_SETUP([Sign-rpms with HeadSigning check])
+
+m4_include([include_setup.at])
+m4_include([include_start.at])
+m4_include([include_importedkey.at])
+
+[cat >> client/client.conf <<EOF
+[binding]
+enabled: test
+EOF]
+
+AT_DATA([key_passphrase.dat], [[{"method": "test", "value": "imported-key-pw", "may_unbind": "1"}
+]])
+AT_DATA([file_signing_key_passphrase.dat], [[{"method": "test", "value": "file-key-pw", "may_unbind": "1"}
+]])
+
+AT_CHECK([[
+	printf 'rootroot\0file-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-key --key-admin root --key-type ECC file-key > file-key-pubkey.pem
+]])
+AT_CHECK([printf 'rootroot\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		list-keys], ,
+[file-key (ECC)
+imported-key (gnupg)
+])
+
+# We need a DER certificate to actually validate, so let's just generate one
+openssl req -x509 -subj "/CN=TestCA" -out cacert.pem -newkey rsa:2048 -nodes -keyout cakey.pem
+openssl req -new -key cakey.pem -subj "/CN=Testkey" -out fake.csr
+echo 00 >cacert.srl
+openssl x509 -in fake.csr -req -CAkey cakey.pem -CA cacert.pem -days 5 -force_pubkey file-key-pubkey.pem -out file-key-pubkey.cert.pem
+openssl x509 -in file-key-pubkey.cert.pem -out file-key-pubkey.cert.der -outform DER
+
+create_rpm()
+{
+	sed "s/@N@/$1"/g < "$abs_srcdir/tests/testrpm.spec" > "testrpm$1".spec
+	rpmbuild --quiet --define "_specdir $(pwd)" --define "_rpmdir $(pwd)" \
+		--define '_rpmfilename %{name}.rpm' --clean --rmspec \
+		-bb "testrpm$1.spec"
+}
+
+
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" --initdb])
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" --import \
+	$abs_srcdir/tests/imported-public-key.asc])
+
+# sign-rpms
+mkdir unsigned signed
+# Because of course RPM added a warning when you rpmbuild without post scripts....
+# https://bugzilla.redhat.com/show_bug.cgi?id=1540971
+# @ignatenkobrain: "It's just a warning, ignore it ;). We will solve it at some point."
+AT_CHECK([cd unsigned; \
+	  for i in $(seq 1 ]S_NUM_RPMS[); do create_rpm "$i"; done; \
+	  cd ..], 0, [], [ignore])
+AT_CHECK([printf 'imported-key-pw\0file-key-pw\0' | \
+		sigul -c client/client.conf --batch \
+		sign-rpms \
+		--head-signing \
+		--file-signing-key file-key \
+		-o signed imported-key unsigned/*])
+for i in $(seq 1 S_NUM_RPMS); do
+    echo "signed/testrpm$i.rpm: rsa sha1 (md5) pgp md5 OK"
+done | LC_ALL=C sort > expected-old
+for i in $(seq 1 S_NUM_RPMS); do
+    echo "signed/testrpm$i.rpm: digests signatures OK"
+done | LC_ALL=C sort > expected
+AT_CHECK([rpm --dbpath "$(pwd)/rpm" -K signed/* | LC_ALL=C sort > output])
+AT_CHECK([diff -u expected output || diff -u expected-old output])
+for i in $(seq 1 S_NUM_RPMS); do
+	echo "At RPM $i"
+	AT_CHECK([rpm2cpio signed/testrpm$i.rpm | cpio --extract --make-directories --no-absolute-filenames], , , [ignore])
+	AT_CHECK([../../testtools/target/release/extract_ima_signatures signed/testrpm$i.rpm tmp/file$i])
+	AT_CHECK([evmctl ima_verify -vvvv --sigfile --key file-key-pubkey.cert.der tmp/file$i 2>&1 | grep "verification is OK" | sed -E "s/file([[0-9]]+)//"], 0, [tmp/: verification is OK
+])
+done
+rm -r expected expected-old output signed unsigned
+
+m4_include([include_cleanup.at])

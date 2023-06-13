@@ -249,6 +249,8 @@ modified by bridge to supply complete payloads
    default: true
 ** [koji-instance: string]
    default: default instance (not the same as an empty string)
+** [head-signing: bool]
+   default: false
 All of the fields above are only used by the bridge
 ** [v3-signature: bool]
    default: false
@@ -298,7 +300,9 @@ Each subreply has the following format:
     hmac-sha512 of header, using
     sha-512(|subreply-header-auth-key || subrequest number) as key
 *** u64 L payload length
-*** u8[L] payload: signed RPM
+*** u8[L] payload: signed RPM or RPM signature header
+    contains the full RPM if head-signing=false, otherwise contains
+    just the RPM signature header.
     imported into koji by bridge if import-signature
     dropped by bridge if !return-package
     Note that if status != 0, empty payload is still sent

@@ -32,10 +32,15 @@ import sys
 import tempfile
 import time
 
+import cryptography.hazmat.primitives.asymmetric.utils as crypto_asym_utils
+import cryptography.hazmat.primitives.hashes as crypto_hashes
 import cryptography.hazmat.primitives.serialization as crypto_serialization
 import cryptography.hazmat.primitives.asymmetric.ec as crypto_ec
 from cryptography.hazmat.backends import default_backend \
     as crypto_default_backend
+
+import rpm_head_signing.extract_header
+import rpm_head_signing.insert_signature
 
 import nss.error
 import nss.nss
@@ -512,6 +517,13 @@ class ServersConnection(object):
         writer = utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
         self.__send_payload_from_file(writer, fd)
 
+    def send_subpayload_from_bytes(self, contents, nss_key):
+        '''Send a subreply payload from bytes authenticated using nss_key.'''
+        self.__send_payload_size(len(contents))
+        writer = utils.SHA512HMACWriter(self.__client.outer_write, nss_key)
+        writer.write(contents)
+        writer.write_64B_hmac()
+
     def close(self):
         '''Destroy non-garbage-collected state.
 
@@ -873,7 +885,167 @@ class RPMFile(object):
             raise RPMFileError('RPM not authenticated')
 
 
-class SigningContext(object):
+class RpmHeadSignSigningContext(object):
+    '''An abstraction for RPM head signing.'''
+
+    def __init__(self, conn, key, key_passphrase):
+        self.__conn = conn
+        self.__key = key
+        self.__key_passphrase = key_passphrase
+        self.__file_signing_key = None
+        self.__file_signing_key_id = None
+        self.__file_signing_key_name = None
+
+    def add_file_signing(self, conn, key, key_passphrase):
+        self.__file_signing_key_name = key.name
+        keypaths = non_gnupg_key_paths(conn.config, key.fingerprint)
+        with open(keypaths['private'], 'rb') as f:
+            keybytes = f.read()
+        privkey = crypto_serialization.load_pem_private_key(
+            keybytes,
+            key_passphrase.encode('utf8'),
+            crypto_default_backend(),
+        )
+        self.__file_signing_key = privkey
+        keybytes = privkey.public_key().public_bytes(
+            crypto_serialization.Encoding.X962,
+            crypto_serialization.PublicFormat.UncompressedPoint,
+        )
+        keybytes_digester = crypto_hashes.Hash(
+            # This needs to be sha1, but it's only used for determining which
+            # key to use for verifying by the kernel.
+            crypto_hashes.SHA1(),  # nosec
+            backend=crypto_default_backend(),
+        )
+        keybytes_digester.update(keybytes)
+        keybytes_digest = keybytes_digester.finalize()
+        self.__file_signing_key_id = keybytes_digest[-4:]
+
+    def _ima_digestalgo_name_to_hash(name):
+        name = name.lower()
+        if name == 'sha1':
+            raise ValueError("SHA1 is rejected")
+        elif name == 'sha224':
+            return crypto_hashes.SHA224
+        elif name == 'sha256':
+            return crypto_hashes.SHA256
+        elif name == 'sha384':
+            return crypto_hashes.SHA384
+        elif name == 'sha512':
+            return crypto_hashes.SHA512
+        else:
+            raise ValueError('Unsupported digest algorithm %s' % name)
+
+    def _ima_digestalgo_name_to_ima_id(name):
+        name = name.lower()
+        # Source: includes/linux/hash_info.h
+        if name == 'sha1':
+            raise ValueError('SHA1 is rejected')
+        elif name == 'sha224':
+            return 7
+        elif name == 'sha256':
+            return 4
+        elif name == 'sha384':
+            return 5
+        elif name == 'sha512':
+            return 6
+        else:
+            raise ValueError("Unsupported digest algorithm %s" % name)
+
+    def sign_rpm(self, config, rpm):
+        '''Sign rpm, using config.
+
+        Raise RPMFileError on error.
+
+        '''
+
+        logging.info("Starting signing operation (head-signing)")
+        with (tempfile.NamedTemporaryFile() as header_file,
+                tempfile.NamedTemporaryFile() as signed_header_file,
+                tempfile.NamedTemporaryFile(mode='w+') as file_digests_file,
+                tempfile.NamedTemporaryFile(
+                    mode='w+') as signed_file_digests_file):
+
+            rpm_head_signing.extract_header(
+                rpm.path, header_file.name, file_digests_file.name,
+            )
+            server_common.gpg_detached_signature(
+                config,
+                signed_header_file,
+                header_file,
+                self.__key.fingerprint,
+                self.__key_passphrase,
+                armor=False,
+            )
+            signed_header_file.flush()
+            ima_presigned_path = None
+            if self.__file_signing_key:
+                ima_presigned_path = signed_file_digests_file.name
+
+                # IMA signatures
+                for file_digest_line in file_digests_file.readlines():
+                    (algo_name, file_digest) = file_digest_line.strip().split(
+                        " "
+                    )
+                    digest = bytearray.fromhex(file_digest)
+                    algo = RpmHeadSignSigningContext._ima_digestalgo_name_to_hash(  # noqa
+                        algo_name
+                    )()
+                    algo = crypto_asym_utils.Prehashed(algo)
+                    algoid = RpmHeadSignSigningContext._ima_digestalgo_name_to_ima_id(  # noqa
+                        algo_name
+                    )
+                    signature = self.__file_signing_key.sign(
+                        bytes(digest),
+                        crypto_ec.ECDSA(algo),
+                    )
+                    # Structure source: include/imaevm.h
+                    # struct signature_v2_hdr {
+                    #   uint8_t version;
+                    # /* signature format version */
+                    #   uint8_t hash_algo;
+                    # /* Digest algorithm [enum pkey_hash_algo] */
+                    #   uint32_t keyid;
+                    # /* IMA key identifier - not X509/PGP specific*/
+                    #   uint16_t sig_size;
+                    # /* signature size */
+                    #   uint8_t sig[0];
+                    # /* signature payload */
+                    # } __packed;
+                    # with "version" being 0x2 (DIGSIG_VERSION_2)
+                    # with sig_size being in big endian
+                    sigsize = struct.pack('>H', len(signature))
+                    hdr = struct.pack(
+                        '=BB', 2, algoid
+                    ) + self.__file_signing_key_id + sigsize
+                    sig_with_hdr = base64.b64encode(hdr + signature)
+                    if isinstance(sig_with_hdr, bytes):
+                        sig_with_hdr = sig_with_hdr.decode('utf8')
+                    signed_file_digests_file.write(
+                        '%s %s %s\n' % (algo_name, file_digest, sig_with_hdr)
+                    )
+
+                signed_file_digests_file.flush()
+
+            if self.__file_signing_key_name:
+                logging.info(
+                    'Signed RPM %s with key %s including file signing with '
+                    'key %s (head-signing)',
+                    rpm.rpm_id, self.__key.name, self.__file_signing_key_name)
+            else:
+                logging.info(
+                    'Signed RPM %s with key %s (head-signing)',
+                    rpm.rpm_id, self.__key.name)
+
+            return bytes(rpm_head_signing.insert_signature(
+                rpm.path,
+                signed_header_file.name,
+                ima_presigned_path,
+                True,
+            ))
+
+
+class RpmAddSignSigningContext(object):
     '''A tool for running rpm --addsign.'''
 
     def __init__(self, conn, key, key_passphrase):
@@ -940,7 +1112,7 @@ class SigningContext(object):
             self._passphrase_writer.write('%s\n' % self.__key_passphrase)
             self._passphrase_writer.flush()
 
-        logging.error("Starting signing operation")
+        logging.info("Starting signing operation")
         try:
             subprocess.run(
                 [
@@ -1721,7 +1893,7 @@ def cmd_sign_rpm(db, conn):
     except RPMFileError:
         conn.send_error(rpm.status)
 
-    ctx = SigningContext(conn, access.key, key_passphrase)
+    ctx = RpmAddSignSigningContext(conn, access.key, key_passphrase)
     if file_key_access is not None:
         ctx.add_file_signing(conn, file_key_access.key, file_key_passphrase)
 
@@ -1821,8 +1993,9 @@ class SignRPMsRequestThread(utils.WorkerThread):
 class SignRPMsSignerThread(utils.WorkerThread):
     '''A thread that actually performs the signing.
 
-    The requests in dst_queue and src_queue are RPMFile objects, with None
+    The requests in src_queue are RPMFile objects, with None
     marking end of the requests.
+    The objects in dst_queue are (RPMFile, bytes-or-none) objects.
 
     '''
 
@@ -1841,16 +2014,17 @@ class SignRPMsSignerThread(utils.WorkerThread):
             rpm = self.__src.get()
             if rpm is None:
                 break
+            signature = None
             try:
                 try:
                     # FIXME: sign more at a time
-                    self.__handle_one_rpm(rpm)
+                    signature = self.__handle_one_rpm(rpm)
                 except Exception:
                     if rpm.status is None:
                         rpm.status = errors.UNKNOWN_ERROR
                     raise
             finally:
-                self.__dst.put(rpm)
+                self.__dst.put((rpm, signature))
 
     def __handle_one_rpm(self, rpm):
         '''Handle an incoming request.'''
@@ -1859,7 +2033,7 @@ class SignRPMsSignerThread(utils.WorkerThread):
             return
 
         try:
-            self.__ctx.sign_rpm(self.__config, rpm)
+            return self.__ctx.sign_rpm(self.__config, rpm)
         except RPMFileError as e:
             logging.error(str(e))
 
@@ -1885,13 +2059,14 @@ class SignRPMsReplyThread(utils.WorkerThread):
         '''Read all results and send subreplies.'''
         server_idx = 0
         while True:
-            rpm = self.__src.get()
-            if rpm is None:
+            src = self.__src.get()
+            if src is None:
                 break
-            self.__handle_one_rpm(rpm, server_idx)
+            (rpm, signature) = src
+            self.__handle_one_rpm(rpm, signature, server_idx)
             server_idx += 1
 
-    def __handle_one_rpm(self, rpm, server_idx):
+    def __handle_one_rpm(self, rpm, signature, server_idx):
         '''Send information based on rpm.'''
         logging.debug('%s: Started handling %s', self.name, rpm.rpm_id)
         f = {'id': rpm.request_id}
@@ -1906,11 +2081,14 @@ class SignRPMsReplyThread(utils.WorkerThread):
 
         nss_key = utils.derived_key(self.__payload_nss_key, server_idx)
         if rpm.status is None:
-            f = open(rpm.path, 'rb')
-            try:
-                self.__conn.send_subpayload_from_file(f, nss_key)
-            finally:
-                f.close()
+            if signature is not None:
+                self.__conn.send_subpayload_from_bytes(signature, nss_key)
+            else:
+                f = open(rpm.path, 'rb')
+                try:
+                    self.__conn.send_subpayload_from_file(f, nss_key)
+                finally:
+                    f.close()
         else:
             self.__conn.send_empty_subpayload(nss_key)
 
@@ -1961,7 +2139,18 @@ def cmd_sign_rpms(db, conn):
     subreply_payload_nss_key = nss.nss.import_sym_key(
         slot, mech, nss.nss.PK11_OriginUnwrap, nss.nss.CKA_DERIVE,
         nss.nss.SecItem(buf))
-    signing_ctx = SigningContext(conn, access.key, key_passphrase)
+    if conn.outer_field_bool('head-signing'):
+        signing_ctx = RpmHeadSignSigningContext(
+            conn,
+            access.key,
+            key_passphrase
+        )
+    else:
+        signing_ctx = RpmAddSignSigningContext(
+            conn,
+            access.key,
+            key_passphrase
+        )
     if file_key_access is not None:
         signing_ctx.add_file_signing(
             conn, file_key_access.key, file_key_passphrase)
