@@ -8,10 +8,6 @@ RUN dnf install -y \
         cargo autoconf automake make bandit openssl ostree \
         skopeo
 
-# This is a temporary patch for fixing sign_hash's use of the hash_algo argument
-# https://patchwork.kernel.org/project/linux-integrity/patch/20210106094335.3178261-2-patrick@puiterwijk.org/
-RUN dnf install -y https://kojipkgs.fedoraproject.org//packages/ima-evm-utils/1.3.2/1.withalgofix.el8.infra/x86_64/ima-evm-utils-1.3.2-1.withalgofix.el8.infra.x86_64.rpm
-
 VOLUME /testcode/testsuite.dir
 WORKDIR /testcode
 COPY incontainer_run.sh /usr/local/bin/runtests.sh
