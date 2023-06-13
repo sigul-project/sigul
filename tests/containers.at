@@ -17,7 +17,7 @@
 
 AT_SETUP([Container check])
 
-AT_SKIP_IF([! skopeo])
+AT_SKIP_IF([! skopeo --help])
 
 m4_include([include_setup.at])
 m4_include([include_start.at])
@@ -63,9 +63,7 @@ AT_CHECK([printf 'imported-key-pw\0' | \
 		sign-container -o signature.asc imported-key manifest.json testimage])
 
 AT_CHECK([GNUPGHOME=gnupg skopeo standalone-verify manifest.json testimage \
-          "E521C6FD707E651BD295D6BA54B69BA6868C1849" signature.asc], ,
-         [Signature verified, digest sha256:0e4e6e9922795fbbf9c3a1be37d468c6d744a8bdabd42dd7686d471a83fe9339
-])
+          "E521C6FD707E651BD295D6BA54B69BA6868C1849" signature.asc | grep "Signature verified.*digest sha256:0e4e6e9922795fbbf9c3a1be37d468c6d744a8bdabd42dd7686d471a83fe9339"], , [ignore])
 
 
 m4_include([include_cleanup.at])
