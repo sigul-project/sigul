@@ -1195,6 +1195,9 @@ request_types = {
         ),
         max_payload=1024 * 1024 * 1024
     ),
+    'sign-pe': RT((SF('key'),
+                   SF('cert-name')),
+                  max_payload=1024 * 1024 * 1024),
     'list-binding-methods': RT(()),
 }
 del RT

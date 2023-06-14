@@ -1,0 +1,90 @@
+# Copyright (C) 2023 Red Hat, Inc.  All rights reserved.
+#
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the GNU
+# General Public License v.2.  This program is distributed in the hope that it
+# will be useful, but WITHOUT ANY WARRANTY expressed or implied, including the
+# implied warranties of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.  You should have
+# received a copy of the GNU General Public License along with this program; if
+# not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth
+# Floor, Boston, MA 02110-1301, USA.  Any Red Hat trademarks that are
+# incorporated in the source code or documentation are not subject to the GNU
+# General Public License and may only be used or replicated with the express
+# permission of Red Hat, Inc.
+
+AT_SETUP([PE Signing])
+
+m4_include([include_setup.at])
+m4_include([include_start.at])
+
+# Create the keys
+AT_CHECK([[
+	printf 'rootroot\0root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-key --key-admin root --key-type ECC root-ca-key > root-ca-key-pubkey.asc
+]])
+AT_CHECK([[
+	printf 'rootroot\0root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-key --key-admin root --key-type ECC int-ca-key > int-ca-key-pubkey.asc
+]])
+AT_CHECK([[
+	printf 'rootroot\0root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-key --key-admin root --key-type RSA leaf-key > leaf-key-pubkey.asc
+]])
+
+# Create root CA certificate
+AT_CHECK([[
+	printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		sign-certificate root-ca-key root-ca-key \
+			--subject-certificate-name root \
+			--validity 1y \
+			--certificate-type ca \
+			--subject "CN=Root CA,C=XX" > root-ca-cert.pem
+]])
+AT_CHECK([[
+	printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		sign-certificate root-ca-key int-ca-key \
+			--issuer-certificate-name root \
+			--subject-certificate-name intermediate \
+			--validity 1y \
+			--certificate-type ca \
+			--subject "CN=Intermediate CA,C=XX" > int-ca-cert.pem
+]])
+AT_CHECK([[
+	printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		sign-certificate int-ca-key leaf-key \
+			--issuer-certificate-name intermediate \
+			--subject-certificate-name codesigning \
+			--validity 1y \
+			--certificate-type codesigning \
+			--subject "CN=Leaf Code,C=XX" > leaf-cert-codesigning.pem
+]])
+
+# Get a DER encoded version of the certificates for pesigcheck
+openssl x509 -in leaf-cert-codesigning.pem -out leaf-cert-codesigning.der -inform PEM -outform DER
+openssl x509 -in root-ca-cert.pem -out root-ca-cert.der -inform PEM -outform DER
+
+# Try to sign a Shim binary
+cp "$abs_srcdir/tests/shimaa64.efi" shimaa64.efi
+
+AT_CHECK([[
+	printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		sign-pe leaf-key codesigning shimaa64.efi \
+            -o shimaa64.signed.efi
+]])
+
+# This checks the actual signature
+AT_CHECK(
+    [pesigcheck --in shimaa64.signed.efi --no-system-db=0 --certfile=leaf-cert-codesigning.der | grep "is valid"],
+    0,
+    [pesigcheck: "shimaa64.signed.efi" is valid.
+])
+
+m4_include([include_cleanup.at])

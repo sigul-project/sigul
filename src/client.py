@@ -1271,6 +1271,49 @@ def cmd_sign_certificate(conn, args):
     conn.write_payload_to_file(sys.stdout, decoding="utf-8")
 
 
+def cmd_sign_pe(conn, args):
+    p2 = optparse.OptionParser(
+        usage='%prog sign-pe [options] key cert-name file',
+        description='Sign a Platform Executable (PE) file')
+    p2.add_option('-o', '--output', metavar='FILE',
+                  help='Write output to this file')
+    (o2, args) = p2.parse_args(args)
+    if len(args) != 3:
+        p2.error('key name, certificate name and file name expected')
+    (key_name, cert_name, input_file) = args
+    if o2.output is None and sys.stdout.isatty():
+        p2.error('won\'t write output to a TTY, specify a file name')
+
+    passphrase = read_key_passphrase(conn.config)
+
+    try:
+        f = open(input_file, 'rb')
+    except IOError as e:
+        raise ClientError(
+            'Error opening {0!s}: {1!s}'.format(
+                args[1], e.strerror))
+
+    try:
+        conn.connect(
+            'sign-pe',
+            {'key': safe_string(key_name),
+             'cert-name': safe_string(cert_name)})
+        conn.send_payload_from_file(f)
+    finally:
+        f.close()
+    conn.send_inner({'passphrase': passphrase})
+    conn.read_response()
+    try:
+        if o2.output is None:
+            conn.write_payload_to_file(sys.stdout, decoding="utf-8")
+        else:
+            utils.write_new_file(o2.output, conn.write_payload_to_file)
+    except IOError as e:
+        raise ClientError(
+            'Error writing to {0!s}: {1!s}'.format(
+                o2.output, e.strerror))
+
+
 def cmd_sign_container(conn, args):
     p2 = optparse.OptionParser(
         usage='%prog sign-container [options] key manifest tag',
@@ -1808,6 +1851,7 @@ command_handlers = {
     'sign-rpm': (cmd_sign_rpm, 'Sign a RPM'),
     'sign-rpms': (cmd_sign_rpms, 'Sign one or more RPMs'),
     'sign-certificate': (cmd_sign_certificate, 'Sign an X509 certificate'),
+    'sign-pe': (cmd_sign_pe, 'Sign a PE file'),
     'list-binding-methods': (cmd_list_binding_methods,
                              'List bind methods supported by client'),
     'list-server-binding-methods': (cmd_list_server_binding_methods,

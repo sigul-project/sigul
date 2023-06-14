@@ -37,6 +37,7 @@ import time
 import cryptography.hazmat.primitives.asymmetric.utils as crypto_asym_utils
 import cryptography.hazmat.primitives.hashes as crypto_hashes
 import cryptography.hazmat.primitives.serialization as crypto_serialization
+import cryptography.hazmat.primitives.serialization.pkcs12 as crypto_pkcs12
 import cryptography.hazmat.primitives.asymmetric.ec as crypto_ec
 import cryptography.hazmat.primitives.asymmetric.rsa as crypto_rsa
 from cryptography.hazmat.backends import default_backend \
@@ -1388,6 +1389,17 @@ def non_gnupg_public_key(config, fingerprint):
         )
 
 
+def non_gnupg_certificate(config, fingerprint, cert_name):
+    keypaths = non_gnupg_key_paths(config, fingerprint, with_certs=True)
+    if cert_name not in keypaths['certificates']:
+        return None
+    with open(keypaths['certificates'][cert_name], 'rb') as f:
+        return x509.load_pem_x509_certificate(
+            f.read(),
+            crypto_default_backend(),
+        )
+
+
 def non_gnupg_key_paths(config, fingerprint, with_certs=False):
     certs = None
 
@@ -1435,6 +1447,9 @@ def cmd_new_key(db, conn):
     keytype = conn.safe_outer_field('keytype')
     if keytype is None:
         keytype = 'gnupg'
+    if keytype != 'gnupg' and keytype not in conn.config.keys_allowed:
+        logging.info('Keytype %s not allowed' % keytype)
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
     try:
         keytype = server_common.KeyTypeEnum[keytype]
     except KeyError:
@@ -1870,6 +1885,158 @@ def cmd_sign_ostree(db, conn):
     finally:
         shutil.rmtree(ostree_path)
         input_file.close()
+        signature_file.close()
+
+
+class TempNSSDb(object):
+    """This manages a temporary NSS database.
+
+    It looks pretty ugly, becasue it constantly shells out to certutil for
+    all operations.
+    This is done because it's a separate NSS database from the normal one,
+    and NSS normally only allows a single database.
+    """
+    def __init__(self):
+        self._db_dir = tempfile.TemporaryDirectory(prefix="sigul_temp_nss_")
+        self.db_dir = self._db_dir.name
+        self._db_pass = utils.random_passphrase(128)
+
+        self.execute_certutil(["-N"])
+
+    def prepare_secretfile(self, contents):
+        (pw_r, pw_w) = os.pipe2(0)
+        pw_w = open(pw_w, mode='wb', closefd=True)
+        pw_w.write(contents)
+        pw_w.close()
+        # We never actually read this, but this is using the Python Garbage
+        # Collector to auto-close the FD.
+        return open(pw_r, mode='r', closefd=True)
+
+    def prepare_pwfile(self):
+        return self.prepare_secretfile(self._db_pass.encode('utf-8'))
+
+    def execute_certutil(self, args):
+        pw_r = self.prepare_pwfile()
+
+        subprocess.run(
+            [
+                "/usr/bin/certutil",
+                "-d", self.db_dir,
+                '-f', "/dev/fd/%d" % pw_r.fileno(),
+            ] + args,
+            check=True,
+            stdin=subprocess.DEVNULL,
+            pass_fds=(
+                pw_r.fileno(),
+            ),
+        )
+
+    def add_cert(self, path, trust="CT,c,c"):
+        self.execute_certutil(
+            [
+                "-A", "-a",
+                "-i", path,
+                "-n", path,
+                "-t", trust,
+            ]
+        )
+
+    def add_pkcs12(self, pkcs12_bytes, passphrase):
+        pw_r = self.prepare_pwfile()
+        pk12_pass_r = self.prepare_secretfile(passphrase.encode('utf-8'))
+
+        # pk12util will not read the actual PKCS12 contents from a pipe, so
+        # instead just write those to a temporary (nameless) file.
+        with tempfile.TemporaryFile() as pk12_f:
+            pk12_f.write(pkcs12_bytes)
+            pk12_f.flush()
+            pk12_f.seek(0)
+
+            subprocess.run(
+                [
+                    "/usr/bin/pk12util",
+                    "-d", self.db_dir,
+                    '-k', "/dev/fd/%d" % pw_r.fileno(),
+                    '-i', '/dev/fd/%d' % pk12_f.fileno(),
+                    '-w', '/dev/fd/%d' % pk12_pass_r.fileno(),
+                ],
+                check=True,
+                stdin=subprocess.DEVNULL,
+                pass_fds=(
+                    pw_r.fileno(),
+                    pk12_pass_r.fileno(),
+                    pk12_f.fileno(),
+                ),
+                capture_output=True,
+            )
+
+
+@request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
+def cmd_sign_pe(db, conn):
+    (access, key_passphrase) = conn.authenticate_user(db)
+    if not access.key.keytype.supports_pe():
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
+
+    privkey = non_gnupg_private_key(
+        conn.config,
+        access.key.fingerprint,
+        key_passphrase,
+    )
+    cert_name = conn.safe_outer_field("cert-name")
+    cert = non_gnupg_certificate(
+        conn.config, access.key.fingerprint, cert_name,
+    )
+    pk12_passphrase = utils.random_passphrase(64)
+    cert_pkcs12 = crypto_pkcs12.serialize_key_and_certificates(
+        b"signkey",
+        key=privkey,
+        cert=cert,
+        cas=None,
+        encryption_algorithm=crypto_serialization.BestAvailableEncryption(
+            pk12_passphrase.encode('utf-8')
+        ),
+    )
+
+    nssdir = TempNSSDb()
+    nssdir.add_pkcs12(cert_pkcs12, pk12_passphrase)
+    # Just add all certs, just to get all the issuers in the chain.
+    for certfile in glob.glob(f"{conn.config.keys_storage}/*.cert.*.pem"):
+        nssdir.add_cert(certfile)
+
+    pw_r = nssdir.prepare_pwfile()
+    signature_file = tempfile.TemporaryFile()
+    try:
+        subprocess.run(
+            [
+                "/usr/bin/pesign",
+                "--sign",
+                "--in", conn.payload_file.name,
+                "--out", "/dev/fd/%d" % signature_file.fileno(),
+                "--force",
+                "--certdir", nssdir.db_dir,
+                "--certificate", "signkey",
+                "--nofork",
+                "--pinfile", "/dev/fd/%d" % pw_r.fileno(),
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            pass_fds=(
+                pw_r.fileno(),
+                signature_file.fileno(),
+            ),
+        )
+
+        signature_file.seek(0)
+
+        logging.info(
+            "Signed PE file with key %s, certificate %s",
+            access.key.name,
+            cert_name,
+        )
+
+        conn.send_reply_header(errors.OK, {})
+        conn.send_reply_payload_from_file(signature_file)
+    finally:
         signature_file.close()
 
 
