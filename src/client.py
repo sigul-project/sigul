@@ -31,6 +31,7 @@ import struct
 import subprocess
 import sys
 
+from cryptography import x509
 import nss.nss
 
 import double_tls
@@ -1177,6 +1178,99 @@ def cmd_sign_git_tag(conn, args):
               unsigned_oid])
 
 
+def cmd_sign_certificate(conn, args):
+    p2 = optparse.OptionParser(
+        usage='%prog sign-certificate [options] issuer-key subject-key',
+        description='Sign an x509 certificate')
+    p2.add_option('--issuer-certificate-name',
+                  help='Name of issuer certificate')
+    p2.add_option('--subject-certificate-name',
+                  help='Name of certificate to be signed')
+    p2.add_option('--validity',
+                  help='Validity string, in the form of <int:n>y for n years')
+    p2.add_option('--certificate-type',
+                  help='The type of certificate to be created',
+                  choices=('ca', 'codesigning', 'sslserver', ))
+    p2.add_option('-s', '--subject',
+                  help='Subject RDN in totality')
+    p2.add_option('--subject-common-name',
+                  help='Subject CommonName')
+    p2.add_option('--subject-organizational-unit',
+                  help='Subject OrganizationalUnit')
+    p2.add_option('--subject-organization',
+                  help='Subject Organizat')
+    p2.add_option('--subject-locality',
+                  help='Subject Locality')
+    p2.add_option('--subject-state',
+                  help='Subject State')
+    p2.add_option('--subject-country-name',
+                  help='Subject CountryName')
+    (o2, args) = p2.parse_args(args)
+    if len(args) != 2:
+        p2.error('issuer key name, and subject key name expected')
+    (issuer_key, subject_key) = args
+
+    any_subject_fields = (o2.subject_common_name
+                          or o2.subject_organizational_unit
+                          or o2.subject_organization
+                          or o2.subject_locality
+                          or o2.subject_state
+                          or o2.subject_country_name)
+
+    if o2.subject and any_subject_fields:
+        p2.error("Don't provide both --subject and a --subject-* value")
+    if not o2.subject and not any_subject_fields:
+        p2.error('Either --subject, or --subject-* fields should be provided')
+
+    if o2.subject:
+        # Decode the subject to verify it client-side
+        subject_name = x509.Name.from_rfc4514_string(o2.subject)
+    else:
+        attr_map = {
+            x509.oid.NameOID.COMMON_NAME: o2.subject_common_name,
+            x509.oid.NameOID.ORGANIZATIONAL_UNIT_NAME:
+                o2.subject_organizational_unit,
+        }
+
+        attrs = []
+        for oid in attr_map:
+            val = attr_map[oid]
+            if val is not None:
+                attrs.append(x509.NameAttribute(oid, val))
+
+        subject_name = x509.Name(attrs)
+
+    if not o2.issuer_certificate_name:
+        if issuer_key != subject_key:
+            p2.error("Issuer certificate name is required if not self-signed")
+    if not o2.subject_certificate_name:
+        p2.error("Subject certificate name is required")
+    if not o2.validity:
+        p2.error("Validity is required")
+    utils.parse_validity(o2.validity)
+
+    passphrase = read_key_passphrase(conn.config)
+
+    args = {
+        'issuer-key': safe_string(issuer_key),
+        'subject-key': safe_string(subject_key),
+        'subject': safe_string(subject_name.rfc4514_string()),
+        'validity': safe_string(o2.validity),
+        'subject-certificate-name': safe_string(o2.subject_certificate_name),
+        'certificate-type': safe_string(o2.certificate_type),
+    }
+    if o2.issuer_certificate_name:
+        args['issuer-certificate-name'] = safe_string(
+            o2.issuer_certificate_name
+        )
+
+    conn.connect('sign-certificate', args)
+    conn.empty_payload()
+    conn.send_inner({'passphrase': passphrase})
+    conn.read_response()
+    conn.write_payload_to_file(sys.stdout, decoding="utf-8")
+
+
 def cmd_sign_container(conn, args):
     p2 = optparse.OptionParser(
         usage='%prog sign-container [options] key manifest tag',
@@ -1713,6 +1807,7 @@ command_handlers = {
     'sign-ostree': (cmd_sign_ostree, 'Sign an OSTree commit object'),
     'sign-rpm': (cmd_sign_rpm, 'Sign a RPM'),
     'sign-rpms': (cmd_sign_rpms, 'Sign one or more RPMs'),
+    'sign-certificate': (cmd_sign_certificate, 'Sign an X509 certificate'),
     'list-binding-methods': (cmd_list_binding_methods,
                              'List bind methods supported by client'),
     'list-server-binding-methods': (cmd_list_server_binding_methods,

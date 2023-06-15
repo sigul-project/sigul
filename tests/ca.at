@@ -1,0 +1,118 @@
+# Copyright (C) 2023 Red Hat, Inc.  All rights reserved.
+#
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the GNU
+# General Public License v.2.  This program is distributed in the hope that it
+# will be useful, but WITHOUT ANY WARRANTY expressed or implied, including the
+# implied warranties of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.  You should have
+# received a copy of the GNU General Public License along with this program; if
+# not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth
+# Floor, Boston, MA 02110-1301, USA.  Any Red Hat trademarks that are
+# incorporated in the source code or documentation are not subject to the GNU
+# General Public License and may only be used or replicated with the express
+# permission of Red Hat, Inc.
+#
+# Red Hat Author: Patrick Uiterwijk <patrick@puiterwijk.org>
+
+# Can we split this into groups?
+AT_SETUP([Certificate Authority functionality])
+
+m4_include([include_setup.at])
+m4_include([include_start.at])
+# The Imported Key can't be used for CA stuff, but we can test that it
+# is rejected as issuer or subject keys.
+m4_include([include_importedkey.at])
+
+# Create the keys
+AT_CHECK([[
+	printf 'rootroot\0root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-key --key-admin root --key-type ECC root-ca-key > root-ca-key-pubkey.asc
+]])
+AT_CHECK([[
+	printf 'rootroot\0root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-key --key-admin root --key-type ECC int-ca-key > int-ca-key-pubkey.asc
+]])
+AT_CHECK([[
+	printf 'rootroot\0root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-key --key-admin root --key-type ECC leaf-key > leaf-key-pubkey.asc
+]])
+
+# Create root CA certificate
+AT_CHECK([[
+	printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		sign-certificate root-ca-key root-ca-key \
+			--subject-certificate-name root \
+			--validity 1y \
+			--certificate-type ca \
+			--subject "CN=Root CA,C=XX" > root-ca-cert.pem
+]])
+AT_CHECK([[
+	printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		sign-certificate root-ca-key int-ca-key \
+			--issuer-certificate-name root \
+			--subject-certificate-name intermediate \
+			--validity 1y \
+			--certificate-type ca \
+			--subject "CN=Intermediate CA,C=XX" > int-ca-cert.pem
+]])
+AT_CHECK([[
+	printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		sign-certificate int-ca-key leaf-key \
+			--issuer-certificate-name intermediate \
+			--subject-certificate-name codesigning \
+			--validity 1y \
+			--certificate-type codesigning \
+			--subject "CN=Leaf Code,C=XX" > leaf-cert-codesigning.pem
+]])
+AT_CHECK([[
+	printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		sign-certificate int-ca-key leaf-key \
+			--issuer-certificate-name intermediate \
+			--subject-certificate-name sslserver \
+			--validity 1y \
+			--certificate-type sslserver \
+			--subject "CN=Leaf SSL,C=XX" > leaf-cert-sslserver.pem
+]])
+
+AT_CHECK(
+	[openssl verify \
+		-CAfile root-ca-cert.pem \
+		-untrusted int-ca-cert.pem \
+		-show_chain \
+		-x509_strict \
+		-check_ss_sig \
+		leaf-cert-codesigning.pem],
+	0,
+	[leaf-cert-codesigning.pem: OK
+Chain:
+depth=0: C = XX, CN = Leaf Code (untrusted)
+depth=1: C = XX, CN = Intermediate CA (untrusted)
+depth=2: C = XX, CN = Root CA
+])
+
+AT_CHECK(
+	[openssl verify \
+		-CAfile root-ca-cert.pem \
+		-untrusted int-ca-cert.pem \
+		-show_chain \
+		-x509_strict \
+		-check_ss_sig \
+		-purpose sslserver \
+		leaf-cert-sslserver.pem],
+	0,
+	[leaf-cert-sslserver.pem: OK
+Chain:
+depth=0: C = XX, CN = Leaf SSL (untrusted)
+depth=1: C = XX, CN = Intermediate CA (untrusted)
+depth=2: C = XX, CN = Root CA
+])
+
+m4_include([include_cleanup.at])

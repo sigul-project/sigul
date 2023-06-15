@@ -19,7 +19,9 @@
 import base64
 import binascii
 import crypt
+from datetime import datetime
 import json
+import glob
 import hashlib
 import logging
 import os
@@ -38,6 +40,7 @@ import cryptography.hazmat.primitives.serialization as crypto_serialization
 import cryptography.hazmat.primitives.asymmetric.ec as crypto_ec
 from cryptography.hazmat.backends import default_backend \
     as crypto_default_backend
+from cryptography import x509
 
 import rpm_head_signing.extract_header
 import rpm_head_signing.insert_signature
@@ -216,7 +219,11 @@ class ServersConnection(object):
                 'Required outer field {0!s} missing'.format(key))
         return v
 
-    def safe_outer_field(self, key, filename=False, **kwargs):
+    def safe_outer_field(self,
+                         key,
+                         filename=False,
+                         identifier=False,
+                         **kwargs):
         '''Return an outer field value, or None if not present.
 
         Raise InvalidRequestError if field is not a safe string.
@@ -226,7 +233,7 @@ class ServersConnection(object):
         v = self.outer_field(key, **kwargs)
         if v is not None:
             v = v.decode('utf-8')
-            if not utils.string_is_safe(v, filename):
+            if not utils.string_is_safe(v, filename, identifier):
                 raise InvalidRequestError(
                     'Field {0!s} has unsafe value'.format(
                         repr(key)))
@@ -720,13 +727,13 @@ class ServersConnection(object):
         return (access, key_passphrase)
 
 
-def key_by_name(db, conn):
-    '''Return a key specified by conn.safe_outer_field('key').
+def key_by_name(db, conn, field='key'):
+    '''Return a key specified by conn.safe_outer_field(field).
 
     Raise InvalidRequestError.
 
     '''
-    name = conn.safe_outer_field('key', required=True)
+    name = conn.safe_outer_field(field, required=True)
     key = db.query(Key).filter_by(name=name).first()
     if key is None:
         conn.send_error(errors.KEY_NOT_FOUND)
@@ -898,13 +905,10 @@ class RpmHeadSignSigningContext(object):
 
     def add_file_signing(self, conn, key, key_passphrase):
         self.__file_signing_key_name = key.name
-        keypaths = non_gnupg_key_paths(conn.config, key.fingerprint)
-        with open(keypaths['private'], 'rb') as f:
-            keybytes = f.read()
-        privkey = crypto_serialization.load_pem_private_key(
-            keybytes,
-            key_passphrase.encode('utf8'),
-            crypto_default_backend(),
+        privkey = non_gnupg_private_key(
+            conn.config,
+            key.fingerprint,
+            key_passphrase,
         )
         self.__file_signing_key = privkey
         keybytes = privkey.public_key().public_bytes(
@@ -1355,19 +1359,57 @@ def non_gnupg_new_key(db, conn, keytype):
     conn.send_error(errors.UNSUPPORTED_KEYTYPE)
 
 
-def non_gnupg_key_paths(config, fingerprint):
+def non_gnupg_private_key(config, fingerprint, passphrase):
+    keypaths = non_gnupg_key_paths(config, fingerprint)
+    with open(keypaths['private'], 'rb') as f:
+        return crypto_serialization.load_pem_private_key(
+            f.read(),
+            passphrase.encode('utf8'),
+            crypto_default_backend(),
+        )
+
+
+def non_gnupg_public_key(config, fingerprint):
+    keypaths = non_gnupg_key_paths(config, fingerprint)
+    with open(keypaths['public'], 'rb') as f:
+        return crypto_serialization.load_pem_public_key(
+            f.read(),
+            crypto_default_backend(),
+        )
+
+
+def non_gnupg_key_paths(config, fingerprint, with_certs=False):
+    certs = None
+
+    if with_certs:
+        certs = {}
+
+        for path in glob.glob(
+            os.path.join(config.keys_storage, f'{fingerprint}.cert.*.pem')
+        ):
+            identifier = path.removeprefix(config.keys_storage)
+            identifier = identifier.removeprefix(f'/{fingerprint}.cert.')
+            identifier = identifier.removesuffix('.pem')
+            certs[identifier] = path
+    logging.info("For key %s, returning certs %s", fingerprint, certs)
+
     return {
         'private': os.path.join(
             config.keys_storage, '%s.pem' % fingerprint),
         'public': os.path.join(
             config.keys_storage, '%s.public.pem' % fingerprint),
+        'certificates': certs,
+        'new_certificate': lambda cert_name: os.path.join(
+            config.keys_storage, f'{fingerprint}.cert.{cert_name}.pem'),
     }
 
 
 def remove_non_gnupg_key(config, fingerprint):
-    keypaths = non_gnupg_key_paths(config, fingerprint)
+    keypaths = non_gnupg_key_paths(config, fingerprint, with_certs=True)
     os.remove(keypaths['private'])
     os.remove(keypaths['public'])
+    for certpath in keypaths['certificates'].values():
+        os.remove(certpath)
 
 
 @request_handler()
@@ -1867,6 +1909,194 @@ def cmd_sign_container(db, conn):
         conn.send_reply_payload_from_file(signature_file)
     finally:
         signature_file.close()
+
+
+@request_handler()
+def cmd_sign_certificate(db, conn):
+    (access, key_passphrase) = conn.authenticate_user(db, 'issuer-key')
+    if access.key.keytype != KeyTypeEnum.ECC:
+        conn.send_error(
+            errors.UNSUPPORTED_KEYTYPE,
+            "Issuer key is of wrong type"
+        )
+    subject_key = key_by_name(db, conn, 'subject-key')
+    if subject_key.keytype != KeyTypeEnum.ECC:
+        conn.send_error(
+            errors.UNSUPPORTED_KEYTYPE,
+            "Subject key is of wrong type"
+        )
+    issuer_cert_name = conn.safe_outer_field(
+        'issuer-certificate-name',
+        identifier=True
+    )
+    subject_cert_name = conn.safe_outer_field(
+        "subject-certificate-name",
+        required=True,
+        identifier=True,
+    )
+    subject_name = x509.Name.from_rfc4514_string(
+        conn.safe_outer_field("subject", required=True)
+    )
+    serial_number = x509.random_serial_number()
+    validity = utils.parse_validity(
+        conn.safe_outer_field("validity", required=True),
+    )
+    cert_type = conn.safe_outer_field('certificate-type', required=True)
+
+    subject_key_paths = non_gnupg_key_paths(
+        conn.config,
+        subject_key.fingerprint,
+        with_certs=True,
+    )
+    issuer_key_paths = non_gnupg_key_paths(
+        conn.config,
+        access.key.fingerprint,
+        with_certs=True,
+    )
+    issuer_privkey = non_gnupg_private_key(
+        conn.config,
+        access.key.fingerprint,
+        key_passphrase,
+    )
+    subject_pubkey = non_gnupg_public_key(
+        conn.config,
+        subject_key.fingerprint,
+    )
+
+    if subject_cert_name in subject_key_paths['certificates']:
+        raise InvalidRequestError("Subject certificate already exists")
+
+    if issuer_cert_name is None:
+        issuer_cert = None
+        issuer_name = subject_name
+    else:
+        if issuer_cert_name not in issuer_key_paths['certificates']:
+            raise InvalidRequestError(
+                f"No issuer certificate {issuer_cert_name}"
+            )
+        with open(
+            issuer_key_paths['certificates'][issuer_cert_name], 'rb'
+        ) as certf:
+            issuer_cert = x509.load_pem_x509_certificate(certf.read())
+        issuer_name = issuer_cert.subject
+
+    builder = x509.CertificateBuilder(
+        issuer_name=issuer_name,
+        subject_name=subject_name,
+        serial_number=serial_number,
+        not_valid_before=datetime.utcnow(),
+        not_valid_after=datetime.utcnow() + validity,
+        public_key=subject_pubkey,
+    )
+
+    key_usage = None
+    if cert_type == 'ca':
+        key_usage = x509.KeyUsage(
+            digital_signature=True,
+            key_cert_sign=True,
+            crl_sign=True,
+            content_commitment=False,
+            key_encipherment=False,
+            data_encipherment=False,
+            key_agreement=False,
+            encipher_only=False,
+            decipher_only=False,
+        )
+    elif cert_type == 'codesigning':
+        key_usage = x509.KeyUsage(
+            digital_signature=True,
+            key_cert_sign=False,
+            crl_sign=False,
+            content_commitment=False,
+            key_encipherment=False,
+            data_encipherment=False,
+            key_agreement=False,
+            encipher_only=False,
+            decipher_only=False,
+        )
+        builder = builder.add_extension(
+            x509.ExtendedKeyUsage(
+                usages=[
+                    x509.oid.ExtendedKeyUsageOID.CODE_SIGNING,
+                ],
+            ),
+            critical=False,
+        )
+    elif cert_type == 'sslserver':
+        key_usage = x509.KeyUsage(
+            digital_signature=True,
+            key_cert_sign=False,
+            crl_sign=False,
+            content_commitment=False,
+            key_encipherment=True,
+            data_encipherment=False,
+            key_agreement=False,
+            encipher_only=False,
+            decipher_only=False,
+        )
+        builder = builder.add_extension(
+            x509.ExtendedKeyUsage(
+                usages=[
+                    x509.oid.ExtendedKeyUsageOID.SERVER_AUTH,
+                    x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH,
+                ],
+            ),
+            critical=False,
+        )
+    else:
+        raise InvalidRequestError("Invalid certificate-type requested")
+
+    builder = builder.add_extension(
+        x509.BasicConstraints(ca=cert_type == 'ca', path_length=None),
+        critical=True,
+    )
+    builder = builder.add_extension(
+        key_usage,
+        critical=True,
+    )
+    builder = builder.add_extension(
+        x509.SubjectKeyIdentifier.from_public_key(subject_pubkey),
+        critical=False,
+    )
+    if issuer_cert is not None:
+        issuer_ski = issuer_cert.extensions.get_extension_for_class(
+            x509.SubjectKeyIdentifier
+        )
+        builder = builder.add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
+                issuer_ski.value
+            ),
+            critical=False,
+        )
+
+    signed_cert = builder.sign(
+        issuer_privkey,
+        crypto_hashes.SHA512(),
+        backend=crypto_default_backend(),
+    )
+    signed_cert = signed_cert.public_bytes(
+        crypto_serialization.Encoding.PEM,
+    )
+
+    with open(
+        subject_key_paths['new_certificate'](subject_cert_name),
+        'wb'
+    ) as certf:
+        certf.write(signed_cert)
+
+    logging.info(
+        "Signed certificate %s for key %s with key %s (cert %s), "
+        "subject %s, serial %s, type %s",
+        subject_cert_name,
+        subject_key.name,
+        access.key.name,
+        issuer_cert_name,
+        subject_name,
+        serial_number,
+        cert_type,
+    )
+    conn.send_reply_header(errors.OK, {})
+    conn.send_reply_payload(signed_cert)
 
 
 @request_handler(payload_storage=RequestHandler.PAYLOAD_FILE,

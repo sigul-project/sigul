@@ -23,6 +23,7 @@ AT_TESTED([sigul sigul_bridge sigul_server sigul_server_create_db] dnl
 m4_include([compile-tools.at])
 m4_include([analysis.at])
 m4_include([basic.at])
+m4_include([ca.at])
 m4_include([decrypt.at])
 m4_include([versions.at])
 m4_include([sign-rpms.at])

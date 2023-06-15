@@ -297,6 +297,25 @@ class YYYYMMDDField(Field):
                     'Field {0!s} is not a valid date'.format(self.name))
 
 
+class EnumField(StringField):
+    '''A field whose value must be in a list of values.'''
+
+    def __init__(self, name, allowed_values, optional=False):
+        super(EnumField, self).__init__(name, optional)
+        self.allowed_values = allowed_values
+
+    def validate(self, value):
+        super(EnumField, self).validate(value)
+        if value is not None:
+            if isinstance(value, six.binary_type):
+                value = value.decode('utf-8', 'strict')
+            if value not in self.allowed_values:
+                raise InvalidRequestError(
+                    f'Field {self.name} must be one of '
+                    f'values {self.allowed_values}'
+                )
+
+
 class RequestValidator(object):
     '''A validator of header fields and payload size.'''
 
@@ -1151,6 +1170,31 @@ request_types = {
                      BoolField('v3-signature', optional=True),
                      BoolField('head-signing', optional=True)),
                     handler=SignRPMsRequestHandler),
+    'sign-certificate': RT(
+        (
+            SF('issuer-key'),
+            # This is None when self-signing
+            SF('issuer-certificate-name', optional=True),
+            # At this moment, the only keys eligible to be signed are keys
+            # stored in Sigul. This may change in the future if more use cases
+            # are known.
+            SF('subject-key'),
+            SF('subject-certificate-name'),
+            # The Subject is in full RDN format, anything else can be
+            # formatted client-side into an RDN.
+            SF('subject'),
+            SF('validity'),
+            EnumField(
+                'certificate-type',
+                [
+                    'ca',
+                    'codesigning',
+                    'sslserver',
+                ]
+            ),
+        ),
+        max_payload=1024 * 1024 * 1024
+    ),
     'list-binding-methods': RT(()),
 }
 del RT

@@ -643,7 +643,7 @@ def readable_fields(fields):
                 fields[k])) for k in keys))
 
 
-def string_is_safe(s, filename=False):
+def string_is_safe(s, filename=False, identifier=False):
     '''Return True if s an allowed readable string.
 
     If filename is True, verifies no path components are in the string.
@@ -652,6 +652,8 @@ def string_is_safe(s, filename=False):
     - lowercase letter
     - number
     - period
+
+    If identitier is True, verify it's just uppercase and lowercase letters.
     '''
     # Motivated by 100% readable logs
     for c in s:
@@ -661,6 +663,9 @@ def string_is_safe(s, filename=False):
                              or (ord(c) >= 0x61 and ord(c) <= 0x7A)
                              or (ord(c) >= 0x30 and ord(c) <= 0x39)
                              or (ord(c) in [0x2E])):
+            return False
+        if identifier and not ((ord(c) >= 0x41 and ord(c) <= 0x5A)
+                               or (ord(c) >= 0x61 and ord(c) <= 0x7A)):
             return False
     # Don't allow a period at the start, to avoid ".."
     if filename and s[0] == '.':
@@ -689,6 +694,17 @@ def is_int(s):
         return True
     except Exception:
         return False
+
+
+def parse_validity(s: str):
+    '''Parses a string into a timedelta object.
+
+    Right now, only supports <number>y for years, but more might be implemented
+    in the future.
+    '''
+    num_years = int(s.removesuffix('y'))
+    return datetime.timedelta(days=365 * num_years)
+
 
 # Threading utilities
 

@@ -50,7 +50,7 @@ _messages = {
     INVALID_IMPORT: 'Invalid import file',
     IMPORT_PASSPHRASE_ERROR: 'Import passphrase does not match',
     DECRYPT_FAILED: 'Decryption failed',
-    UNSUPPORTED_KEYTYPE: 'Unsupported keytype',
+    UNSUPPORTED_KEYTYPE: 'Unsupported keytype for operation',
 }
 
 
