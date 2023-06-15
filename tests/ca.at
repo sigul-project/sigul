@@ -40,6 +40,11 @@ AT_CHECK([[
 		sigul -c client/client.conf --batch -v -v \
 		new-key --key-admin root --key-type ECC leaf-key > leaf-key-pubkey.asc
 ]])
+AT_CHECK([[
+	printf 'rootroot\0root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-key --key-admin root --key-type RSA leaf-key-rsa > leaf-key-rsa-pubkey.asc
+]])
 
 # Create root CA certificate
 AT_CHECK([[
@@ -81,6 +86,17 @@ AT_CHECK([[
 			--certificate-type sslserver \
 			--subject "CN=Leaf SSL,C=XX" > leaf-cert-sslserver.pem
 ]])
+AT_CHECK([[
+	printf 'root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		sign-certificate int-ca-key leaf-key-rsa \
+			--issuer-certificate-name intermediate \
+			--subject-certificate-name sslserver \
+			--validity 1y \
+			--certificate-type sslserver \
+			--subject "CN=Leaf SSL RSA,C=XX" > leaf-cert-rsa-sslserver.pem
+]])
+
 
 AT_CHECK(
 	[openssl verify \
@@ -114,5 +130,23 @@ depth=0: C = XX, CN = Leaf SSL (untrusted)
 depth=1: C = XX, CN = Intermediate CA (untrusted)
 depth=2: C = XX, CN = Root CA
 ])
+
+AT_CHECK(
+	[openssl verify \
+		-CAfile root-ca-cert.pem \
+		-untrusted int-ca-cert.pem \
+		-show_chain \
+		-x509_strict \
+		-check_ss_sig \
+		-purpose sslserver \
+		leaf-cert-rsa-sslserver.pem],
+	0,
+	[leaf-cert-rsa-sslserver.pem: OK
+Chain:
+depth=0: C = XX, CN = Leaf SSL RSA (untrusted)
+depth=1: C = XX, CN = Intermediate CA (untrusted)
+depth=2: C = XX, CN = Root CA
+])
+
 
 m4_include([include_cleanup.at])

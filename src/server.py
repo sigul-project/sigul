@@ -38,6 +38,7 @@ import cryptography.hazmat.primitives.asymmetric.utils as crypto_asym_utils
 import cryptography.hazmat.primitives.hashes as crypto_hashes
 import cryptography.hazmat.primitives.serialization as crypto_serialization
 import cryptography.hazmat.primitives.asymmetric.ec as crypto_ec
+import cryptography.hazmat.primitives.asymmetric.rsa as crypto_rsa
 from cryptography.hazmat.backends import default_backend \
     as crypto_default_backend
 from cryptography import x509
@@ -1317,46 +1318,55 @@ def gnupg_new_key(db, conn):
 
 def non_gnupg_new_key(db, conn, keytype):
     key_passphrase = utils.random_passphrase(conn.config.passphrase_length)
-    if keytype == KeyTypeEnum.ECC:
-        curve = conn.config.ecc_default_curve()
-        key = crypto_ec.generate_private_key(curve, crypto_default_backend())
-        serialized_key = key.private_bytes(
-            crypto_serialization.Encoding.PEM,
-            crypto_serialization.PrivateFormat.PKCS8,
-            crypto_serialization.BestAvailableEncryption(
-                key_passphrase.encode('utf8')),
+    if keytype == KeyTypeEnum.RSA:
+        key = crypto_rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=conn.config.rsa_key_size,
         )
-        pubkey = key.public_key()
-        serialized_pubkey = pubkey.public_bytes(
-            crypto_serialization.Encoding.PEM,
-            crypto_serialization.PublicFormat.SubjectPublicKeyInfo,
+    elif keytype == KeyTypeEnum.ECC:
+        key = crypto_ec.generate_private_key(
+            conn.config.ecc_default_curve(),
+            crypto_default_backend(),
         )
+    else:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
+        return
 
-        pubkey_der = pubkey.public_bytes(
-            crypto_serialization.Encoding.DER,
-            crypto_serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        # nosec because this uses sha1, which is normally dangerous.
-        # But in this case it's according to common use, and it's to ensure
-        # different files have different names.
-        # It is explicitly not used for security reasons.
-        fingerprint = hashlib.sha1(pubkey_der).hexdigest()  # nosec
+    serialized_key = key.private_bytes(
+        crypto_serialization.Encoding.PEM,
+        crypto_serialization.PrivateFormat.PKCS8,
+        crypto_serialization.BestAvailableEncryption(
+            key_passphrase.encode('utf8')),
+    )
+    pubkey = key.public_key()
+    serialized_pubkey = pubkey.public_bytes(
+        crypto_serialization.Encoding.PEM,
+        crypto_serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
 
-        keypaths = non_gnupg_key_paths(conn.config, fingerprint)
+    pubkey_der = pubkey.public_bytes(
+        crypto_serialization.Encoding.DER,
+        crypto_serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    # nosec because this uses sha1, which is normally dangerous.
+    # But in this case it's according to common use, and it's to ensure
+    # different files have different names.
+    # It is explicitly not used for security reasons.
+    fingerprint = hashlib.sha1(pubkey_der).hexdigest()  # nosec
 
-        with open(
-                os.open(
-                    keypaths['private'],
-                    os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                    mode=0o600), 'wb') as keyfile:
-            keyfile.write(serialized_key)
+    keypaths = non_gnupg_key_paths(conn.config, fingerprint)
 
-        with open(keypaths['public'], 'wb') as pubkeyfile:
-            pubkeyfile.write(serialized_pubkey)
+    with open(
+            os.open(
+                keypaths['private'],
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                mode=0o600), 'wb') as keyfile:
+        keyfile.write(serialized_key)
 
-        return (serialized_pubkey, fingerprint, key_passphrase)
+    with open(keypaths['public'], 'wb') as pubkeyfile:
+        pubkeyfile.write(serialized_pubkey)
 
-    conn.send_error(errors.UNSUPPORTED_KEYTYPE)
+    return (serialized_pubkey, fingerprint, key_passphrase)
 
 
 def non_gnupg_private_key(config, fingerprint, passphrase):
@@ -1914,13 +1924,13 @@ def cmd_sign_container(db, conn):
 @request_handler()
 def cmd_sign_certificate(db, conn):
     (access, key_passphrase) = conn.authenticate_user(db, 'issuer-key')
-    if access.key.keytype != KeyTypeEnum.ECC:
+    if not access.key.keytype.supports_ca():
         conn.send_error(
             errors.UNSUPPORTED_KEYTYPE,
             "Issuer key is of wrong type"
         )
     subject_key = key_by_name(db, conn, 'subject-key')
-    if subject_key.keytype != KeyTypeEnum.ECC:
+    if not subject_key.keytype.supports_ca():
         conn.send_error(
             errors.UNSUPPORTED_KEYTYPE,
             "Subject key is of wrong type"

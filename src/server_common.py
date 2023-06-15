@@ -159,6 +159,13 @@ class KeyAccess(object):
 class KeyTypeEnum(enum.Enum):
     gnupg = 1
     ECC = 2
+    RSA = 3
+
+    def supports_ca(self):
+        return self != KeyTypeEnum.gnupg
+
+    def supports_pe(self):
+        return self == KeyTypeEnum.RSA
 
 
 sa = sqlalchemy
@@ -330,8 +337,9 @@ class KeysConfiguration(utils.Configuration):
     def _add_defaults(self, defaults):
         super(KeysConfiguration, self)._add_defaults(defaults)
         defaults.update({
-            'allowed-key-types': 'ECC',
+            'allowed-key-types': 'ECC,RSA',
             'ecc-default-curve': 'SECP256R1',
+            'rsa-key-size': 2048,
             'keys-storage': settings.default_keys_storage,
         })
 
@@ -346,6 +354,7 @@ class KeysConfiguration(utils.Configuration):
         ecc_default_curve = parser.get('keys', 'ecc-default-curve')
         self.ecc_default_curve = getattr(
             cryptography.hazmat.primitives.asymmetric.ec, ecc_default_curve)
+        self.rsa_key_size = parser.get('keys', 'rsa-key-size')
         self.keys_storage = parser.get('keys', 'keys-storage')
 
 
