@@ -1487,34 +1487,7 @@ def cmd_new_key(db, conn):
     conn.send_reply_payload(pubkey)
 
 
-@request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
-def cmd_import_key(db, conn):
-    conn.authenticate_admin(db)
-    key_name = conn.safe_outer_field('key', required=True)
-    # FIXME: is this check atomic?
-    if db.query(Key).filter_by(name=key_name).first() is not None:
-        conn.send_error(errors.ALREADY_EXISTS)
-    keytype = conn.safe_outer_field('keytype')
-    if keytype is None:
-        keytype = 'gnupg'
-    try:
-        keytype = server_common.KeyTypeEnum[keytype]
-    except KeyError:
-        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
-    if keytype != KeyTypeEnum.gnupg:
-        # TODO: Importing non-gnupg keys
-        logging.info('Importing non-gnupg keys is coming later')
-        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
-    admin_name = conn.safe_outer_field('initial-key-admin')
-    if admin_name is None:
-        admin_name = conn.safe_outer_field('user', required=True)
-    admin = db.query(User).filter_by(name=admin_name).first()
-    if admin is None:
-        conn.send_error(errors.USER_NOT_FOUND)
-    new_key_passphrase = utils.random_passphrase(conn.config.passphrase_length)
-    import_key_passphrase = conn.inner_field('passphrase', required=True)
-    user_passphrase = conn.inner_field('new-passphrase', required=True)
-
+def import_gnupg_key(conn, import_key_passphrase, new_key_passphrase):
     try:
         fingerprint = server_common.gpg_import_key(
             conn.config, conn.payload_file)
@@ -1529,7 +1502,103 @@ def cmd_import_key(db, conn):
         except server_common.GPGError as e:
             conn.send_error(errors.IMPORT_PASSPHRASE_ERROR)
 
-        key = Key(key_name, server_common.KeyTypeEnum.gnupg.name, fingerprint)
+        return fingerprint
+
+    except Exception:
+        server_common.gpg_delete_key(conn.config, fingerprint)
+        raise
+
+
+def import_nongnupg_key(conn, import_key_passphrase, new_key_passphrase):
+    key = crypto_serialization.load_pem_private_key(
+        conn.payload_file.read(),
+        import_key_passphrase,
+        crypto_default_backend(),
+    )
+
+    serialized_key = key.private_bytes(
+        crypto_serialization.Encoding.PEM,
+        crypto_serialization.PrivateFormat.PKCS8,
+        crypto_serialization.BestAvailableEncryption(
+            new_key_passphrase.encode('utf8')),
+    )
+
+    pubkey = key.public_key()
+    serialized_pubkey = pubkey.public_bytes(
+        crypto_serialization.Encoding.PEM,
+        crypto_serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
+    pubkey_der = pubkey.public_bytes(
+        crypto_serialization.Encoding.DER,
+        crypto_serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    # nosec because this uses sha1, which is normally dangerous.
+    # But in this case it's according to common use, and it's to ensure
+    # different files have different names.
+    # It is explicitly not used for security reasons.
+    fingerprint = hashlib.sha1(pubkey_der).hexdigest()  # nosec
+
+    keypaths = non_gnupg_key_paths(conn.config, fingerprint)
+
+    if (
+        os.path.exists(keypaths['public'])
+        or os.path.exists(keypaths['private'])
+    ):
+        return conn.send_error(errors.ALREADY_EXISTS)
+
+    with open(
+            os.open(
+                keypaths['private'],
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                mode=0o600), 'wb') as keyfile:
+        keyfile.write(serialized_key)
+
+    with open(keypaths['public'], 'wb') as pubkeyfile:
+        pubkeyfile.write(serialized_pubkey)
+
+    return fingerprint
+
+
+@request_handler(payload_storage=RequestHandler.PAYLOAD_FILE)
+def cmd_import_key(db, conn):
+    conn.authenticate_admin(db)
+    key_name = conn.safe_outer_field('key', required=True)
+    # FIXME: is this check atomic?
+    if db.query(Key).filter_by(name=key_name).first() is not None:
+        conn.send_error(errors.ALREADY_EXISTS)
+    keytype = conn.safe_outer_field('keytype')
+    if keytype is None:
+        keytype = 'gnupg'
+    try:
+        keytype = server_common.KeyTypeEnum[keytype]
+    except KeyError:
+        conn.send_error(errors.UNSUPPORTED_KEYTYPE)
+    admin_name = conn.safe_outer_field('initial-key-admin')
+    if admin_name is None:
+        admin_name = conn.safe_outer_field('user', required=True)
+    admin = db.query(User).filter_by(name=admin_name).first()
+    if admin is None:
+        conn.send_error(errors.USER_NOT_FOUND)
+    new_key_passphrase = utils.random_passphrase(conn.config.passphrase_length)
+    import_key_passphrase = conn.inner_field('passphrase', required=True)
+    user_passphrase = conn.inner_field('new-passphrase', required=True)
+
+    if keytype == KeyTypeEnum.gnupg:
+        fingerprint = import_gnupg_key(
+            conn,
+            import_key_passphrase,
+            new_key_passphrase,
+        )
+    else:
+        fingerprint = import_nongnupg_key(
+            conn,
+            import_key_passphrase,
+            new_key_passphrase,
+        )
+
+    try:
+        key = Key(key_name, keytype.name, fingerprint)
         db.add(key)
         access = KeyAccess(key, admin, key_admin=True)
         access.set_passphrase(conn.config, key_passphrase=new_key_passphrase,
@@ -1538,8 +1607,12 @@ def cmd_import_key(db, conn):
         db.add(access)
         db.commit()
     except Exception:
-        server_common.gpg_delete_key(conn.config, fingerprint)
+        if keytype == KeyTypeEnum.gnupg:
+            server_common.gpg_delete_key(conn.config, key.fingerprint)
+        else:
+            remove_non_gnupg_key(conn.config, fingerprint)
         raise
+
     conn.send_reply_ok_only()
 
 

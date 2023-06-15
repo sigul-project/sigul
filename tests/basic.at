@@ -152,11 +152,17 @@ AT_CHECK([[
 		sigul -c client/client.conf --batch -v -v \
 		new-key --key-admin root --key-type ECC ecckey > ecc-key-pubkey.asc
 ]])
+AT_CHECK([[
+	printf 'rootroot\0root-key-pw\0' | \
+		sigul -c client/client.conf --batch -v -v \
+		new-key --key-admin root --key-type RSA rsakey > rsa-key-pubkey.asc
+]])
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
 [ecckey (ECC)
 key (gnupg)
+rsakey (RSA)
 ])
 
 
@@ -174,16 +180,33 @@ AT_CHECK([printf 'rootroot\0' | \
 
 
 # import-key
+# Generate new RSA and ECC keys
+openssl genrsa 2048 | openssl pkcs8 -topk8 -passout "pass:imported" -out testrsakey.pem
+openssl ecparam -name prime256v1 -genkey | openssl pkcs8 -topk8 -passout "pass:imported" -out testecckey.pem
+
 AT_CHECK([printf 'rootroot\0imported\0imported-key-pw\0' | \
  		sigul -c client/client.conf --batch -v -v \
 		import-key imported-key \
 		"$abs_srcdir/tests/imported-secret-key.asc"])
+AT_CHECK([printf 'rootroot\0imported\0imported-key-pw\0' | \
+ 		sigul -c client/client.conf --batch -v -v \
+		import-key imported-ecc-key \
+		--key-type ECC \
+		testecckey.pem])
+AT_CHECK([printf 'rootroot\0imported\0imported-key-pw\0' | \
+ 		sigul -c client/client.conf --batch -v -v \
+		import-key imported-rsa-key \
+		--key-type RSA \
+		testrsakey.pem])
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
 [ecckey (ECC)
+imported-ecc-key (ECC)
 imported-key (gnupg)
+imported-rsa-key (RSA)
 key (gnupg)
+rsakey (RSA)
 ])
 
 
@@ -196,8 +219,11 @@ AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
 [ecckey (ECC)
+imported-ecc-key (ECC)
 imported-key (gnupg)
+imported-rsa-key (RSA)
 key (gnupg)
+rsakey (RSA)
 ])
 
 
@@ -209,8 +235,11 @@ AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
 [ecckey (ECC)
+imported-ecc-key (ECC)
 imported-key (gnupg)
+imported-rsa-key (RSA)
 keyX (gnupg)
+rsakey (RSA)
 ])
 AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
@@ -219,8 +248,11 @@ AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
 [ecckey (ECC)
+imported-ecc-key (ECC)
 imported-key (gnupg)
+imported-rsa-key (RSA)
 key (gnupg)
+rsakey (RSA)
 ])
 
 
@@ -335,7 +367,10 @@ AT_CHECK([printf 'rootroot\0' | \
 		sigul -c client/client.conf --batch -v -v \
 		list-keys], ,
 [ecckey (ECC)
+imported-ecc-key (ECC)
+imported-rsa-key (RSA)
 key (gnupg)
+rsakey (RSA)
 ])
 
 

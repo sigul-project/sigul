@@ -746,6 +746,8 @@ def cmd_import_key(conn, args):
                                description='Import a secret key')
     p2.add_option('--key-admin', metavar='USER',
                   help='Initial key administrator')
+    p2.add_option('--key-type', metavar='KEYTYPE',
+                  help='Key type to create', default='gnupg')
     (o2, args) = p2.parse_args(args)
     if len(args) != 2:
         p2.error('key name and input file path expected')
@@ -761,7 +763,10 @@ def cmd_import_key(conn, args):
                 args[1], e.strerror))
 
     try:
-        fields = {'key': safe_string(args[0])}
+        fields = {
+            'key': safe_string(args[0]),
+            'keytype': o2.key_type,
+        }
         if o2.key_admin is not None:
             fields['initial-key-admin'] = safe_string(o2.key_admin)
         conn.connect('import-key', fields)
