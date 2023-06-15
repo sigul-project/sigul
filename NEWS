@@ -1,3 +1,9 @@
+Changes in version 1.2:
+- Implemented the RSA keytype
+- Implemented RPM Head Signing
+- Implemented x.509 Certificate signing
+- Implemented import for ECC and RSA keys
+
 Changes in version 1.1:
 - Added keytype abstraction
 - Implemented the ECC keytype

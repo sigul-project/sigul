@@ -1,5 +1,5 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT([sigul], [1.1], [puiterwijk@redhat.com], ,
+AC_INIT([sigul], [1.2], [patrick@puiterwijk.org], ,
         [https://pagure.io/sigul/])
 AC_COPYRIGHT(
 [Copyright (C) 2009-2021 Red Hat, Inc.  All rights reserved.
