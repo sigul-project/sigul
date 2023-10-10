@@ -26,7 +26,9 @@ import shutil
 import subprocess
 import tempfile
 
+from cryptography import x509
 import cryptography.hazmat.primitives.asymmetric.ec
+from cryptography.x509.oid import NameOID
 
 import nss.nss
 import sqlalchemy
@@ -710,3 +712,35 @@ def gpg_detached_signature(config, signature_file, cleartext_file, fingerprint,
     ctx.armor = armor
     ctx.textmode = False
     ctx.sign(cleartext_file, signature_file, ourgpg.constants.SIG_MODE_DETACH)
+
+
+def x509_name_from_rfc4514_string(full_string):
+    if hasattr(x509.Name, 'from_rfc4514_string'):
+        return x509.Name.from_rfc4514_string(full_string)
+    # This is too old of a python-cryptography to have this method.
+    # Instead, we parse just a few basic things
+    # If it contains any unsupported (or unparseable) parts,
+    # we just return an error
+    attrs = []
+    if '%' in full_string:
+        raise ValueError("Unsupported RFC4514 value '%s'" % part)
+    for part in full_string.split(','):
+        key, split, value = part.partition("=")
+        if split != '=':
+            raise ValueError("Invalid RFC4514 part '%s'" % part)
+        if key == "CN":
+            oid = NameOID.COMMON_NAME
+        elif key == "L":
+            oid = NameOID.LOCALITY_NAME
+        elif key == "ST":
+            oid = NameOID.STATE_OR_PROVINCE_NAME
+        elif key == "O":
+            oid = NameOID.ORGANIZATION_NAME
+        elif key == "OU":
+            oid = NameOID.ORGANIZATIONAL_UNIT_NAME
+        elif key == "C":
+            oid = NameOID.COUNTRY_NAME
+        else:
+            raise ValueError("Unsupported RFC4514 part '%s'" % part)
+        attrs.append(x509.NameAttribute(oid, value))
+    return x509.Name(attrs)

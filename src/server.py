@@ -2184,7 +2184,7 @@ def cmd_sign_certificate(db, conn):
         required=True,
         identifier=True,
     )
-    subject_name = x509.Name.from_rfc4514_string(
+    subject_name = server_common.x509_name_from_rfc4514_string(
         conn.safe_outer_field("subject", required=True)
     )
     serial_number = x509.random_serial_number()
