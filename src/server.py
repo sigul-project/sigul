@@ -2242,7 +2242,7 @@ def cmd_sign_certificate(db, conn):
     key_usage = None
     if cert_type == 'ca':
         key_usage = x509.KeyUsage(
-            digital_signature=True,
+            digital_signature=False,
             key_cert_sign=True,
             crl_sign=True,
             content_commitment=False,
