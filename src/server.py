@@ -2308,7 +2308,18 @@ def cmd_sign_certificate(db, conn):
         x509.SubjectKeyIdentifier.from_public_key(subject_pubkey),
         critical=False,
     )
-    if issuer_cert is not None:
+    if issuer_cert is None:
+        # Technically AKI can be omitted with a self-signed cert per RFC5280
+        # (issuer_cert is None), but seemingly the Linux kernel is buggy in
+        # that it requires it. So in order to be compatible, just add it
+        # always.
+        builder = builder.add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(
+                subject_pubkey,
+            ),
+            critical=False,
+        )
+    else:
         issuer_ski = issuer_cert.extensions.get_extension_for_class(
             x509.SubjectKeyIdentifier
         )
