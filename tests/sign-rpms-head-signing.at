@@ -56,7 +56,9 @@ create_rpm()
 {
 	sed "s/@N@/$1"/g < "$abs_srcdir/tests/testrpm.spec" > "testrpm$1".spec
 	rpmbuild --quiet --define "_specdir $(pwd)" --define "_rpmdir $(pwd)" \
-		--define '_rpmfilename %{name}.rpm' --clean --rmspec \
+		--define '_rpmfilename %{name}.rpm' \
+		--define 'filesize 10' \
+		--clean --rmspec \
 		-bb "testrpm$1.spec"
 }
 
